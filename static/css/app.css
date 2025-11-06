@@ -1,0 +1,71 @@
+/* Tipografía & utilidades */
+:root{
+  --primary-500:#3b82f6; /* azul */
+  --primary-600:#2563eb;
+  --secondary-700:#6b7280;
+  --card-radius:20px;
+  --ring:#ebeff7;
+}
+body.bg-soft{
+  background: radial-gradient(1000px 600px at 95% 0%, #f9fafb 0%, #ffffff 40%, #fbfbfb 100%);
+  min-height:100dvh;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans";
+  color:#0f172a;
+}
+
+.fw-600{font-weight:600}
+.fw-700{font-weight:700}
+.fw-800{font-weight:800}
+.text-secondary-700{color:var(--secondary-700)}
+.text-primary-500{color:var(--primary-500)}
+.link-primary-600{color:var(--primary-600);text-decoration:none}
+.link-primary-600:hover{text-decoration:underline}
+
+/* Layout sección */
+.auth-wrap{padding-top:6rem;padding-bottom:6rem}
+
+/* Logo badge “B” */
+.logo-badge{
+  width:44px;height:44px;border-radius:12px;
+  background:linear-gradient(180deg,#2764f1 0%,#1f49b8 100%);
+  display:grid; place-items:center; color:#fff; font-weight:800; font-size:20px;
+  box-shadow:0 6px 16px rgba(37, 99, 235, .25);
+}
+
+/* Features */
+.feature-ic{
+  width:40px;height:40px;border-radius:10px;
+  background:#eef2ff;color:#2746d6;display:grid;place-items:center;
+}
+.feature svg{display:block}
+
+/* Card login */
+.login-card{
+  border-radius:var(--card-radius);
+  box-shadow:0 10px 30px rgba(2,6,23,.06);
+}
+.login-card .card-body{padding:2rem}
+@media (min-width:992px){ .login-card .card-body{padding:2.5rem 3rem} }
+
+/* Inputs */
+.form-control{
+  border-radius:14px;
+  padding:.9rem 1rem;
+  border:1px solid #e5e7eb;
+}
+.form-control:focus{
+  border-color:#cbd5e1;
+  box-shadow:0 0 0 .25rem rgba(59,130,246,.15);
+}
+
+/* Botón degradado */
+.btn-primary-gradient{
+  border:none;
+  border-radius:14px;
+  background:linear-gradient(180deg,#1f3b7f 0%, #0f1e3d 100%);
+  color:#fff;
+  padding:0.95rem 1rem;
+  transition:transform .05s ease, filter .2s ease;
+}
+.btn-primary-gradient:hover{filter:brightness(1.05)}
+.btn-primary-gradient:active{transform:translateY(1px)}

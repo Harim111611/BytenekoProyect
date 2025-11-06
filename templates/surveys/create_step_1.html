@@ -1,0 +1,88 @@
+{% extends "base_dashboard.html" %}
+{% load static %}
+{% block title %}Crear Encuesta · Paso 1{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <h1 class="h3 mb-1">Crear Encuesta</h1>
+  <div class="text-muted mb-2">Sigue los pasos para crear tu encuesta profesional</div>
+
+  {% include "surveys/_stepper.html" with step=1 progress=progress %}
+
+  <div class="panel shadow-sm">
+    <div class="panel-body">
+      <div class="alert alert-info d-flex align-items-start mb-3">
+        <i class="bi bi-info-circle me-2 mt-1"></i>
+        <div>
+          <div class="fw-semibold mb-1">Paso 1: Información básica</div>
+          Define el nombre, categoría y objetivo de tu encuesta. Esto te ayudará a organizar mejor tus estudios.
+        </div>
+      </div>
+
+      {% if saved_ok and form.is_bound and form.is_valid %}
+        <div class="alert alert-success d-flex align-items-start">
+          <i class="bi bi-check-circle me-2 mt-1"></i>
+          <div>¡Perfecto! Ya puedes continuar al siguiente paso.</div>
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate class="mt-3">
+        {% csrf_token %}
+
+        <div class="row g-3">
+          <!-- Nombre -->
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.name.id_for_label }}">
+              Nombre de la encuesta <span class="badge text-bg-danger ms-1">Requerido</span>
+            </label>
+            {{ form.name }}
+            {% if form.name.errors %}
+              <div class="invalid-feedback d-block">{{ form.name.errors|striptags }}</div>
+            {% else %}
+              <div class="form-text">Usa un nombre descriptivo y fácil de identificar</div>
+            {% endif %}
+          </div>
+
+          <!-- Categoría -->
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="{{ form.category.id_for_label }}">
+              Categoría <span class="badge text-bg-danger ms-1">Requerido</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-megaphone"></i></span>
+              {{ form.category }}
+            </div>
+            {% if form.category.errors %}
+              <div class="invalid-feedback d-block">{{ form.category.errors|striptags }}</div>
+            {% else %}
+              <div class="form-text">Esto activará sugerencias específicas para tu estudio</div>
+            {% endif %}
+          </div>
+
+          <!-- Descripción -->
+          <div class="col-12">
+            <label class="form-label fw-semibold" for="{{ form.description.id_for_label }}">Descripción (opcional)</label>
+            {{ form.description }}
+            {% if form.description.errors %}
+              <div class="invalid-feedback d-block">{{ form.description.errors|striptags }}</div>
+            {% else %}
+              <div class="form-text">Esta descripción te ayudará a recordar el propósito del estudio</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+          <span class="text-muted small">Paso 1 de 3</span>
+          {% if saved_ok and form.is_bound and form.is_valid %}
+            <a href="{% url 'surveys:create_step_2' %}" class="btn btn-dark d-inline-flex align-items-center">
+              Continuar a preguntas <i class="bi bi-arrow-right-short fs-5 ms-1"></i>
+            </a>
+          {% else %}
+            <button type="submit" class="btn btn-primary">Guardar información</button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
