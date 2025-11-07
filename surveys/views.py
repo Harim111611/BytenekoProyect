@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
+import json
+from django.http import JsonResponse, HttpResponse
 # surveys/views.py (arriba, junto con los otros imports)
 from .forms import CATEGORY_CHOICES as CATEGORIES
 
@@ -178,7 +180,16 @@ class Step3Review(View):
             return redirect("surveys:create_step_2")
 
         draft = {"basic": basic, "questions": questions}
-        context = {"draft": draft, "step": 3, "progress": 100}
+        context = {"draft": draft, "basic": basic, "questions": questions, "step": 3, "progress": 100}
+        # --- computed extras for template ---
+        questions = context.get("questions") or []
+        context["required_count"] = sum(1 for q in questions if isinstance(q, dict) and q.get("required"))
+        basic = context.get("basic") or {}
+        cat = basic.get("category")
+        labels = dict(CATEGORIES)
+        basic["category_label"] = labels.get(cat, cat)
+        context["basic"] = basic
+        
         return render(request, self.template_name, context)
 
     def post(self, request):

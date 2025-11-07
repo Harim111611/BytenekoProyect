@@ -198,3 +198,24 @@ body.bg-dashboard { height: 100vh; overflow: hidden; }
   overflow: auto;
 }
 
+
+
+/* dashed card look */
+.card.border-dashed { border: 1px dashed var(--ring); border-radius: 16px; }
+.fw-600 { font-weight: 600; }
+
+/* Chips y etiquetas */
+.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .5rem;border-radius:999px;background:#eef2f7;border:1px solid var(--ring);font-size:.825rem}
+.chip i{font-size:.9rem}
+
+/* Tarjeta con borde punteado (ya añadida si usas v2+) */
+.card.border-dashed{border:1px dashed var(--ring);border-radius:16px}
+
+/* Reordenar (drag & drop) */
+.q-draggable{cursor:grab}
+.q-draggable:active{cursor:grabbing}
+.q-ghost{opacity:.35}
+
+/* Lista de opciones compacta */
+.opt-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem}
+.opt-row input[type="text"]{flex:1}
