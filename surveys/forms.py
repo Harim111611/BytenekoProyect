@@ -5,13 +5,14 @@ from django import forms
 # -----------------------------
 # Formulario del PASO 1 (básico)
 # -----------------------------
+# surveys/forms.py
 CATEGORY_CHOICES = [
-    ("", "Selecciona el tipo de estudio"),
-    ("satisfaction", "Satisfacción del cliente"),
-    ("product", "Investigación de producto"),
-    ("awareness", "Brand awareness"),
-    ("concept", "Test de concepto"),
+    ("product_research", "Investigación de producto"),
+    ("customer_satisfaction", "Satisfacción del cliente"),
+    ("brand_awareness", "Reconocimiento de marca"),
+    ("market_research", "Investigación de mercado"),
 ]
+
 
 
 class SurveyBasicForm(forms.Form):
