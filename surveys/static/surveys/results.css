@@ -1,0 +1,60 @@
+/* surveys/static/surveys/results.css */
+:root{
+  --byte-primary:#0d6efd;
+  --byteneko-indigo:#6366f1;
+  --byteneko-bg:#0b0f1a;
+}
+.body-results{
+  background-color:#0b0f1a;
+}
+.card-soft{
+  background:#101626;
+  border:1px solid #1b2340;
+  color:#e9ecf2;
+  border-radius:1rem;
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
+}
+.card-soft .metric{
+  font-weight:700;
+  font-size:1.6rem;
+}
+.card-soft .delta{
+  font-size:.95rem;
+}
+.badge-soft{
+  background:#1b2340;
+  color:#b9c2e1;
+  border:1px solid #263157;
+}
+.text-muted-2{ color:#9aa6c7!important; }
+.hr-soft{ border-color:#1e2645; opacity:.3; }
+.table-soft{
+  color:#dfe6ff;
+}
+.table-soft thead th{
+  color:#9fb0ff;
+  border-bottom:1px solid #25305a!important;
+}
+.table-soft tbody tr{
+  border-color:#1e2645;
+}
+.kpi-title{
+  color:#c9d4ff;
+  font-weight:600;
+  font-size:.95rem;
+}
+.page-title{
+  color:#e6ebff;
+}
+.sub-title{
+  color:#aeb9e8;
+}
+.sidebar-active{
+  background:#121a2d;
+  border-left:3px solid var(--byteneko-indigo);
+  color:#e6ebff !important;
+}
+/* Responsive tweaks */
+@media (max-width: 768px){
+  .card-soft{ border-radius:.75rem; }
+}

@@ -1,0 +1,8 @@
+:root{ --card-radius:16px; --card-shadow:0 8px 22px rgba(0,0,0,.03); }
+.appbar{ border-radius:16px; box-shadow:var(--card-shadow); }
+.card-soft{ border-radius:16px; box-shadow:var(--card-shadow); border:1px solid #eef0f4; }
+.kpi-value{ font-weight:800; font-size:1.75rem; }
+.kpi-label{ color:#6b7280; font-size:.85rem; }
+.badge-soft{ background:#eef2ff; color:#3b82f6; }
+.table-wrap{ max-height: 40vh; overflow:auto; }
+.card-title-sm{ font-weight:600; font-size:.95rem; color:#374151; }

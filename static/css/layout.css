@@ -1,0 +1,8 @@
+/* static/css/layout.css */
+html, body { height: 100%; }
+.vh-100 { height: 100vh !important; }
+main .card, main .card-soft { height: 100%; }
+.chart-fluid { min-height: 260px; height: 36vh; }
+@media (max-width: 768px) {
+  .chart-fluid { height: 300px; }
+}

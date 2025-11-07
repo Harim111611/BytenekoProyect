@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Byteneko | Resultados{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+  <h4 class="mb-0">Resultados de la encuesta #{{ survey_id }}</h4>
+  <form class="row g-2" method="get">
+    <div class="col-auto">
+      <select class="form-select" name="segment">
+        {% for s in segments %}
+          <option value="{{ s }}" {% if s == active_segment %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><input type="date" class="form-control" name="from" value="{{ from }}"></div>
+    <div class="col-auto"><input type="date" class="form-control" name="to" value="{{ to }}"></div>
+    <div class="col-auto"><button class="btn btn-primary px-4">Aplicar</button></div>
+  </form>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-1">
+  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Totales</div><div class="fs-3 fw-bold">{{ kpis.total }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Completadas</div><div class="fs-3 fw-bold">{{ kpis.completed }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Completitud</div><div class="fs-3 fw-bold">{{ kpis.completion_rate }}%</div></div></div>
+  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Duración prom.</div><div class="fs-3 fw-bold">{{ kpis.avg_duration }} min</div></div></div>
+</div>
+
+<!-- Gráficos (altura adaptable sin tocar tu CSS base) -->
+<style>
+  .chart-fluid { min-height: 260px; height: 36vh; }
+  @media (max-width: 768px) { .chart-fluid { height: 300px; } }
+  .content { overflow: auto; } /* por si el sidebar fija altura */
+</style>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-8">
+    <div class="card p-3" id="card_time">
+      <div class="fw-semibold mb-2">Tendencia de respuestas</div>
+      <div id="fig_time" class="chart-fluid"></div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card p-3" id="card_comp">
+      <div class="fw-semibold mb-2">Estado</div>
+      <div id="fig_comp" class="chart-fluid"></div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-6">
+    <div class="card p-3" id="card_choice">
+      <div class="fw-semibold mb-2">Preferencias</div>
+      <div id="fig_choice" class="chart-fluid"></div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-6">
+    <div class="card p-3" id="card_duration">
+      <div class="fw-semibold mb-2">Duración</div>
+      <div id="fig_duration" class="chart-fluid"></div>
+    </div>
+  </div>
+  <div class="col-12">
+    <div class="card p-3" id="card_segment">
+      <div class="fw-semibold mb-2">Respuestas por segmento</div>
+      <div id="fig_segment" class="chart-fluid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="card p-3 mt-3">
+  <div class="fw-semibold mb-2">Últimas respuestas</div>
+  <div class="table-responsive" style="max-height:40vh;">
+    <table class="table table-sm align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha</th><th>Segmento</th><th>Completada</th><th>Duración (min)</th><th>Score</th><th>Choice</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in table_data %}
+        <tr>
+          <td>{{ r.created_at }}</td>
+          <td><span class="badge text-bg-light border">{{ r.segment }}</span></td>
+          <td>{% if r.completed %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
+          <td>{{ r.duration_min }}</td>
+          <td>{{ r.score }}</td>
+          <td>{{ r.choice }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">Sin datos</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.33.0.min.js"></script>
+<script>
+  const layoutTight = {margin:{l:40,r:20,t:30,b:40}};
+  const opts = {displayModeBar:false, responsive:true};
+
+  const figTime     = JSON.parse('{{ fig_time|escapejs }}');
+  const figComp     = JSON.parse('{{ fig_comp|escapejs }}');
+  const figChoice   = JSON.parse('{{ fig_choice|escapejs }}');
+  const figDuration = JSON.parse('{{ fig_duration|escapejs }}');
+  const figSegment  = JSON.parse('{{ fig_segment|escapejs }}');
+
+  Plotly.react('fig_time',     figTime.data,     Object.assign(figTime.layout||{}, layoutTight),     opts);
+  Plotly.react('fig_comp',     figComp.data,     Object.assign(figComp.layout||{}, layoutTight),     opts);
+  Plotly.react('fig_choice',   figChoice.data,   Object.assign(figChoice.layout||{}, layoutTight),   opts);
+  Plotly.react('fig_duration', figDuration.data, Object.assign(figDuration.layout||{}, layoutTight), opts);
+  Plotly.react('fig_segment',  figSegment.data,  Object.assign(figSegment.layout||{}, layoutTight),  opts);
+
+  // Auto-resize cuando cambie el tamaño del contenedor o cards
+  const cards = ['card_time','card_comp','card_choice','card_duration','card_segment'];
+  const ro = new ResizeObserver(() => {
+    document.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+  });
+  cards.forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+  });
+</script>
+{% endblock %}
