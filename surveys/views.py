@@ -194,4 +194,4 @@ class Step3Review(View):
             messages.success(request, "Encuesta publicada correctamente.")
             return redirect("surveys:create_step_1")
 
-        return redirect("surveys:create_step_3.html")
+        return redirect("surveys:create_step_3")
