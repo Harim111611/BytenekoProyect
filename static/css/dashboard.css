@@ -171,3 +171,30 @@
 .preview{ background:#fff; border:1px dashed #e5e7eb; border-radius:12px; padding:16px; }
 .survey-title{ font-weight:800; margin-bottom:12px; }
 .preview-list{ margin-left:1rem; display:grid; gap:14px; }
+
+/* --- Toast offset for fixed headers (Byteneko) --- */
+:root { --bnk-toast-offset: 72px; }
+@media (max-width: 768px) {
+  :root { --bnk-toast-offset: 56px; }
+}
+
+
+/* === Layout locking for fixed sidebar + scrollable content === */
+html, body { height: 100%; }
+body.bg-dashboard { height: 100vh; overflow: hidden; }
+
+.layout { display: flex; height: 100vh; }
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  flex: 0 0 var(--sidebar-w);
+}
+
+.content {
+  height: 100vh;
+  overflow: auto;
+}
+
