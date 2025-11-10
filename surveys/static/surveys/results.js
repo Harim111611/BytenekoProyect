@@ -6,19 +6,24 @@ document.addEventListener("DOMContentLoaded", function(){
 
   const dataObj = JSON.parse(container.dataset.results);
 
+  const css = getComputedStyle(document.documentElement);
+  const C_PRIMARY = css.getPropertyValue("--bn-primary").trim() || "#4cc9f0";
+  const C_ACCENT  = css.getPropertyValue("--bn-accent").trim()  || "#f72585";
+  const C_MUTED_GRID = "#1f2746";
+
   // Preferences bar chart
   (function(){
     const labels = dataObj.top_preferences.map(i => i.label);
     const values = dataObj.top_preferences.map(i => i.value);
     const trace = {
       x: labels, y: values, type: "bar", hoverinfo:"x+y",
-      marker: { /* no explicit colors per style guide; let Plotly default */ }
+      marker: { color: C_PRIMARY }
     };
     const layout = {
       margin:{l:40,r:10,t:10,b:40},
       paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
       xaxis:{tickfont:{color:"#cfd8ff"}},
-      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:"#1f2746"},
+      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:C_MUTED_GRID},
     };
     Plotly.newPlot("prefBar", [trace], layout, {displayModeBar:false, responsive:true});
   })();
@@ -50,7 +55,7 @@ document.addEventListener("DOMContentLoaded", function(){
       margin:{l:40,r:10,t:10,b:40},
       paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
       xaxis:{tickfont:{color:"#cfd8ff"}},
-      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:"#1f2746"},
+      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:C_MUTED_GRID},
       legend:{font:{color:"#cfd8ff"}}
     };
     Plotly.newPlot("trendLines",[tr1,tr2], layout, {displayModeBar:false, responsive:true});
@@ -66,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function(){
       margin:{l:40,r:10,t:10,b:40},
       paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
       xaxis:{tickfont:{color:"#cfd8ff"}},
-      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:"#1f2746"}
+      yaxis:{tickfont:{color:"#cfd8ff"}, gridcolor:C_MUTED_GRID}
     }, {displayModeBar:false, responsive:true});
   })();
 });
