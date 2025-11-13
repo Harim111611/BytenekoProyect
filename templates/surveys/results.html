@@ -1,126 +1,305 @@
-{% extends 'base.html' %}
+{% extends 'app_base.html' %}
 {% load static %}
-{% block title %}Byteneko | Resultados{% endblock %}
 
-{% block content %}
-<div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
-  <h4 class="mb-0">Resultados de la encuesta #{{ survey_id }}</h4>
-  <form class="row g-2" method="get">
-    <div class="col-auto">
-      <select class="form-select" name="segment">
-        {% for s in segments %}
-          <option value="{{ s }}" {% if s == active_segment %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-auto"><input type="date" class="form-control" name="from" value="{{ from }}"></div>
-    <div class="col-auto"><input type="date" class="form-control" name="to" value="{{ to }}"></div>
-    <div class="col-auto"><button class="btn btn-primary px-4">Aplicar</button></div>
-  </form>
-</div>
-
-<!-- KPIs -->
-<div class="row g-3 mb-1">
-  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Totales</div><div class="fs-3 fw-bold">{{ kpis.total }}</div></div></div>
-  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Completadas</div><div class="fs-3 fw-bold">{{ kpis.completed }}</div></div></div>
-  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Completitud</div><div class="fs-3 fw-bold">{{ kpis.completion_rate }}%</div></div></div>
-  <div class="col-6 col-md-3"><div class="card p-3"><div class="text-muted small">Duración prom.</div><div class="fs-3 fw-bold">{{ kpis.avg_duration }} min</div></div></div>
-</div>
-
-<!-- Gráficos (altura adaptable sin tocar tu CSS base) -->
+{% block page_styles %}
 <style>
-  .chart-fluid { min-height: 260px; height: 36vh; }
-  @media (max-width: 768px) { .chart-fluid { height: 300px; } }
-  .content { overflow: auto; } /* por si el sidebar fija altura */
+    /* Estilos para las tarjetas de KPI */
+    .kpi-card-results {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    .kpi-card-results:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .kpi-icon.icon-primary { background-color: var(--bs-primary-bg-subtle); color: var(--bs-primary); }
+    .kpi-icon.icon-success { background-color: var(--bs-success-bg-subtle); color: var(--bs-success); }
+    .kpi-icon.icon-info { background-color: var(--bs-info-bg-subtle); color: var(--bs-info); }
+    .kpi-icon.icon-warning { background-color: var(--bs-warning-bg-subtle); color: var(--bs-warning); }
 </style>
+{% endblock %}
 
-<div class="row g-3">
-  <div class="col-12 col-xl-8">
-    <div class="card p-3" id="card_time">
-      <div class="fw-semibold mb-2">Tendencia de respuestas</div>
-      <div id="fig_time" class="chart-fluid"></div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-4">
-    <div class="card p-3" id="card_comp">
-      <div class="fw-semibold mb-2">Estado</div>
-      <div id="fig_comp" class="chart-fluid"></div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-6">
-    <div class="card p-3" id="card_choice">
-      <div class="fw-semibold mb-2">Preferencias</div>
-      <div id="fig_choice" class="chart-fluid"></div>
-    </div>
-  </div>
-  <div class="col-12 col-xl-6">
-    <div class="card p-3" id="card_duration">
-      <div class="fw-semibold mb-2">Duración</div>
-      <div id="fig_duration" class="chart-fluid"></div>
-    </div>
-  </div>
-  <div class="col-12">
-    <div class="card p-3" id="card_segment">
-      <div class="fw-semibold mb-2">Respuestas por segmento</div>
-      <div id="fig_segment" class="chart-fluid"></div>
-    </div>
-  </div>
-</div>
 
-<!-- Tabla -->
-<div class="card p-3 mt-3">
-  <div class="fw-semibold mb-2">Últimas respuestas</div>
-  <div class="table-responsive" style="max-height:40vh;">
-    <table class="table table-sm align-middle">
-      <thead class="table-light">
-        <tr>
-          <th>Fecha</th><th>Segmento</th><th>Completada</th><th>Duración (min)</th><th>Score</th><th>Choice</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in table_data %}
-        <tr>
-          <td>{{ r.created_at }}</td>
-          <td><span class="badge text-bg-light border">{{ r.segment }}</span></td>
-          <td>{% if r.completed %}<span class="badge text-bg-success">Sí</span>{% else %}<span class="badge text-bg-secondary">No</span>{% endif %}</td>
-          <td>{{ r.duration_min }}</td>
-          <td>{{ r.score }}</td>
-          <td>{{ r.choice }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" class="text-center text-muted py-4">Sin datos</td></tr>
+{% block app_content %}
+<div class="container-xl p-4 p-md-5">
+
+    <div class="mb-4">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'surveys:detail' encuesta.pk %}">{{ encuesta.titulo }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Resultados</li>
+            </ol>
+        </nav>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 fw-semibold mb-0">Análisis de Resultados</h1>
+                <p class="text-muted">{{ encuesta.titulo }}</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'surveys:detail' encuesta.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-gear-fill me-1"></i> Gestionar Encuesta
+                </a>
+                <a href="{% url 'surveys:exportar' encuesta.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-download me-1"></i> Exportar CSV
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if total_respuestas == 0 %}
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-5">
+                <div class="d-flex flex-column align-items-center justify-content-center text-center" style="min-height: 400px;">
+                    <div class="d-flex align-items-center justify-content-center bg-light rounded-circle mb-4" style="width: 80px; height: 80px;">
+                        <i class="bi bi-bar-chart-line-fill fs-1 text-muted"></i>
+                    </div>
+                    <h2 class="h3 fw-bold mb-2">No hay datos para analizar</h2>
+                    <p class="text-muted mb-4 col-md-6">
+                        Esta encuesta aún no tiene respuestas. Comparte el link público o importa un archivo CSV para comenzar a ver los insights.
+                    </p>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'surveys:responder' encuesta.pk %}" class="btn btn-outline-secondary" target="_blank">
+                            <i class="bi bi-link-45deg me-1"></i> Obtener Link Público
+                        </a>
+                        <a href="{% url 'surveys:detail' encuesta.pk %}" class="btn btn-primary">
+                            <i class="bi bi-upload me-1"></i> Importar Respuestas
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="card kpi-card-results h-100">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div class="kpi-icon icon-primary"><i class="bi bi-people-fill fs-4"></i></div>
+                        <div>
+                            <h6 class="card-subtitle text-muted">Total Respuestas</h6>
+                            <h3 class="card-title fw-bold">{{ total_respuestas }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card kpi-card-results h-100">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div class="kpi-icon icon-success"><i class="bi bi-check-circle-fill fs-4"></i></div>
+                        <div>
+                            <h6 class="card-subtitle text-muted">Tasa Finalización</h6>
+                            <h3 class="card-title fw-bold">N/A</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card kpi-card-results h-100">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div class="kpi-icon icon-info"><i class="bi bi-star-fill fs-4"></i></div>
+                        <div>
+                            <h6 class="card-subtitle text-muted">Satisfacción Prom.</h6>
+                            <h3 class="card-title fw-bold">{{ kpi_prom_satisfaccion|floatformat:1 }}/10</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card kpi-card-results h-100">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div class="kpi-icon icon-warning"><i class="bi bi-clock-history fs-4"></i></div>
+                        <div>
+                            <h6 class="card-subtitle text-muted">Tiempo Prom.</h6>
+                            <h3 class="card-title fw-bold">N/A</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Tendencia de Respuestas</h5>
+                        <div style="height: 300px;">
+                            <canvas id="trendLineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Distribución (Ejemplo)</h5>
+                        <p class="small text-muted">Resultados de la pregunta: {{ pie_data.question_title|default:"N/A" }}</p>
+                        <div style="height: 300px;">
+                            <canvas id="completionPieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="h4 fw-bold mt-5 mb-3">Análisis por Pregunta</h3>
+
+        {% for data in analysis_data %}
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white p-4">
+                <h5 class="fw-bold mb-0">{{ forloop.counter }}. {{ data.pregunta_texto }}</h5>
+                <span class="badge bg-secondary-subtle text-dark-emphasis border">{{ data.pregunta_tipo }}</span>
+            </div>
+            <div class="card-body p-4">
+                {% if data.tipo == 'text' %}
+                    <h6 class="text-muted">Últimas 5 respuestas de texto:</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for resp in data.respuestas %}
+                            <li class="list-group-item"><i>"{{ resp.valor_texto|truncatechars:100 }}"</i></li>
+                        {% endfor %}
+                    </ul>
+                {% elif data.tipo == 'number' or data.tipo == 'scale' %}
+                    <h6 class="text-muted">Promedio: <span class="fw-bold fs-5 text-dark">{{ data.promedio|floatformat:1 }}</span></h6>
+                    <div style="height: 250px;">
+                        <canvas id="chart_pregunta_{{ data.pregunta_id }}"></canvas>
+                    </div>
+                {% elif data.tipo == 'single' or data.tipo == 'multi' %}
+                     <div style="height: 250px;">
+                        <canvas id="chart_pregunta_{{ data.pregunta_id }}"></canvas>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
+
+    {% endif %}
+
 </div>
+{% endblock %}
 
-<script src="https://cdn.plot.ly/plotly-2.33.0.min.js"></script>
-  <script src="{% static 'surveys/results_theme.js' %}"></script>
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+{% if total_respuestas > 0 %}
 <script>
-  const layoutTight = {margin:{l:40,r:20,t:30,b:40}};
-  const opts = {displayModeBar:false, responsive:true};
+    // Colores para los gráficos
+    const chartColors = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6c757d', '#0dcaf0'];
+    const chartBgColors = [
+        'rgba(13, 110, 253, 0.2)',
+        'rgba(25, 135, 84, 0.2)',
+        'rgba(255, 193, 7, 0.2)',
+        'rgba(220, 53, 69, 0.2)',
+        'rgba(108, 117, 125, 0.2)',
+        'rgba(13, 202, 240, 0.2)'
+    ];
 
-  const figTime     = JSON.parse('{{ fig_time|escapejs }}');
-  const figComp     = JSON.parse('{{ fig_comp|escapejs }}');
-  const figChoice   = JSON.parse('{{ fig_choice|escapejs }}');
-  const figDuration = JSON.parse('{{ fig_duration|escapejs }}');
-  const figSegment  = JSON.parse('{{ fig_segment|escapejs }}');
+    // --- 1. Gráfico de Tendencia (Line) ---
+    const trendCtx = document.getElementById('trendLineChart')?.getContext('2d');
+    if (trendCtx) {
+        const trendData = {{ trend_data|safe }};
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: trendData.labels,
+                datasets: [{
+                    label: 'Respuestas por día',
+                    data: trendData.data,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
 
-  Plotly.react('fig_time',     figTime.data,     Object.assign(figTime.layout||{}, layoutTight),     opts);
-  Plotly.react('fig_comp',     figComp.data,     Object.assign(figComp.layout||{}, layoutTight),     opts);
-  Plotly.react('fig_choice',   figChoice.data,   Object.assign(figChoice.layout||{}, layoutTight),   opts);
-  Plotly.react('fig_duration', figDuration.data, Object.assign(figDuration.layout||{}, layoutTight), opts);
-  Plotly.react('fig_segment',  figSegment.data,  Object.assign(figSegment.layout||{}, layoutTight),  opts);
+    // --- 2. Gráfico de Distribución (Pie/Doughnut) ---
+    const pieCtx = document.getElementById('completionPieChart')?.getContext('2d');
+    if (pieCtx) {
+        const pieData = {{ pie_data|safe }};
+        new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: pieData.labels,
+                datasets: [{
+                    label: 'Respuestas',
+                    data: pieData.data,
+                    backgroundColor: chartColors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
 
-  // Auto-resize cuando cambie el tamaño del contenedor o cards
-  const cards = ['card_time','card_comp','card_choice','card_duration','card_segment'];
-  const ro = new ResizeObserver(() => {
-    document.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
-  });
-  cards.forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
-  window.addEventListener('resize', () => {
-    document.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
-  });
+    // --- 3. Gráficos por Pregunta ---
+    const analysisData = {{ analysis_data_json|safe }};
+
+    analysisData.forEach(data => {
+        const ctx = document.getElementById(`chart_pregunta_${data.pregunta_id}`)?.getContext('2d');
+        if (!ctx) return; // Si es 'text' no hay canvas
+
+        let chartType = 'bar';
+        let options = {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'x',
+            plugins: {
+                legend: { display: false }
+            }
+        };
+
+        if (data.tipo === 'single' || data.tipo === 'multi') {
+            chartType = 'bar';
+            options.indexAxis = 'y'; // Barras horizontales
+        } else if (data.tipo === 'scale') {
+            chartType = 'bar';
+            options.scales = {
+                x: {
+                    type: 'category',
+                    labels: data.chart_labels
+                }
+            };
+        } else if (data.tipo === 'number') {
+            chartType = 'bar'; // O podría ser un histograma, pero bar es más simple
+        }
+
+        new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: data.chart_labels,
+                datasets: [{
+                    label: 'Nº de Respuestas',
+                    data: data.chart_data,
+                    backgroundColor: chartBgColors,
+                    borderColor: chartColors,
+                    borderWidth: 1
+                }]
+            },
+            options: options
+        });
+    });
+
 </script>
+{% endif %}
 {% endblock %}

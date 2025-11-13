@@ -1,7 +1,0 @@
-{# templates/partials/_sidebar_results_link.html #}
-<li class="nav-item">
-  <a class="nav-link {% if request.resolver_match.url_name == 'results-detail' %}active{% endif %}"
-     href="{% url 'surveys_results:results-detail' survey_id=1 %}">
-    <i class="bi bi-graph-up"></i> Resultados
-  </a>
-</li>
