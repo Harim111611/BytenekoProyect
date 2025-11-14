@@ -29,9 +29,13 @@ urlpatterns = [
         core_views.report_powerpoint_view,
         name="report_pptx",
     ),
+
+    # --- CORRECCIÓN AQUÍ ---
+    # Se ha cambiado 'report_preview_view' por 'report_preview_ajax'
+    # para que coincida con el nombre de la función en core/views.py
     path(
         "reportes/preview/<int:pk>/",
-        core_views.report_preview_view,
+        core_views.report_preview_ajax,  # <--- ESTE ES EL CAMBIO
         name="report_preview",
     ),
 
