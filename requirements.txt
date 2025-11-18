@@ -1,3 +1,6 @@
 django
 weasyprint
 python-pptx
+pandas
+seaborn
+matplotlib
