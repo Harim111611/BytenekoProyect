@@ -18,29 +18,34 @@ urlpatterns = [
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 
-    # Apps
+    # Apps (Core)
     path("dashboard/", core_views.dashboard_view, name="dashboard"),
     path("resultados/", core_views.results_dashboard_view, name="results"),
     path("reportes/", core_views.reports_page_view, name="reports"),
 
-    # Reportes
+    # --- NUEVA RUTA AGREGADA AQUÍ ---
+    path("configuracion/", core_views.settings_view, name="settings"),
+
+    # Reportes Específicos
+    path(
+        "report/pdf/",
+        core_views.report_pdf_view,
+        name="report_pdf",
+    ),
     path(
         "reportes/powerpoint/",
         core_views.report_powerpoint_view,
         name="report_pptx",
     ),
-
-    # --- CORRECCIÓN AQUÍ ---
-    # Se ha cambiado 'report_preview_view' por 'report_preview_ajax'
-    # para que coincida con el nombre de la función en core/views.py
     path(
         "reportes/preview/<int:pk>/",
-        core_views.report_preview_ajax,  # <--- ESTE ES EL CAMBIO
+        core_views.report_preview_ajax,
         name="report_preview",
     ),
 
+    # Surveys App
     path("surveys/", include("surveys.urls")),
 
-    # Inicio
+    # Inicio (Redirección)
     path("", RedirectView.as_view(pattern_name="login", permanent=False), name="index"),
 ]

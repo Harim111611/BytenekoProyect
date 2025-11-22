@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Encuesta - {{ encuesta.titulo }}</title>
+    <style>
+        /* --- CONFIGURACIÓN DE PÁGINA --- */
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-center {
+                content: "Página " counter(page);
+                font-size: 9pt;
+                color: #adb5bd;
+            }
+        }
+
+        /* --- ESTILOS GENERALES --- */
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 11pt;
+            color: #212529;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        h1 { font-size: 24pt; color: #0d6efd; margin-bottom: 0.5cm; }
+        h2 { font-size: 16pt; border-bottom: 2px solid #dee2e6; padding-bottom: 5px; margin-top: 1cm; margin-bottom: 0.5cm; color: #343a40; }
+        h3 { font-size: 13pt; margin-bottom: 5px; color: #495057; font-weight: 600; }
+        h4 { font-size: 11pt; margin-bottom: 5px; color: #6c757d; font-weight: 600; text-transform: uppercase; }
+
+        p { margin: 0 0 10px 0; }
+        .text-muted { color: #6c757d; }
+        .small { font-size: 9pt; }
+        .fw-bold { font-weight: 700; }
+        .text-center { text-align: center; }
+        .page-break { page-break-before: always; }
+
+        /* --- PORTADA --- */
+        .cover-container {
+            text-align: center;
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+        }
+        .cover-title {
+            font-size: 36pt;
+            font-weight: 700;
+            color: #0d6efd;
+            line-height: 1.2;
+            margin-bottom: 20px;
+        }
+        .cover-subtitle {
+            font-size: 16pt;
+            color: #495057;
+            margin-bottom: 40px;
+        }
+        .cover-meta {
+            border-top: 1px solid #dee2e6;
+            border-bottom: 1px solid #dee2e6;
+            padding: 20px 0;
+            margin: 0 auto;
+            width: 60%;
+            color: #6c757d;
+            font-size: 10pt;
+        }
+
+        /* --- KPIs (Resumen Ejecutivo) --- */
+        .kpi-table {
+            width: 100%;
+            margin-bottom: 1cm;
+            border-collapse: separate;
+            border-spacing: 10px;
+        }
+        .kpi-cell {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            width: 33%;
+        }
+        .kpi-value {
+            display: block;
+            font-size: 28pt;
+            font-weight: 700;
+            color: #212529;
+            margin-bottom: 5px;
+        }
+        .kpi-label {
+            font-size: 10pt;
+            text-transform: uppercase;
+            color: #6c757d;
+            letter-spacing: 1px;
+        }
+        /* Colores para KPIs específicos */
+        .kpi-green { color: #198754; }
+        .kpi-blue { color: #0d6efd; }
+        .kpi-red { color: #dc3545; }
+
+        /* --- INSIGHT BOX (La joya de la corona) --- */
+        .insight-box {
+            background-color: #f0f7ff;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .insight-title {
+            display: block;
+            font-size: 9pt;
+            font-weight: 700;
+            color: #0d6efd;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .insight-text {
+            font-size: 11pt;
+            color: #0f172a;
+            font-style: italic;
+        }
+
+        /* --- CONTENIDO DE PREGUNTA --- */
+        .question-container {
+            margin-bottom: 1.5cm;
+            page-break-inside: avoid; /* Evita cortar gráficos a la mitad */
+        }
+
+        .question-header {
+            margin-bottom: 15px;
+        }
+        .question-type {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 8pt;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        /* --- TABLAS Y GRÁFICOS --- */
+        .chart-img {
+            width: 100%;
+            max-width: 15cm;
+            height: auto;
+            display: block;
+            margin: 10px auto;
+            border: 1px solid #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 9pt;
+        }
+        .data-table th {
+            text-align: left;
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            padding: 8px;
+            color: #495057;
+        }
+        .data-table td {
+            border-bottom: 1px solid #dee2e6;
+            padding: 8px;
+            color: #212529;
+        }
+        .data-table tr:last-child td { border-bottom: none; }
+
+        /* Listas de texto */
+        ul.text-responses {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul.text-responses li {
+            background-color: #f9fafb;
+            border-left: 3px solid #ced4da;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-style: italic;
+            color: #495057;
+            font-size: 10pt;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="cover-page">
+        <div class="cover-container">
+            <div class="cover-title">{{ encuesta.titulo }}</div>
+            <div class="cover-subtitle">Reporte Ejecutivo de Resultados</div>
+
+            <div class="cover-meta">
+                <p><strong>Generado el:</strong> {% now "d \d\e F \d\e Y" %}</p>
+                <p><strong>Autor:</strong> {{ encuesta.creador.username|title }}</p>
+                {% if start_date or end_date %}
+                    <p><strong>Periodo:</strong> {{ start_date|default:"Inicio" }} — {{ end_date|default:"Hoy" }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h1>Resumen Ejecutivo</h1>
+    <p class="text-muted" style="margin-bottom: 30px;">Visión general de los indicadores clave de desempeño.</p>
+
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-cell">
+                <span class="kpi-value kpi-blue">{{ total_respuestas }}</span>
+                <span class="kpi-label">Total Respuestas</span>
+            </td>
+            <td class="kpi-cell">
+                <span class="kpi-value kpi-green">{{ kpi_prom_satisfaccion|floatformat:1 }}</span>
+                <span class="kpi-label">Satisfacción (1-10)</span>
+            </td>
+            <td class="kpi-cell">
+                <span class="kpi-value {% if nps_score > 0 %}kpi-green{% elif nps_score < 0 %}kpi-red{% else %}text-muted{% endif %}">
+                    {{ nps_score|default:"--" }}
+                </span>
+                <span class="kpi-label">NPS Global</span>
+            </td>
+        </tr>
+    </table>
+
+    {% if nps_score is not None %}
+        <div class="insight-box">
+            <span class="insight-title">Análisis de Salud</span>
+            <span class="insight-text">
+                Con un NPS de <strong>{{ nps_score }}</strong>, la percepción general de la marca es
+                {% if nps_score >= 50 %}<strong>Excelente</strong>. La mayoría de los usuarios son promotores leales.{% endif %}
+                {% if nps_score > 0 and nps_score < 50 %}<strong>Positiva</strong>, aunque hay margen para convertir pasivos en promotores.{% endif %}
+                {% if nps_score <= 0 %}<strong>Crítica</strong>. Es prioritario atender las causas de insatisfacción.{% endif %}
+            </span>
+        </div>
+    {% endif %}
+
+    <div class="page-break"></div>
+
+    <h1>Análisis por Pregunta</h1>
+    <p class="text-muted" style="margin-bottom: 1cm;">Desglose estadístico y cualitativo ítem por ítem.</p>
+
+    {% for item in analysis_data %}
+        <div class="question-container">
+
+            <div class="question-header">
+                <h3>{{ item.orden }}. {{ item.texto }}</h3>
+                <span class="question-type">{{ item.tipo_display }}</span>
+            </div>
+
+            {% if item.insight %}
+                <div class="insight-box">
+                    <span class="insight-title">Hallazgo Clave</span>
+                    <span class="insight-text">{% autoescape off %}{{ item.insight }}{% endautoescape %}</span>
+                </div>
+            {% endif %}
+
+            {% if item.total_respuestas > 0 %}
+
+                {% if item.chart_image %}
+                    <img src="data:image/png;base64,{{ item.chart_image }}" class="chart-img">
+                {% endif %}
+
+                {% if item.tipo == 'text' %}
+                    <h4 style="margin-top: 15px;">Muestra de opiniones:</h4>
+                    <ul class="text-responses">
+                        {% for resp in item.samples_texto %}
+                            <li>"{{ resp }}"</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {% if item.estadisticas and item.tipo != 'text' %}
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                        <table style="width: 100%;">
+                            <tr>
+                                <td><strong>Promedio:</strong> {{ item.estadisticas.promedio|floatformat:2 }}</td>
+                                <td><strong>Mediana:</strong> {{ item.estadisticas.mediana|floatformat:1 }}</td>
+                                <td><strong>Rango:</strong> {{ item.estadisticas.minimo|floatformat:0 }} - {{ item.estadisticas.maximo|floatformat:0 }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                {% endif %}
+
+                {% if include_table and item.opciones %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Opción</th>
+                                <th style="text-align: center;">Frecuencia</th>
+                                <th style="text-align: right;">Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for op in item.opciones %}
+                                <tr>
+                                    <td>{{ op.label }}</td>
+                                    <td style="text-align: center;">{{ op.count }}</td>
+                                    <td style="text-align: right;">{{ op.percent|floatformat:1 }}%</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% endif %}
+
+            {% else %}
+                <p class="text-muted small" style="font-style: italic;">No se registraron respuestas para esta pregunta en el periodo seleccionado.</p>
+            {% endif %}
+
+        </div>
+
+        {% if forloop.counter|divisibleby:2 and not forloop.last %}
+            <div class="page-break"></div>
+        {% endif %}
+
+    {% endfor %}
+
+</body>
+</html>

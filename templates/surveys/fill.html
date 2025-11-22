@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center py-5" style="background-color: #f3f4f6;">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-xl-6">
+
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+
+                    <div class="bg-primary p-2"></div>
+
+                    <div class="card-body p-4 p-md-5">
+
+                        <div class="mb-5">
+                            <h1 class="h3 fw-bold text-body mb-2">{{ encuesta.titulo }}</h1>
+                            {% if encuesta.descripcion %}
+                                <p class="text-muted">{{ encuesta.descripcion }}</p>
+                            {% endif %}
+                        </div>
+
+                        {% if form_errors %}
+                            <div class="alert alert-danger border-0 bg-danger-subtle text-danger mb-4 rounded-3">
+                                <ul class="mb-0 ps-3">
+                                    {% for error in form_errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        <form method="POST">
+                            {% csrf_token %}
+
+                            <div class="vstack gap-4">
+                                {% for pregunta in encuesta.preguntas.all %}
+                                    <div class="question-group">
+                                        <label class="form-label fw-semibold text-body mb-2 d-block">
+                                            {{ pregunta.texto }}
+                                            {% if pregunta.es_obligatoria %}
+                                                <span class="text-danger" title="Obligatoria">*</span>
+                                            {% endif %}
+                                        </label>
+
+                                        {% if pregunta.tipo == 'text' %}
+                                            <textarea class="form-control form-control-lg bg-body-tertiary border-0"
+                                                      name="pregunta_{{ pregunta.id }}" rows="3"
+                                                      placeholder="Escribe tu respuesta aquí..."
+                                                      {% if pregunta.es_obligatoria %}required{% endif %}></textarea>
+
+                                        {% elif pregunta.tipo == 'number' %}
+                                            <input type="number" class="form-control form-control-lg bg-body-tertiary border-0"
+                                                   name="pregunta_{{ pregunta.id }}"
+                                                   placeholder="0"
+                                                   {% if pregunta.es_obligatoria %}required{% endif %}>
+
+                                        {% elif pregunta.tipo == 'scale' %}
+                                            <div class="mb-2">
+                                                <div class="d-flex justify-content-between small text-muted mb-1 px-1">
+                                                    <span>0 - Nada probable</span>
+                                                    <span>10 - Muy probable</span>
+                                                </div>
+                                                <div class="d-flex flex-wrap gap-1 justify-content-between">
+                                                    {% for i in "0123456789"|make_list %}
+                                                        <div class="flex-fill text-center">
+                                                            <input type="radio" class="btn-check"
+                                                                   name="pregunta_{{ pregunta.id }}"
+                                                                   id="scale_{{ pregunta.id }}_{{ i }}"
+                                                                   value="{{ i }}"
+                                                                   {% if pregunta.es_obligatoria %}required{% endif %}>
+                                                            <label class="btn btn-outline-secondary w-100" for="scale_{{ pregunta.id }}_{{ i }}">{{ i }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                    <div class="flex-fill text-center">
+                                                        <input type="radio" class="btn-check"
+                                                               name="pregunta_{{ pregunta.id }}"
+                                                               id="scale_{{ pregunta.id }}_10"
+                                                               value="10"
+                                                               {% if pregunta.es_obligatoria %}required{% endif %}>
+                                                        <label class="btn btn-outline-secondary w-100" for="scale_{{ pregunta.id }}_10">10</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        {% elif pregunta.tipo == 'single' %}
+                                            <div class="d-flex flex-column gap-2">
+                                                {% for opcion in pregunta.opciones.all %}
+                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary">
+                                                        <input class="form-check-input" type="radio"
+                                                               name="pregunta_{{ pregunta.id }}"
+                                                               id="opt_{{ opcion.id }}"
+                                                               value="{{ opcion.id }}"
+                                                               {% if pregunta.es_obligatoria %}required{% endif %}>
+                                                        <label class="form-check-label w-100 stretched-link" for="opt_{{ opcion.id }}">
+                                                            {{ opcion.texto }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+
+                                        {% elif pregunta.tipo == 'multi' %}
+                                            <div class="d-flex flex-column gap-2">
+                                                {% for opcion in pregunta.opciones.all %}
+                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary">
+                                                        <input class="form-check-input" type="checkbox"
+                                                               name="pregunta_{{ pregunta.id }}"
+                                                               id="opt_{{ opcion.id }}"
+                                                               value="{{ opcion.id }}">
+                                                        <label class="form-check-label w-100 stretched-link" for="opt_{{ opcion.id }}">
+                                                            {{ opcion.texto }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="mt-5 pt-3 border-top">
+                                <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold py-3 shadow-sm">
+                                    Enviar Respuestas
+                                </button>
+                                <div class="text-center mt-3">
+                                    <small class="text-muted">Desarrollado con <i class="bi bi-heart-fill text-danger" style="font-size: 0.7rem;"></i> por Byteneko</small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

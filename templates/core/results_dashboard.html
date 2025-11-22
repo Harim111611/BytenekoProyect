@@ -1,0 +1,213 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{% block page_styles %}
+<style>
+    /* Estilos de tarjetas y elementos similares a dashboard.html */
+    .kpi-card-modern, .chart-card {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        transition: transform 0.2s;
+    }
+    .kpi-card-modern:hover { transform: translateY(-3px); }
+
+    .icon-square {
+        width: 48px; height: 48px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .top-survey-item {
+        transition: transform 0.2s;
+    }
+    .top-survey-item:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="container-xl p-4 p-md-5">
+
+    <div class="d-flex justify-content-between align-items-end mb-5">
+        <div>
+            <h6 class="text-uppercase text-muted small fw-bold ls-1 mb-1">Análisis Global</h6>
+            <h1 class="h2 fw-bold text-body-emphasis mb-0">Resultados de Encuestas</h1>
+            <p class="text-muted mt-1 mb-0">Métricas agregadas de todas tus encuestas.</p>
+        </div>
+        <div>
+            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
+                <i class="bi bi-plus-lg me-2"></i>Nueva Encuesta
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        {# KPI: Total Respuestas #}
+        <div class="col-md-4">
+            <div class="card kpi-card-modern h-100 p-3">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-square bg-primary-subtle text-primary me-3">
+                        <i class="bi bi-people-fill"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small text-uppercase fw-bold mb-1">Respuestas Totales</p>
+                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ total_responses|default:"0" }}</h2>
+                        <small class="text-muted">En todas las encuestas</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# KPI: Satisfacción Global #}
+        <div class="col-md-4">
+            <div class="card kpi-card-modern h-100 p-3">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-square bg-success-subtle text-success me-3">
+                        <i class="bi bi-emoji-heart-eyes-fill"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small text-uppercase fw-bold mb-1">Sat. Global (Escala)</p>
+                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ global_satisfaction|default:"0"|floatformat:1 }} <small class="text-muted">/10</small></h2>
+                        <small class="text-muted">Promedio en encuestas de escala</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# KPI: Encuestas Activas #}
+        <div class="col-md-4">
+            <div class="card kpi-card-modern h-100 p-3">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-square bg-info-subtle text-info me-3">
+                        <i class="bi bi-broadcast-pin"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small text-uppercase fw-bold mb-1">Encuestas Activas</p>
+                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ total_active|default:"0" }}</h2>
+                        <small class="text-muted">Generando datos</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-lg-8">
+            <div class="card chart-card h-100">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                    <h5 class="h6 fw-bold m-0 text-primary"><i class="bi bi-graph-up me-2"></i>Tendencia de Respuestas (30 días)</h5>
+                    <small class="text-muted">Todas las encuestas</small>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <div style="height: 300px;">
+                        <canvas id="globalAreaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card chart-card h-100">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">Top 5 Encuestas</h5>
+                </div>
+                <div class="card-body p-4">
+                    <ul class="list-group list-group-flush">
+                        {% for survey in top_surveys %}
+                        <li class="list-group-item px-0 bg-transparent border-secondary-subtle top-survey-item">
+                            <div class="d-flex justify-content-between align-items-center py-2">
+                                <div>
+                                    <h6 class="mb-0 fw-bold text-body-emphasis">{{ survey.titulo }}</h6>
+                                    <small class="text-muted">{{ survey.response_count }} respuestas</small>
+                                </div>
+                                <a href="{% url 'surveys:resultados' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                    Ver <i class="bi bi-arrow-right"></i>
+                                </a>
+                            </div>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item px-0 bg-transparent border-0 text-center py-4 text-muted">
+                            <i class="bi bi-journal-x fs-4 mb-2"></i><br>
+                            No hay datos para mostrar top encuestas.
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Detectar tema para ajustar colores del gráfico
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6';
+    const textColor = isDark ? '#adb5bd' : '#666';
+
+    // 2. Configurar el gráfico de área (Tendencias)
+    var ctx = document.getElementById("globalAreaChart");
+    if (ctx) {
+        var chartLabels = {{ chart_labels|default:"[]"|safe }};
+        var chartData = {{ chart_data|default:"[]"|safe }};
+
+        var myLineChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: "Respuestas",
+                    lineTension: 0.3,
+                    backgroundColor: "rgba(78, 115, 223, 0.05)",
+                    borderColor: "#4e73df",
+                    pointRadius: 3,
+                    pointBackgroundColor: "#4e73df",
+                    pointBorderColor: "#4e73df",
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: "#4e73df",
+                    pointHoverBorderColor: "#4e73df",
+                    pointHitRadius: 10,
+                    pointBorderWidth: 2,
+                    data: chartData,
+                    fill: true,
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? 'rgba(33, 37, 41, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                        titleColor: isDark ? '#f8f9fa' : '#333',
+                        bodyColor: isDark ? '#dee2e6' : '#666',
+                        borderColor: isDark ? '#495057' : '#dddfeb',
+                        borderWidth: 1,
+                        xPadding: 15,
+                        yPadding: 15,
+                        displayColors: false,
+                        caretPadding: 10,
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        ticks: { color: textColor, maxTicksLimit: 7 }
+                    },
+                    y: {
+                        ticks: { color: textColor, maxTicksLimit: 5, padding: 10, callback: function(value) { return value; } },
+                        grid: { color: gridColor, drawBorder: false, borderDash: [2], zeroLineBorderDash: [2] }
+                    },
+                },
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

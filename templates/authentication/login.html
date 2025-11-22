@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block styles %}
+    <link rel="stylesheet" href="{% static 'css/byteneko.css' %}">
+{% endblock %}
+
+{% block title %}Iniciar Sesión - Byteneko{% endblock %}
+
+{% block content %}
+<div class="container login-container">
+    <div class="row min-vh-100 align-items-center justify-content-center">
+
+        <div class="col-lg-7 d-none d-lg-block">
+            <div class="d-flex align-items-center mb-4">
+                <img src="{% static 'img/favicon.ico' %}" alt="Logo" style="width: 40px; height: 40px;" class="me-2">
+                <span class="fs-4 fw-bold text-body">Byteneko</span>
+            </div>
+
+            <h1 class="display-4 fw-bold text-body mb-3">Investigación de mercados<br><span class="text-primary">más inteligente</span></h1>
+            <p class="fs-5 mb-5 text-muted">
+                Crea cuestionarios, analiza resultados y genera reportes profesionales en minutos.
+            </p>
+
+            <div class="d-flex align-items-start mb-4">
+                <div class="p-3 bg-primary-subtle text-primary rounded-3 me-3">
+                    <i class="bi bi-bar-chart-line-fill fs-5"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold text-body">Análisis visual avanzado</h5>
+                    <p class="text-muted">Visualiza tus datos con gráficos interactivos y reportes detallados.</p>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-start mb-4">
+                <div class="p-3 bg-primary-subtle text-primary rounded-3 me-3">
+                    <i class="bi bi-graph-up-arrow fs-5"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold text-body">Insights automáticos</h5>
+                    <p class="text-muted">Descubre patrones y tendencias con inteligencia artificial.</p>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-start">
+                <div class="p-3 bg-primary-subtle text-primary rounded-3 me-3">
+                    <i class="bi bi-people-fill fs-5"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold text-body">Colaboración en equipo</h5>
+                    <p class="text-muted">Trabaja con tu equipo en tiempo real y comparte resultados.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card card-login-form">
+                <div class="card-body">
+
+                    <h2 class="text-center fw-bold text-body mb-2">Bienvenido</h2>
+                    <p class="text-center text-muted mb-4">Inicia sesión para continuar</p>
+
+                    {% if form.errors %}
+                        <div class="alert alert-danger" role="alert">
+                            Tu usuario y contraseña no coinciden. Por favor, intenta de nuevo.
+                        </div>
+                    {% endif %}
+
+                    <form method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="id_username" class="form-label">Usuario</label>
+                            <input type="text" name="username" class="form-control form-control-lg" id="id_username" placeholder="Tu nombre de usuario" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="id_password" class="form-label">Contraseña</label>
+                            <input type="password" name="password" class="form-control form-control-lg" id="id_password" placeholder="Tu contraseña" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-dark btn-lg w-100 mb-4">
+                            Iniciar Sesión
+                        </button>
+
+                        <p class="text-center text-muted">
+                            ¿No tienes una cuenta?
+                            <a href="#" class="link-accent">Solicita acceso</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

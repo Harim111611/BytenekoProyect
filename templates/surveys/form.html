@@ -1,0 +1,54 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{% block app_content %}
+<div class="container-fluid p-4 p-md-5">
+
+    <div class="mb-4">
+        <h1 class="h2 fw-semibold mb-0">Editar Encuesta</h1>
+        <p class="text-muted">Modifica los detalles básicos de tu encuesta.</p>
+    </div>
+
+        <div class="row justify-content-center">\n        <div class="col-12 col-lg-10 col-xl-8">\n            <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 p-lg-5">
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="id_titulo" class="form-label fw-medium">Título</label>
+                    {{ form.titulo }}
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_descripcion" class="form-label fw-medium">Descripción</label>
+                    {{ form.descripcion }}
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6 mb-3">
+                        <label for="id_estado" class="form-label fw-medium">Estado</label>
+                        {{ form.estado }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="id_objetivo_muestra" class="form-label fw-medium">Objetivo de Muestra</label>
+                        {{ form.objetivo_muestra }}
+                    </div>
+                </div>
+
+                <p class="small text-muted mt-3">
+                    <i class="bi bi-info-circle-fill"></i>
+                    Para editar las preguntas, debes hacerlo desde el creador de encuestas (próximamente).
+                </p>
+
+                <div class="d-flex justify-content-end gap-2 pt-4 mt-4 border-top">
+                    <a href="{% url 'surveys:list' %}" class="btn btn-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

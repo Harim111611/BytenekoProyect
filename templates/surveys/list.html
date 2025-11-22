@@ -1,0 +1,177 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{% block page_styles %}
+<style>
+    /* Tarjeta de Encuesta Adaptativa */
+    .survey-card {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid var(--card-border-color);
+        background-color: var(--card-bg); /* Fondo dinámico */
+    }
+    .survey-card:hover {
+        transform: translateY(-4px);
+        /* Sombra adaptada al tema (definida en byteneko.css o bootstrap) */
+        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.15) !important;
+        border-color: var(--bk-primary); /* Borde azul al hover */
+    }
+
+    /* En modo oscuro, quitar sombra excesiva al hover para limpieza */
+    [data-bs-theme="dark"] .survey-card:hover {
+        box-shadow: none !important;
+        border-color: var(--bk-primary);
+    }
+
+    /* Puntos de estado */
+    .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .bg-active { background-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+    .bg-draft { background-color: #9ca3af; }
+    .bg-closed { background-color: #ef4444; }
+
+    /* Botones de acción */
+    .action-btn-group .btn { border-radius: 8px; }
+</style>
+{% endblock %}
+
+{% block app_content %}
+
+<div class="container-xl p-4 p-md-5">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-5 gap-3">
+        <div>
+            <h1 class="h2 fw-bold mb-1 text-body-emphasis">Mis Proyectos</h1>
+            <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary border-dashed fw-medium" data-bs-toggle="modal" data-bs-target="#smartImportModal">
+                <i class="bi bi-cloud-upload me-2"></i>Importar CSV
+            </button>
+
+            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-medium shadow-sm px-4">
+                <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+            </a>
+        </div>
+    </div>
+
+    {% if encuestas %}
+        <div class="row g-4">
+            {% for encuesta in encuestas %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 survey-card shadow-sm">
+                        <div class="card-body p-4 d-flex flex-column">
+
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
+                                    {{ encuesta.fecha_creacion|date:"d M Y" }}
+                                </span>
+                                <div class="d-flex align-items-center small">
+                                    {% if encuesta.estado == 'active' %}
+                                        <span class="status-dot bg-active"></span> <span class="text-success fw-bold" style="font-size: 0.8rem;">Activa</span>
+                                    {% elif encuesta.estado == 'draft' %}
+                                        <span class="status-dot bg-draft"></span> <span class="text-muted" style="font-size: 0.8rem;">Borrador</span>
+                                    {% else %}
+                                        <span class="status-dot bg-closed"></span> <span class="text-danger" style="font-size: 0.8rem;">Cerrada</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate" title="{{ encuesta.titulo }}">
+                                <a href="{% url 'surveys:detail' encuesta.pk %}" class="text-decoration-none text-body-emphasis stretched-link">
+                                    {{ encuesta.titulo }}
+                                </a>
+                            </h5>
+
+                            <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
+                                {{ encuesta.descripcion|default:"Sin descripción adicional."|truncatechars:85 }}
+                            </p>
+
+                            <div class="d-flex align-items-center text-secondary small mb-4 bg-body-tertiary rounded-3 p-2 border border-dashed">
+                                <div class="d-flex align-items-center me-3">
+                                    <i class="bi bi-people-fill me-2 text-primary"></i>
+                                    <strong class="text-body">{{ encuesta.respuestas.count }}</strong>&nbsp;respuestas
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-layers-fill me-2 text-primary"></i>
+                                    <strong class="text-body">{{ encuesta.preguntas.count }}</strong>&nbsp;preguntas
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
+                                <a href="{% url 'surveys:resultados' encuesta.pk %}" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                    <i class="bi bi-bar-chart-fill me-1"></i> Resultados
+                                </a>
+                                <a href="{% url 'surveys:editar' encuesta.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </a>
+                                <a href="{% url 'surveys:borrar' encuesta.pk %}" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                                    <i class="bi bi-trash-fill"></i>
+                                </a>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+    {% else %}
+        <div class="text-center py-5 my-5">
+            <div class="mb-4">
+                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
+                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                </div>
+            </div>
+            <h3 class="fw-bold text-body-emphasis mb-2">Tu espacio de trabajo está vacío</h3>
+            <p class="text-muted mb-4 col-md-6 mx-auto">
+                Crea tu primera encuesta desde cero o importa un archivo CSV existente para comenzar a analizar datos hoy mismo.
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="{% url 'surveys:crear' %}" class="btn btn-primary btn-lg px-4">
+                    <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+                </a>
+                <button class="btn btn-outline-secondary btn-lg px-4" data-bs-toggle="modal" data-bs-target="#smartImportModal">
+                    Importar CSV
+                </button>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+
+<div class="modal fade" id="smartImportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg bg-body text-body"> <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-body-emphasis">Importar Datos Externos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{% url 'surveys:importar_nueva' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body pt-4">
+                    <div class="text-center mb-4">
+                        <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                            <i class="bi bi-file-earmark-spreadsheet-fill fs-3"></i>
+                        </div>
+                        <p class="small text-muted">Sube un archivo <code>.csv</code>. Detectaremos automáticamente las preguntas y las respuestas.</p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Archivo</label>
+                        <input class="form-control bg-body-tertiary" type="file" name="csv_file" accept=".csv" required>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Nombre del Proyecto (Opcional)</label>
+                        <input type="text" class="form-control bg-body-tertiary" name="survey_title" placeholder="Ej. Satisfacción Q4 2025">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-4">
+                    <button type="button" class="btn btn-light text-muted" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary px-4">Analizar e Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

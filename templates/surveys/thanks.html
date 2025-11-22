@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block styles %}
+<style>
+    body { background-color: #f8f9fa; }
+    .thanks-wrapper {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+    }
+    .thanks-container {
+        width: 100%;
+        max-width: 500px;
+        padding: 2rem;
+        text-align: center;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .thanks-icon {
+        font-size: 4rem;
+        color: var(--bs-success);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="thanks-wrapper">
+    <div class="thanks-container">
+        <i class="bi bi-check-circle-fill thanks-icon"></i>
+        <h1 class="h3 fw-bold mt-3">¡Gracias por tu respuesta!</h1>
+        <p class="text-muted">Tu opinión ha sido registrada con éxito.</p>
+        <a href="{% url 'login' %}" class="btn btn-outline-primary mt-2">Volver al inicio</a>
+    </div>
+</div>
+{% endblock %}

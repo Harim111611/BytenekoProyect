@@ -13,13 +13,21 @@ class Encuesta(models.Model):
 
     titulo = models.CharField(max_length=255, verbose_name='Title')
     descripcion = models.TextField(null=True, blank=True, verbose_name='Description')
+
+    # Campo abierto para guardar lo que venga del Select o del Input "Otro"
+    categoria = models.CharField(
+        max_length=100,
+        default='General',
+        verbose_name='Category'
+    )
+
     estado = models.CharField(
         max_length=10,
         choices=ESTADO_CHOICES,
         default='draft',
         verbose_name='Status'
     )
-    creador = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Creator')
+    creador = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Creator', db_index=True)
     objetivo_muestra = models.PositiveIntegerField(default=0, verbose_name='Sample Goal')
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Creation Date')
     fecha_modificacion = models.DateTimeField(auto_now=True, verbose_name='Modification Date')
@@ -93,7 +101,8 @@ class RespuestaEncuesta(models.Model):
         blank=True,
         verbose_name='User'
     )
-    creado_en = models.DateTimeField(auto_now_add=True, verbose_name='Created At')
+
+    creado_en = models.DateTimeField(default=timezone.now, verbose_name='Created At', db_index=True)
     anonima = models.BooleanField(default=False, verbose_name='Anonymous')
 
     def __str__(self):

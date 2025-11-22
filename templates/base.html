@@ -14,8 +14,16 @@
 
     <title>{% block title %}Byteneko{% endblock %}</title>
 </head>
-<body>
-
+<body id="page-top" class="d-flex flex-column min-vh-100">
+    <script>
+        // Script anti-flicker para modo oscuro
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const theme = savedTheme || systemTheme;
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
     <div class="main-content">
         {% block content %}
         {% endblock %}

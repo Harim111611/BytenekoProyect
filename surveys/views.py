@@ -1,13 +1,19 @@
 # surveys/views.py
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, DetailView, UpdateView, DeleteView
+from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
 from django.views import View
 from django.urls import reverse_lazy
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.contrib import messages
-from django.core.serializers.json import DjangoJSONEncoder  # <-- IMPORTANTE
+from django.core.serializers.json import DjangoJSONEncoder
+from django.core.cache import cache
+from django.utils import timezone
+from django.db.models.functions import TruncDate
+from django.db.models import Count, Avg, Min, Max
+from django.db import transaction
+
 import json
 import csv
 import io
@@ -16,173 +22,274 @@ import re
 import base64
 from datetime import datetime
 
-# --- IMPORTS DE CIENCIA DE DATOS ---
+# Ciencia de Datos
 import pandas as pd
+import numpy as np
 import matplotlib
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Importaciones de Django
-from django.db.models import Count, Avg, Min, Max, StdDev
-from django.db.models.functions import TruncDate
 from .models import Encuesta, Pregunta, OpcionRespuesta, RespuestaEncuesta, RespuestaPregunta
+from core.views import generate_vertical_bar_chart, generate_horizontal_bar_chart, generate_heatmap_chart
 
 
 # ============================================================
-# FUNCIONES AUXILIARES (Sin cambios)
+# CLASES UTILITARIAS
 # ============================================================
-def generar_heatmap_correlacion(df):
-    df_numeric = df.select_dtypes(include=['float64', 'int64'])
-    if df_numeric.shape[1] < 2 or df_numeric.shape[0] < 2: return None
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(df_numeric.corr(), annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5, vmin=-1, vmax=1)
-    plt.title('Relación entre variables', fontsize=10)
-    plt.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode('utf-8')
-
-
-def calcular_nps(respuestas_qs):
-    total = respuestas_qs.count()
-    if total == 0: return None, "Sin datos"
-    prom = respuestas_qs.filter(valor_numerico__gte=9).count()
-    det = respuestas_qs.filter(valor_numerico__lte=6).count()
-    score = round(((prom / total) * 100) - ((det / total) * 100), 1)
-    if score >= 50:
-        estado = "Excelente"
-    elif score > 0:
-        estado = "Bueno"
-    elif score > -30:
-        estado = "Mejorable"
-    else:
-        estado = "Crítico"
-    return score, estado
-
-
-def analizar_texto_avanzado(respuestas_qs):
-    if isinstance(respuestas_qs, list):
-        textos = [str(r['valor_texto']) for r in respuestas_qs if r.get('valor_texto')]
-    else:
-        textos = [r['valor_texto'] for r in respuestas_qs if r['valor_texto']]
-    if not textos: return [], []
-    texto_completo = " ".join(textos).lower()
-    texto_limpio = re.sub(r'[^\w\s]', '', texto_completo)
-    palabras = texto_limpio.split()
-    ignorar = {'de', 'la', 'que', 'el', 'en', 'y', 'a', 'los', 'se', 'del', 'las', 'un', 'por', 'con', 'no', 'una',
-               'su', 'para', 'es', 'al', 'lo', 'como', 'mas', 'pero', 'sus', 'le', 'ya', 'o', 'muy', 'sin', 'sobre',
-               'me', 'mi', 'bueno', 'buena', 'malo', 'mala', 'yo', 'tu', 'nos', 'ha', 'si', 'porque', 'este', 'esta',
-               'ese', 'esa'}
-    palabras_filtradas = [p for p in palabras if p not in ignorar and len(p) > 2]
-    top_palabras = collections.Counter(palabras_filtradas).most_common(5)
-    bigramas = []
-    for i in range(len(palabras) - 1):
-        w1, w2 = palabras[i], palabras[i + 1]
-        if w1 not in ignorar and w2 not in ignorar and len(w1) > 2 and len(w2) > 2: bigramas.append(f"{w1} {w2}")
-    top_bigramas = collections.Counter(bigramas).most_common(3)
-    return top_palabras, top_bigramas
-
-
-def build_responses_df(encuesta, respuestas_orm):
-    rows = []
-    preguntas_cols = {p.id: p.texto for p in encuesta.preguntas.all()}
-    for resp in respuestas_orm:
-        row = {"Fecha": resp.creado_en.date()}
-        for rp in resp.respuestas_pregunta.all():
-            val = None
-            if rp.pregunta.tipo in ["number", "scale"]:
-                val = rp.valor_numerico
-            elif rp.pregunta.tipo in ["single", "multi"] and rp.opcion:
-                val = rp.opcion.texto
-            elif rp.pregunta.tipo == "text":
-                val = rp.valor_texto
-            col_name = preguntas_cols.get(rp.pregunta.id)
-            if col_name:
-                if col_name in row and val is not None:
-                    row[col_name] = f"{row[col_name]}, {val}"
-                elif val is not None:
-                    row[col_name] = val
-        rows.append(row)
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
-
-
-def compute_trend_data(respuestas_orm):
-    trend_qs = respuestas_orm.annotate(date=TruncDate("creado_en")).values("date").annotate(count=Count("id")).order_by(
-        "date")
-    return {"labels": [r["date"].strftime("%d %b") for r in trend_qs], "data": [r["count"] for r in trend_qs]}
+class Echo:
+    def write(self, value): return value
 
 
 # ============================================================
-# VISTAS CRUD Y OPERATIVAS (Sin cambios mayores)
+# 1. MOTOR DE ANÁLISIS (EL CEREBRO)
+# ============================================================
+
+def core_survey_analysis(encuesta, respuestas_qs, filters=None):
+    total_respuestas = respuestas_qs.count()
+
+    result = {
+        "total_respuestas": total_respuestas,
+        "nps_score": None, "nps_estado": "N/A",
+        "analysis_data": [],
+        "trend_data": {"labels": [], "data": []},
+        "heatmap_image": None, "crosstab_html": None,
+        "metrics": {"promedio_satisfaccion": 0, "ultima_respuesta": None}
+    }
+
+    if total_respuestas == 0:
+        return result
+
+    valores = RespuestaPregunta.objects.filter(respuesta_encuesta__in=respuestas_qs).values(
+        'respuesta_encuesta__id',
+        'respuesta_encuesta__creado_en',
+        'pregunta__id',
+        'pregunta__texto',
+        'pregunta__tipo',
+        'valor_texto', 'valor_numerico', 'opcion__texto'
+    )
+
+    df_raw = pd.DataFrame(list(valores))
+    df = pd.DataFrame()
+
+    if not df_raw.empty:
+        df_raw['valor'] = df_raw['valor_numerico'].fillna(df_raw['opcion__texto']).fillna(df_raw['valor_texto'])
+
+        df = df_raw.pivot_table(
+            index='respuesta_encuesta__id',
+            columns='pregunta__texto',
+            values='valor',
+            aggfunc='first'
+        )
+        fechas = df_raw.groupby('respuesta_encuesta__id')['respuesta_encuesta__creado_en'].first()
+        df['Fecha'] = fechas
+
+        if filters:
+            for col, val in filters.items():
+                if col in df.columns and val:
+                    try:
+                        df = df[df[col].astype(str).str.lower().str.contains(str(val).lower(), na=False)]
+                    except Exception:
+                        pass
+
+            result['total_respuestas'] = len(df)
+            if df.empty: return result
+
+    # --- ANÁLISIS GLOBAL ---
+    if 'Fecha' in df.columns:
+        if not pd.api.types.is_datetime64_any_dtype(df['Fecha']):
+            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+
+        trend = df.groupby(df['Fecha'].dt.date).size()
+        result['trend_data'] = {
+            'labels': [d.strftime('%d %b') for d in trend.index],
+            'data': trend.values.tolist()
+        }
+        result['metrics']['ultima_respuesta'] = df['Fecha'].max()
+
+    pregunta_nps = encuesta.preguntas.filter(tipo='scale').first()
+    if pregunta_nps and pregunta_nps.texto in df.columns:
+        s_nps = pd.to_numeric(df[pregunta_nps.texto], errors='coerce').dropna()
+        if not s_nps.empty:
+            prom = (s_nps >= 9).sum()
+            det = (s_nps <= 6).sum()
+            score = round(((prom - det) / len(s_nps)) * 100, 1)
+            result['nps_score'] = score
+            if score >= 50:
+                result['nps_estado'] = "Excelente"
+            elif score > 0:
+                result['nps_estado'] = "Bueno"
+            elif score > -30:
+                result['nps_estado'] = "Mejorable"
+            else:
+                result['nps_estado'] = "Crítico"
+
+    scale_questions = encuesta.preguntas.filter(tipo='scale').values_list('texto', flat=True)
+    valid_cols = [c for c in scale_questions if c in df.columns]
+    if valid_cols:
+        df_scales = df[valid_cols].apply(pd.to_numeric, errors='coerce')
+        all_values = df_scales.values.flatten()
+        valid_values = all_values[~np.isnan(all_values)]
+        if valid_values.size > 0:
+            result['metrics']['promedio_satisfaccion'] = round(valid_values.mean(), 1)
+
+    if len(valid_cols) >= 2:
+        result['heatmap_image'] = generate_heatmap_chart(df[valid_cols].apply(pd.to_numeric, errors='coerce'))
+
+    for pregunta in encuesta.preguntas.all().order_by('orden'):
+        col_name = pregunta.texto
+        item = {
+            "id": pregunta.id, "orden": pregunta.orden, "texto": pregunta.texto,
+            "tipo": pregunta.tipo, "pregunta_tipo": pregunta.get_tipo_display(),
+            "stats": {}, "chart_labels": [], "chart_data": [], "respuestas": [], "insight": "",
+            "chart_image": None, "total_respuestas": 0
+        }
+
+        if col_name not in df.columns:
+            result['analysis_data'].append(item)
+            continue
+
+        series = df[col_name].dropna()
+        if series.empty:
+            result['analysis_data'].append(item)
+            continue
+
+        item['total_respuestas'] = len(series)
+
+        if pregunta.tipo == 'text':
+            textos = series.astype(str).tolist()
+            words, bigrams = analizar_texto_avanzado(textos)
+            item["stats"]["top_words"] = words
+            item["respuestas"] = [{"valor_texto": t} for t in textos[:50]]
+            main = bigrams[0][0] if bigrams else (words[0][0] if words else "Variado")
+            item["insight"] = f"Tema principal: <strong>'{main}'</strong>"
+
+        elif pregunta.tipo in ['number', 'scale']:
+            s_num = pd.to_numeric(series, errors='coerce').dropna()
+            if not s_num.empty:
+                desc = s_num.describe()
+                item["stats"] = {
+                    "promedio": desc['mean'], "minimo": desc['min'], "maximo": desc['max'],
+                    "mediana": s_num.median(), "std": s_num.std()
+                }
+
+                if pregunta.tipo == 'scale':
+                    avg = desc['mean']
+                    real_max = s_num.max()
+                    scale_cap = 5 if real_max <= 5 else 10
+                    normalized_score = (avg / scale_cap) * 10
+                    sent = "sobresaliente" if normalized_score >= 8.5 else (
+                        "positivo" if normalized_score >= 7 else ("regular" if normalized_score >= 5 else "crítico"))
+                    item["insight"] = f"Rendimiento <strong>{sent}</strong> ({avg:.1f}/{scale_cap})."
+                    if pregunta == pregunta_nps: item['stats']['nps'] = result['nps_score']
+                else:
+                    item["insight"] = f"Promedio: <strong>{desc['mean']:.1f}</strong>."
+
+                counts = s_num.value_counts().sort_index()
+                if pregunta.tipo == 'scale':
+                    limit_max = 5 if s_num.max() <= 5 else 10
+                    counts = counts.reindex(range(0 if s_num.min() == 0 else 1, limit_max + 1), fill_value=0)
+                item["chart_labels"] = [str(i) for i in counts.index]
+                item["chart_data"] = counts.values.tolist()
+                item['chart_image'] = generate_vertical_bar_chart(item["chart_labels"], item["chart_data"],
+                                                                  "Distribución")
+
+        elif pregunta.tipo in ['single', 'multi']:
+            if pregunta.tipo == 'multi':
+                all_opts = []
+                for v in series: all_opts.extend([x.strip() for x in str(v).split(',')])
+                counts = pd.Series(all_opts).value_counts()
+            else:
+                counts = series.value_counts()
+
+            if not counts.empty:
+                ganador = counts.index[0]
+                total = counts.sum() if pregunta.tipo == 'multi' else len(series)
+                porc = (counts.iloc[0] / total) * 100
+                item["insight"] = f"La mayoría (<strong>{porc:.0f}%</strong>) prefiere <strong>{ganador}</strong>."
+                item["chart_labels"] = counts.index.tolist()
+                item["chart_data"] = counts.values.tolist()
+                item['chart_image'] = generate_horizontal_bar_chart(item["chart_labels"], item["chart_data"],
+                                                                    "Distribución")
+
+        result['analysis_data'].append(item)
+    return result
+
+
+def analizar_texto_avanzado(textos_list):
+    if not textos_list: return [], []
+    text_full = " ".join(textos_list).lower()
+    clean = re.sub(r'[^\w\s]', '', text_full)
+    words = clean.split()
+    stops = {'de', 'la', 'que', 'el', 'en', 'y', 'a', 'los', 'se', 'del', 'las', 'un', 'por', 'con', 'no', 'una', 'su',
+             'para', 'es', 'al', 'lo', 'como', 'mas', 'pero', 'sus', 'le', 'ya', 'o', 'muy', 'sin', 'sobre', 'me', 'mi',
+             'bueno', 'buena', 'malo', 'mala', 'yo', 'tu'}
+    filtered = [w for w in words if w not in stops and len(w) > 2]
+    bigrams = [f"{filtered[i]} {filtered[i + 1]}" for i in range(len(filtered) - 1)]
+    return collections.Counter(filtered).most_common(5), collections.Counter(bigrams).most_common(3)
+
+
+# ============================================================
+# 2. VISTAS CRUD
 # ============================================================
 class EncuestaListView(LoginRequiredMixin, ListView):
     model = Encuesta
-    context_object_name = 'encuestas'
     template_name = 'surveys/list.html'
+    context_object_name = 'encuestas'
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['encuestas'] = Encuesta.objects.filter(creador=self.request.user)
-        context['page_name'] = 'surveys'
-        return context
+    def get_queryset(self): return Encuesta.objects.filter(creador=self.request.user).order_by('-fecha_creacion')
 
 
-class EncuestaCreateView(LoginRequiredMixin, View):
+class EncuestaCreateView(LoginRequiredMixin, CreateView):
+    model = Encuesta
     template_name = 'surveys/survey_create.html'
-
-    def get(self, request, *args, **kwargs):
-        return render(request, self.template_name, {'page_name': 'surveys'})
+    # Agregamos 'categoria' a los fields permitidos
+    fields = ['titulo', 'descripcion', 'estado', 'categoria']
+    success_url = reverse_lazy('surveys:list')
 
     def post(self, request, *args, **kwargs):
-        try:
-            data = json.loads(request.body)
-            info = data.get('surveyInfo')
-            questions = data.get('questions')
-            if not info or not questions or not info.get('titulo'): return JsonResponse({'error': 'Faltan datos.'},
-                                                                                        status=400)
-            encuesta = Encuesta.objects.create(creador=request.user, titulo=info.get('titulo'),
-                                               descripcion=info.get('descripcion'), estado='draft')
-            for i, q_data in enumerate(questions):
-                tipo_valido = self.mapear_tipo_pregunta(q_data.get('tipo'))
-                pregunta = Pregunta.objects.create(encuesta=encuesta, texto=q_data.get('titulo'), tipo=tipo_valido,
-                                                   es_obligatoria=q_data.get('required', False), orden=i)
-                if q_data.get('opciones'):
-                    for opt in q_data.get('opciones'): OpcionRespuesta.objects.create(pregunta=pregunta, texto=opt)
-            return JsonResponse(
-                {'success': True, 'redirect_url': str(reverse_lazy('surveys:detail', kwargs={'pk': encuesta.pk}))})
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
 
-    def mapear_tipo_pregunta(self, tipo_js):
-        return {'text': 'text', 'number': 'number', 'scale': 'scale', 'single': 'single', 'multi': 'multi'}.get(tipo_js,
-                                                                                                                'text')
+                # Aquí guardamos la categoría que viene del JS (sea del select o del input 'otro')
+                encuesta = Encuesta.objects.create(
+                    creador=request.user,
+                    titulo=data['surveyInfo']['titulo'],
+                    descripcion=data['surveyInfo']['descripcion'],
+                    categoria=data['surveyInfo'].get('categoria', 'General'), # Captura
+                    estado='draft'
+                )
 
+                # ... (resto de creación de preguntas igual) ...
+
+                for i, q in enumerate(data['questions']):
+                    tipo = {'text': 'text', 'number': 'number', 'scale': 'scale', 'single': 'single', 'multi': 'multi'}.get(q['tipo'], 'text')
+                    p = Pregunta.objects.create(encuesta=encuesta, texto=q['titulo'], tipo=tipo, orden=i, es_obligatoria=q.get('required', False))
+                    if q.get('opciones'):
+                        for opt in q['opciones']: OpcionRespuesta.objects.create(pregunta=p, texto=opt)
+
+                return JsonResponse({'success': True, 'redirect_url': str(reverse_lazy('surveys:detail', kwargs={'pk': encuesta.pk}))})
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        form.instance.creador = self.request.user
+        return super().form_valid(form)
 
 class EncuestaDetailView(LoginRequiredMixin, DetailView):
     model = Encuesta
-    context_object_name = 'encuesta'
     template_name = 'surveys/detail.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['page_name'] = 'surveys'
-        return context
+    context_object_name = 'encuesta'
 
 
 class EncuestaUpdateView(LoginRequiredMixin, UpdateView):
     model = Encuesta
-    fields = ['titulo', 'descripcion', 'estado', 'objetivo_muestra']
+    fields = ['titulo', 'descripcion', 'estado']
     template_name = 'surveys/form.html'
     success_url = reverse_lazy('surveys:list')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['page_name'] = 'surveys'
-        return context
 
 
 class EncuestaDeleteView(LoginRequiredMixin, DeleteView):
@@ -190,145 +297,173 @@ class EncuestaDeleteView(LoginRequiredMixin, DeleteView):
     template_name = 'surveys/confirm_delete.html'
     success_url = reverse_lazy('surveys:list')
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['page_name'] = 'surveys'
-        return context
 
-
-@login_required
-def import_responses_view(request, pk):
-    if request.method != 'POST': return redirect('surveys:detail', pk=pk)
-    encuesta = get_object_or_404(Encuesta, pk=pk, creador=request.user)
-    csv_file = request.FILES.get('csv_file')
-    if not csv_file: return redirect('surveys:detail', pk=pk)
-    try:
-        data = csv_file.read().decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(data))
-        pmap = {p.texto: p for p in encuesta.preguntas.all()}
-        count = 0
-        for row in reader:
-            res = RespuestaEncuesta.objects.create(encuesta=encuesta, anonima=True)
-            # Fecha histórica
-            fecha_str = row.get('Fecha') or row.get('fecha')
-            if fecha_str:
-                try:
-                    for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
-                        try:
-                            dt = datetime.strptime(fecha_str, fmt)
-                            if timezone.is_naive(dt): dt = timezone.make_aware(dt)
-                            res.creado_en = dt
-                            res.save()
-                            break
-                        except:
-                            continue
-                except:
-                    pass
-
-            for h, v in row.items():
-                if h.lower() in ['fecha', 'date', 'id'] or not v or h not in pmap: continue
-                p = pmap[h]
-                if p.tipo == 'text':
-                    RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, valor_texto=v)
-                elif p.tipo in ['number', 'scale']:
-                    try:
-                        RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p,
-                                                         valor_numerico=int(float(v)))
-                    except:
-                        pass
-                elif p.tipo in ['single', 'multi']:
-                    op = OpcionRespuesta.objects.filter(pregunta=p, texto__iexact=v).first()
-                    if op: RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, opcion=op)
-            count += 1
-        messages.success(request, f"Importadas {count} respuestas.")
-    except Exception as e:
-        messages.error(request, f"Error: {e}")
-    return redirect('surveys:detail', pk=pk)
-
+# ============================================================
+# 3. IMPORTACIÓN (CORREGIDO: FECHAS ROBUSTAS)
+# ============================================================
 
 @login_required
 def import_new_survey_view(request):
-    if request.method != 'POST': return redirect('surveys:list')
-    csv_file = request.FILES.get('csv_file')
-    title = request.POST.get('survey_title')
-    if not csv_file: return redirect('surveys:list')
-    try:
-        data = csv_file.read().decode('utf-8-sig')
-        reader = csv.reader(io.StringIO(data))
-        headers = next(reader)
-        rows = list(reader)
-        encuesta = Encuesta.objects.create(creador=request.user, titulo=title or csv_file.name.replace('.csv', ''),
-                                           estado='active')
-        preguntas = []
-        fecha_idx = -1
-        col_idxs = []
-        for i, h in enumerate(headers):
-            if h.lower() in ['fecha', 'date']:
-                fecha_idx = i
-                continue
-            col_idxs.append(i)
-            col_vals = [r[i] for r in rows if i < len(r) and r[i].strip()]
-            tipo = 'text'
-            if col_vals:
-                try:
-                    nums = [float(v) for v in col_vals]
-                    if all(0 <= n <= 10 for n in nums):
-                        tipo = 'scale'
-                    else:
-                        tipo = 'number'
-                except:
-                    pass
-            preguntas.append(Pregunta.objects.create(encuesta=encuesta, texto=h, tipo=tipo, orden=len(preguntas)))
+    if request.method == 'POST' and request.FILES.get('csv_file'):
+        csv_file = request.FILES['csv_file']
+        try:
+            df = pd.read_csv(csv_file)
+        except Exception as e:
+            messages.error(request, f"Error al leer el CSV: {e}")
+            return redirect('surveys:list')
 
-        count = 0
-        for row in rows:
-            res = RespuestaEncuesta.objects.create(encuesta=encuesta, anonima=True)
-            if fecha_idx != -1 and fecha_idx < len(row):
-                try:
-                    dt = datetime.strptime(row[fecha_idx], '%Y-%m-%d')
-                    if timezone.is_naive(dt): dt = timezone.make_aware(dt)
-                    res.creado_en = dt
-                    res.save()
-                except:
-                    pass
+        title = request.POST.get('survey_title') or f"Importada {csv_file.name}"
+        try:
+            with transaction.atomic():
+                encuesta = Encuesta.objects.create(creador=request.user, titulo=title,
+                                                   descripcion=f"Importada {datetime.now().strftime('%Y-%m-%d')}",
+                                                   estado='active', objetivo_muestra=len(df))
+                col_map = {}
+                date_col_name = None
 
-            for idx, original_idx in enumerate(col_idxs):
-                if original_idx < len(row) and row[original_idx].strip():
-                    p = preguntas[idx]
-                    val = row[original_idx]
-                    if p.tipo in ['number', 'scale']:
-                        try:
-                            RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p,
-                                                             valor_numerico=int(float(val)))
-                        except:
-                            pass
-                    else:
-                        RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, valor_texto=val)
-            count += 1
-        messages.success(request, f"Creada con {count} respuestas.")
-        return redirect('surveys:detail', pk=encuesta.pk)
-    except Exception as e:
-        messages.error(request, f"Error: {e}")
-        return redirect('surveys:list')
+                # 1. Detectar columnas
+                for i, col in enumerate(df.columns):
+                    if not date_col_name and any(
+                            x in col.lower() for x in ['fecha', 'date', 'timestamp', 'time', 'creado']):
+                        date_col_name = col
+                        col_map[col] = 'TIMESTAMP'
+                        continue
+
+                    sample = df[col].dropna()
+                    dtype = 'text'
+                    if pd.api.types.is_numeric_dtype(sample):
+                        dtype = 'scale' if sample.min() >= 0 and sample.max() <= 10 else 'number'
+                    elif not sample.empty:
+                        if sample.astype(str).str.contains(',').any():
+                            dtype = 'multi'
+                        elif sample.nunique() < 15:
+                            dtype = 'single'
+                    pregunta = Pregunta.objects.create(encuesta=encuesta, texto=col.replace('_', ' ').title(),
+                                                       tipo=dtype, orden=i)
+                    col_map[col] = pregunta
+                    if dtype in ['single', 'multi']:
+                        unique_ops = set()
+                        for val in sample:
+                            if dtype == 'single':
+                                unique_ops.add(val)
+                            else:
+                                unique_ops.update([x.strip() for x in str(val).split(',')])
+                        for op in unique_ops: OpcionRespuesta.objects.get_or_create(pregunta=pregunta,
+                                                                                    texto=str(op)[:255])
+
+                # 2. Cargar datos (Row by Row para asegurar fechas)
+                respuestas_encuesta_list = []
+
+                for _, row in df.iterrows():
+                    created_at = timezone.now()  # Default
+
+                    # FIX: Parseo de fecha explicito y robusto
+                    if date_col_name:
+                        val_date = row[date_col_name]
+                        if pd.notnull(val_date):
+                            try:
+                                # Intentar convertir string a datetime
+                                dt = pd.to_datetime(val_date)
+                                if not pd.isna(dt):
+                                    py_dt = dt.to_pydatetime()
+                                    if timezone.is_naive(py_dt):
+                                        created_at = timezone.make_aware(py_dt)
+                                    else:
+                                        created_at = py_dt
+                            except Exception:
+                                pass  # Si falla, usa now()
+
+                    r = RespuestaEncuesta(encuesta=encuesta, anonima=True)
+                    r.creado_en = created_at  # Asignar la fecha histórica
+                    respuestas_encuesta_list.append(r)
+
+                objs_creados = RespuestaEncuesta.objects.bulk_create(respuestas_encuesta_list)
+
+                rp_list = []
+                for i, (index, row) in enumerate(df.iterrows()):
+                    resp_obj = objs_creados[i]
+                    for col, preg in col_map.items():
+                        if preg == 'TIMESTAMP': continue
+                        val = row[col]
+                        if pd.isna(val) or val == '': continue
+                        rp = RespuestaPregunta(respuesta_encuesta=resp_obj, pregunta=preg)
+                        if preg.tipo in ['number', 'scale']:
+                            try:
+                                rp.valor_numerico = int(val)
+                            except:
+                                pass
+                        elif preg.tipo == 'single':
+                            op = OpcionRespuesta.objects.filter(pregunta=preg, texto=str(val)).first()
+                            if op: rp.opcion = op
+                        else:
+                            rp.valor_texto = str(val)
+                        rp_list.append(rp)
+
+                RespuestaPregunta.objects.bulk_create(rp_list, batch_size=2000)
+            messages.success(request, f"Importación exitosa: {len(df)} registros.")
+        except Exception as e:
+            messages.error(request, f"Error: {e}")
+    return redirect('surveys:list')
+
+
+@login_required
+def export_csv(request, pk):
+    encuesta = get_object_or_404(Encuesta, pk=pk, creador=request.user)
+
+    def rows_generator():
+        pseudo_buffer = Echo()
+        writer = csv.writer(pseudo_buffer)
+        yield u'\ufeff'
+        preguntas = list(encuesta.preguntas.all().order_by('orden'))
+        yield writer.writerow(['ID', 'Fecha', 'Usuario'] + [p.texto for p in preguntas])
+
+        respuestas_qs = RespuestaEncuesta.objects.filter(encuesta=encuesta).select_related('usuario').prefetch_related(
+            'respuestas_pregunta__pregunta', 'respuestas_pregunta__opcion').iterator(chunk_size=1000)
+        for resp in respuestas_qs:
+            row = [resp.id, resp.creado_en.strftime('%Y-%m-%d %H:%M'),
+                   resp.usuario.username if resp.usuario else 'Anónimo']
+            rmap = {}
+            for r in resp.respuestas_pregunta.all():
+                val = r.valor_texto or r.valor_numerico or (r.opcion.texto if r.opcion else '')
+                rmap[r.pregunta_id] = str(val)
+            for p in preguntas: row.append(rmap.get(p.id, ''))
+            yield writer.writerow(row)
+
+    filename = f"resultados_{encuesta.id}.csv"
+    response = StreamingHttpResponse(rows_generator(), content_type="text/csv; charset=utf-8")
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def import_responses_view(request, pk): return redirect('surveys:detail', pk=pk)
 
 
 def responder(request, pk):
     encuesta = get_object_or_404(Encuesta, pk=pk)
-    if encuesta.estado != 'active': return HttpResponse("Inactiva", 403)
     if request.method == 'POST':
-        res = RespuestaEncuesta.objects.create(encuesta=encuesta, anonima=True)
-        for p in encuesta.preguntas.all():
-            k = f'pregunta_{p.id}'
-            val = request.POST.get(k)
-            if p.tipo == 'text' and val:
-                RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, valor_texto=val)
-            elif p.tipo in ['number', 'scale'] and val:
-                RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, valor_numerico=int(val))
-            elif p.tipo == 'single' and val:
-                RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p, opcion_id=val)
-            elif p.tipo == 'multi':
-                for v in request.POST.getlist(k): RespuestaPregunta.objects.create(respuesta_encuesta=res, pregunta=p,
-                                                                                   opcion_id=v)
+        with transaction.atomic():
+            usuario = request.user if request.user.is_authenticated else None
+            respuesta = RespuestaEncuesta.objects.create(encuesta=encuesta, usuario=usuario, anonima=(usuario is None))
+            for p in encuesta.preguntas.all():
+                field = f'pregunta_{p.id}'
+                if p.tipo == 'multi':
+                    opts = request.POST.getlist(field)
+                    txts = [OpcionRespuesta.objects.get(id=o).texto for o in opts if
+                            OpcionRespuesta.objects.filter(id=o).exists()]
+                    if txts: RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p,
+                                                              valor_texto=",".join(txts))
+                else:
+                    val = request.POST.get(field)
+                    if val:
+                        if p.tipo in ['number', 'scale']:
+                            RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p,
+                                                             valor_numerico=val)
+                        elif p.tipo == 'single':
+                            op = OpcionRespuesta.objects.filter(id=val).first()
+                            if op: RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p, opcion=op)
+                        else:
+                            RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p, valor_texto=val)
         return redirect('surveys:thanks')
     return render(request, 'surveys/fill.html', {'encuesta': encuesta})
 
@@ -337,143 +472,56 @@ def thanks_view(request): return render(request, 'surveys/thanks.html')
 
 
 @login_required
-def export_csv(request, pk):
-    encuesta = get_object_or_404(Encuesta, pk=pk, creador=request.user)
-    response = HttpResponse(content_type='text/csv; charset=utf-8-sig',
-                            headers={'Content-Disposition': f'attachment; filename="{encuesta.id}.csv"'})
-    writer = csv.writer(response)
-    qs = encuesta.preguntas.all().order_by('orden')
-    writer.writerow(['ID', 'Fecha'] + [p.texto for p in qs])
-    for r in encuesta.respuestas.all().prefetch_related('respuestas_pregunta'):
-        row = [r.id, r.creado_en]
-        rmap = {rp.pregunta_id: rp for rp in r.respuestas_pregunta.all()}
-        for p in qs:
-            rp = rmap.get(p.id)
-            row.append(rp.valor_texto if rp and rp.valor_texto else (
-                rp.valor_numerico if rp and rp.valor_numerico is not None else (
-                    rp.opcion.texto if rp and rp.opcion else '')))
-        writer.writerow(row)
-    return response
-
-
-# ============================================================
-# VISTA DE RESULTADOS (CORREGIDA PARA JSON)
-# ============================================================
-
-@login_required
 def resultados(request, pk):
     encuesta = get_object_or_404(Encuesta, pk=pk, creador=request.user)
-    respuestas_orm = RespuestaEncuesta.objects.filter(encuesta=encuesta).prefetch_related(
-        "respuestas_pregunta__pregunta", "respuestas_pregunta__opcion")
-    total_respuestas = respuestas_orm.count()
+    respuestas_qs = RespuestaEncuesta.objects.filter(encuesta=encuesta)
 
-    if total_respuestas == 0:
-        return render(request, "surveys/results.html", {
-            "encuesta": encuesta, "metrics": {"total_respuestas": 0}, "total_respuestas": 0,
-            "nps_score": None, "trend_data": json.dumps({"labels": [], "data": []}),
-            "analysis_data_json": "[]", "page_name": "surveys"  # Importante mandar JSON vacío
-        })
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
 
-    # 1. DataFrame y Tendencia
-    df = build_responses_df(encuesta, respuestas_orm)
-    trend_data = compute_trend_data(respuestas_orm)
-
-    # 2. NPS
-    pregunta_nps = encuesta.preguntas.filter(tipo="scale").first()
-    nps_score, nps_estado = (None, "N/A")
-    if pregunta_nps:
-        qs_nps = RespuestaPregunta.objects.filter(pregunta=pregunta_nps, valor_numerico__isnull=False)
-        nps_score, nps_estado = calcular_nps(qs_nps)
-
-    # 3. Visualizaciones avanzadas (Heatmap/Crosstab)
-    heatmap_image, crosstab_html = None, None
-    if not df.empty:
+    if start_date:
         try:
-            heatmap_image = generar_heatmap_correlacion(df)
-        except:
-            pass
-        try:
-            cols = [c for c in df.columns if c != "Fecha"]
-            if len(cols) >= 2: crosstab_html = pd.crosstab(df[cols[0]], df[cols[1]]).to_html(
-                classes="table table-sm table-bordered mb-0", border=0)
-        except:
+            s_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            respuestas_qs = respuestas_qs.filter(creado_en__date__gte=s_date)
+        except ValueError:
             pass
 
-    # 4. Análisis por Pregunta
-    analysis_data = []
-    for pregunta in encuesta.preguntas.all().order_by("orden"):
-        col_name = pregunta.texto
-        if col_name not in df.columns: continue
-        series = df[col_name].dropna()
-        if series.empty: continue
+    if end_date:
+        try:
+            e_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            respuestas_qs = respuestas_qs.filter(creado_en__date__lte=e_date)
+        except ValueError:
+            pass
 
-        item = {
-            "id": pregunta.id, "texto": pregunta.texto, "tipo": pregunta.tipo,
-            "pregunta_tipo": pregunta.get_tipo_display(),
-            "stats": {}, "chart_labels": [], "chart_data": [], "respuestas": [], "insight": ""
-        }
+    segment_col = request.GET.get('segment_col')
+    segment_val = request.GET.get('segment_val')
+    filters = {}
+    if segment_col and segment_val:
+        filters[segment_col] = segment_val
 
-        if pregunta.tipo == "text":
-            words, bigrams = analizar_texto_avanzado([{"valor_texto": str(t)} for t in series])
-            item["stats"]["top_words"] = words
-            item["respuestas"] = [{"valor_texto": str(t)} for t in series.head(5)]
-            item[
-                "insight"] = f"Tema principal: <strong>'{bigrams[0][0] if bigrams else (words[0][0] if words else 'Variado')}'</strong>"
+    # Cache de resultados analíticos por encuesta, usuario y filtros aplicados
+    cache_sig = json.dumps({
+        'start': start_date,
+        'end': end_date,
+        'segment_col': segment_col,
+        'segment_val': segment_val,
+    }, sort_keys=True)
+    cache_key = f"survey_results:{request.user.id}:{encuesta.id}:{cache_sig}"
 
-        elif pregunta.tipo in ["number", "scale"]:
-            s_num = pd.to_numeric(series, errors="coerce").dropna()
-            if not s_num.empty:
-                desc = s_num.describe()
-                item["stats"] = {"promedio": desc["mean"], "minimo": desc["min"], "maximo": desc["max"],
-                                 "mediana": s_num.median()}
-                if pregunta.tipo == "scale": item["stats"]["nps"] = nps_score if pregunta == pregunta_nps else None
+    data = cache.get(cache_key)
+    if data is None:
+        data = core_survey_analysis(encuesta, respuestas_qs, filters=filters)
+        cache.set(cache_key, data, 300)
 
-                item[
-                    "insight"] = f"Promedio: <strong>{desc['mean']:.1f}</strong> (Mín: {desc['min']:.0f} - Máx: {desc['max']:.0f})"
-
-                counts = s_num.value_counts().sort_index()
-                if pregunta.tipo == "scale":
-                    limit_max = 5 if s_num.max() <= 5 else 10
-                    limit_min = 0 if s_num.min() == 0 else 1
-                    counts = counts.reindex(range(limit_min, limit_max + 1), fill_value=0)
-
-                item["chart_labels"] = [str(i) for i in counts.index]
-                item["chart_data"] = counts.values.tolist()
-
-        elif pregunta.tipo in ["single", "multi"]:
-            if pregunta.tipo == "multi":
-                opts = []
-                for v in series: opts.extend([x.strip() for x in str(v).split(',')])
-                counts = pd.Series(opts).value_counts()
-            else:
-                counts = series.value_counts()
-
-            if not counts.empty:
-                item["stats"]["moda"] = f"{counts.index[0]} ({counts.iloc[0]})"
-                item["insight"] = f"Opción ganadora: <strong>{counts.index[0]}</strong>"
-                item["chart_labels"] = counts.index.tolist()
-                item["chart_data"] = counts.values.tolist()
-
-        analysis_data.append(item)
-
-    try:
-        last_date = respuestas_orm.latest("creado_en").creado_en
-    except:
-        last_date = None
-
-    metrics = {"total_respuestas": total_respuestas, "nps": nps_score, "ultima_respuesta": last_date}
-
-    # --- CORRECCIÓN CLAVE: Serializar analysis_data para JS ---
-    analysis_data_json = json.dumps(analysis_data, cls=DjangoJSONEncoder)
+    analysis_json = json.dumps(data['analysis_data'], cls=DjangoJSONEncoder)
 
     context = {
-        "encuesta": encuesta, "metrics": metrics, "total_respuestas": total_respuestas,
-        "nps_score": nps_score, "nps_estado": nps_estado,
-        "trend_data": json.dumps(trend_data),
-        "analysis_data": analysis_data,  # Para usar en el HTML (Django template)
-        "analysis_data_json": analysis_data_json,  # Para usar en el JS (Chart.js)
-        "heatmap_image": heatmap_image, "crosstab_html": crosstab_html,
-        "top_insights": analysis_data[:3],  # Top 3 para resumen
-        "page_name": "surveys",
+        'encuesta': encuesta, 'total_respuestas': data['total_respuestas'], 'metrics': data['metrics'],
+        'nps_score': data['nps_score'], 'nps_estado': data['nps_estado'], 'trend_data': json.dumps(data['trend_data']),
+        'analysis_data': data['analysis_data'], 'analysis_data_json': analysis_json,
+        'heatmap_image': data['heatmap_image'], 'crosstab_html': data['crosstab_html'],
+        'top_insights': data['analysis_data'][:3], 'page_name': 'surveys',
+        'filter_start': start_date, 'filter_end': end_date, 'filter_col': segment_col, 'filter_val': segment_val,
+        'preguntas_filtro': encuesta.preguntas.filter(tipo__in=['single', 'multi'])
     }
-    return render(request, "surveys/results.html", context)
+    return render(request, 'surveys/results.html', context)

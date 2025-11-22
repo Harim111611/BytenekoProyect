@@ -3,19 +3,23 @@
 
 {% block page_styles %}
 <style>
-    /* Estilos personalizados para este dashboard */
-    .hover-shadow { transition: all 0.3s ease; }
-    .hover-shadow:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important; }
-
-    /* Iconos de KPIs */
-    .kpi-icon-box { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-
-    /* Iconos de Insights */
+    /* Icon box para KPIs */
+    .kpi-icon-box {
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+        background-color: var(--bs-tertiary-bg);
+    }
     .insight-icon-box { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 
-    /* Acordeón limpio */
-    .accordion-button:not(.collapsed) { background-color: #f8f9fa; color: #0d6efd; }
-    .accordion-button:focus { box-shadow: none; border-color: rgba(0,0,0,.125); }
+    /* Barra de filtros */
+    .filter-bar {
+        background-color: var(--card-bg);
+        border: 1px solid var(--card-border-color);
+        border-radius: 1rem;
+        padding: 1rem 1.5rem;
+        margin-bottom: 2rem;
+    }
 </style>
 {% endblock %}
 
@@ -25,109 +29,119 @@
     <div class="mb-4">
         <nav aria-label="breadcrumb" class="mb-2">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'surveys:detail' encuesta.pk %}">{{ encuesta.titulo }}</a></li>
-                <li class="breadcrumb-item active">Resultados</li>
+                <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}" class="text-decoration-none">Mis Encuestas</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ encuesta.titulo }}</li>
             </ol>
         </nav>
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h1 class="h2 fw-bold mb-1">Análisis de Resultados</h1>
-                <p class="text-muted mb-0">
-                    <i class="bi bi-calendar3 me-1"></i> Creada el {{ encuesta.fecha_creacion|date:"d M Y" }}
-                </p>
+                <h1 class="h2 fw-bold mb-1 text-body-emphasis">Resultados Analíticos</h1>
+                <p class="text-muted mb-0">Explora los datos y segmenta tu audiencia.</p>
             </div>
             <div class="d-flex gap-2">
-                <a href="{% url 'surveys:detail' encuesta.pk %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-gear-fill me-1"></i> Gestionar
-                </a>
                 <a href="{% url 'surveys:exportar' encuesta.pk %}" class="btn btn-outline-primary">
-                    <i class="bi bi-download me-1"></i> Exportar CSV
+                    <i class="bi bi-download me-1"></i> Exportar
                 </a>
             </div>
         </div>
     </div>
 
+    <div class="filter-bar shadow-sm">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Desde</label>
+                <input
+                    type="date"
+                    name="start"
+                    class="form-control bg-body-tertiary border-0"
+                    value="{{ filter_start|default:'' }}"
+                >
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Hasta</label>
+                <input
+                    type="date"
+                    name="end"
+                    class="form-control bg-body-tertiary border-0"
+                    value="{{ filter_end|default:'' }}"
+                >
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Segmentar por Pregunta</label>
+                <select name="segment_col" class="form-select bg-body-tertiary border-0">
+                    <option value="">-- Sin segmentar --</option>
+                    {% for p in preguntas_filtro %}
+                        <option
+                            value="{{ p.texto }}"
+                            {% if filter_col == p.texto %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ p.texto|truncatechars:30 }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">Valor (Contiene)</label>
+                <input
+                    type="text"
+                    name="segment_val"
+                    class="form-control bg-body-tertiary border-0"
+                    placeholder="Ej. Empresarial"
+                    value="{{ filter_val|default:'' }}"
+                >
+            </div>
+
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-primary w-100" title="Aplicar Filtros">
+                    <i class="bi bi-funnel-fill"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+
     {% if total_respuestas == 0 %}
-        <div class="card border-0 shadow-sm py-5">
+        <div class="card border-0 shadow-sm py-5 bg-body-tertiary">
             <div class="card-body text-center">
-                <div class="mb-3">
-                    <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle" style="width: 80px; height: 80px;">
-                        <i class="bi bi-bar-chart-line fs-1 text-muted"></i>
-                    </div>
-                </div>
-                <h3 class="fw-bold text-secondary">Aún no hay respuestas</h3>
-                <p class="text-muted col-md-6 mx-auto">
-                    Cuando recibas datos, aquí verás un análisis completo con gráficos, NPS y detección automática de tendencias.
-                </p>
-                <div class="mt-4">
-                    <a href="{% url 'surveys:responder' encuesta.pk %}" target="_blank" class="btn btn-primary">
-                        <i class="bi bi-link-45deg"></i> Ir a la encuesta pública
-                    </a>
-                </div>
+                <i class="bi bi-search fs-1 text-muted mb-3"></i>
+                <h3 class="fw-bold text-body-emphasis">No se encontraron resultados</h3>
+                <p class="text-muted">Intenta ajustar los filtros o comparte tu encuesta para recibir datos.</p>
+                <a href="{% url 'surveys:resultados' encuesta.pk %}" class="btn btn-outline-secondary mt-2">Limpiar Filtros</a>
             </div>
         </div>
-
     {% else %}
 
         <div class="row g-4 mb-5">
             <div class="col-md-3 col-6">
-                <div class="card border-0 shadow-sm h-100">
+                <div class="card kpi-card-results h-100 py-3 hover-shadow">
                     <div class="card-body d-flex align-items-center gap-3">
-                        <div class="kpi-icon-box bg-primary-subtle text-primary">
-                            <i class="bi bi-people-fill fs-4"></i>
-                        </div>
+                        <div class="kpi-icon-box text-primary"><i class="bi bi-people-fill fs-4"></i></div>
                         <div>
-                            <div class="text-muted small text-uppercase fw-bold">Total</div>
-                            <div class="h3 fw-bold mb-0">{{ total_respuestas }}</div>
+                            <div class="small text-uppercase fw-bold opacity-75">Muestra</div>
+                            <div class="h3 fw-bold mb-0 text-body-emphasis">{{ total_respuestas }}</div>
                         </div>
                     </div>
                 </div>
             </div>
-
             <div class="col-md-3 col-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body d-flex align-items-center gap-3">
-                        <div class="kpi-icon-box bg-success-subtle text-success">
-                            <i class="bi bi-speedometer2 fs-4"></i>
-                        </div>
-                        <div>
-                            <div class="text-muted small text-uppercase fw-bold">NPS Global</div>
-                            <div class="h3 fw-bold mb-0">
-                                {% if nps_score is not None %}{{ nps_score }}{% else %}--{% endif %}
-                            </div>
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="text-muted small text-uppercase fw-bold">NPS Segmento</div>
+                        <div class="h3 fw-bold mb-0 {% if nps_score > 0 %}text-success{% elif nps_score < 0 %}text-danger{% else %}text-muted{% endif %}">
+                            {{ nps_score|default:"--" }}
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-md-3 col-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body d-flex align-items-center gap-3">
-                        <div class="kpi-icon-box bg-info-subtle text-info">
-                            <i class="bi bi-activity fs-4"></i>
-                        </div>
-                        <div>
-                            <div class="text-muted small text-uppercase fw-bold">Salud</div>
-                            <div class="h4 fw-bold mb-0 text-truncate">{{ nps_estado|default:"N/A" }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3 col-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body d-flex align-items-center gap-3">
-                        <div class="kpi-icon-box bg-warning-subtle text-warning">
-                            <i class="bi bi-clock-history fs-4"></i>
-                        </div>
-                        <div>
-                            <div class="text-muted small text-uppercase fw-bold">Última</div>
-                            <div class="h4 fw-bold mb-0">
-                                {% if metrics.ultima_respuesta %}
-                                    {{ metrics.ultima_respuesta|date:"d M" }}
-                                {% else %}--{% endif %}
-                            </div>
+             <div class="col-md-3 col-6">
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="text-muted small text-uppercase fw-bold">Satisfacción</div>
+                        <div class="h3 fw-bold mb-0 text-body-emphasis">
+                            {{ metrics.promedio_satisfaccion|default:"--" }}
                         </div>
                     </div>
                 </div>
@@ -136,44 +150,25 @@
 
         {% if analysis_data %}
         <div class="mb-5">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div>
-                    <h4 class="fw-bold mb-0"><i class="bi bi-stars text-warning me-2"></i>Resumen Ejecutivo</h4>
-                    <p class="text-muted small">Lo más destacado de tus resultados.</p>
-                </div>
-            </div>
-
+            <h4 class="fw-bold mb-3 text-body-emphasis">
+                <i class="bi bi-stars text-warning me-2"></i>
+                Hallazgos del Segmento
+            </h4>
             <div class="row g-3">
                 {% for item in top_insights %}
                     <div class="col-md-4">
-                        <div class="card h-100 border-0 shadow-sm hover-shadow" style="background-color: #f8f9fa;">
+                        <div class="card h-100 insight-card shadow-sm hover-shadow">
                             <div class="card-body p-4 d-flex flex-column">
-
-                                <div class="d-flex align-items-center mb-3">
-                                    {% if item.tipo == 'text' %}
-                                        <div class="insight-icon-box bg-info-subtle text-info me-2"><i class="bi bi-chat-quote-fill"></i></div>
-                                        <small class="fw-bold text-uppercase text-muted">Opinión</small>
-                                    {% elif item.tipo == 'scale' or item.tipo == 'number' %}
-                                        <div class="insight-icon-box bg-success-subtle text-success me-2"><i class="bi bi-graph-up-arrow"></i></div>
-                                        <small class="fw-bold text-uppercase text-muted">Métrica</small>
-                                    {% else %}
-                                        <div class="insight-icon-box bg-primary-subtle text-primary me-2"><i class="bi bi-pie-chart-fill"></i></div>
-                                        <small class="fw-bold text-uppercase text-muted">Tendencia</small>
-                                    {% endif %}
-                                </div>
-
-                                <h6 class="fw-bold text-dark mb-2">{{ item.pregunta_texto|truncatechars:40 }}</h6>
-
+                                <h6 class="fw-bold text-body-emphasis mb-2">{{ item.texto|truncatechars:40 }}</h6>
                                 <p class="card-text text-secondary flex-grow-1 small">
                                     {% if item.insight %}
                                         {% autoescape off %}{{ item.insight }}{% endautoescape %}
                                     {% else %}
-                                        Información disponible en el detalle.
+                                        Ver detalle.
                                     {% endif %}
                                 </p>
-
-                                <div class="mt-3 pt-3 border-top border-light-subtle">
-                                    <a href="#q_{{ item.id }}" class="text-decoration-none text-muted small stretched-link">
+                                <div class="mt-3 pt-3 border-top border-secondary-subtle">
+                                    <a href="#q_{{ item.id }}" class="text-decoration-none small stretched-link">
                                         Ver detalle <i class="bi bi-arrow-right-short"></i>
                                     </a>
                                 </div>
@@ -188,8 +183,8 @@
         <div class="row g-4 mb-5">
             <div class="col-lg-8">
                 <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header bg-white py-3">
-                        <h6 class="m-0 fw-bold text-primary">Historial de Respuestas</h6>
+                    <div class="card-header bg-transparent py-3">
+                        <h6 class="m-0 fw-bold text-primary">Historial (Filtrado)</h6>
                     </div>
                     <div class="card-body p-4">
                         <div style="height: 300px;">
@@ -198,56 +193,56 @@
                     </div>
                 </div>
             </div>
-
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header bg-white py-3">
+                    <div class="card-header bg-transparent py-3">
                         <h6 class="m-0 fw-bold text-primary">Correlaciones</h6>
                     </div>
-                    <div class="card-body p-4 d-flex align-items-center justify-content-center bg-light">
+                    <div class="card-body p-4 d-flex align-items-center justify-content-center">
                         {% if heatmap_image %}
-                            <img src="data:image/png;base64,{{ heatmap_image }}" class="img-fluid rounded shadow-sm" alt="Mapa de calor" style="max-height: 280px;">
+                            <img
+                                src="data:image/png;base64,{{ heatmap_image }}"
+                                class="img-fluid rounded shadow-sm"
+                                style="max-height: 280px;"
+                            >
                         {% else %}
-                            <div class="text-center text-muted">
-                                <i class="bi bi-grid-3x3-gap fs-1 mb-2"></i>
-                                <p class="small mb-0">Se necesitan más datos numéricos para calcular correlaciones.</p>
-                            </div>
+                            <p class="text-muted small">Sin datos suficientes en este segmento.</p>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <h4 class="fw-bold mb-4 pb-2 border-bottom">Resultados por Pregunta</h4>
-
+        <h4 class="fw-bold mb-4 pb-2 border-bottom border-secondary-subtle text-body-emphasis">
+            Detalle por Pregunta
+        </h4>
         <div class="accordion" id="questionsAccordion">
             {% for item in analysis_data %}
-                <div class="accordion-item mb-3 border-0 shadow-sm" id="q_{{ item.id }}">
+                <div class="accordion-item mb-3 shadow-sm" id="q_{{ item.id }}">
                     <h2 class="accordion-header">
-                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ item.id }}">
-                            <span class="fw-bold me-2 text-muted">{{ item.orden }}.</span> {{ item.texto }}
+                        <button
+                            class="accordion-button {% if not forloop.first %}collapsed{% endif %}"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapse{{ item.id }}"
+                        >
+                            <span class="fw-bold me-2 opacity-50">{{ item.orden }}.</span>
+                            {{ item.texto }}
                         </button>
                     </h2>
-                    <div id="collapse{{ item.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#questionsAccordion">
-                        <div class="accordion-body bg-white">
+                    <div
+                        id="collapse{{ item.id }}"
+                        class="accordion-collapse collapse {% if forloop.first %}show{% endif %}"
+                        data-bs-parent="#questionsAccordion"
+                    >
+                        <div class="accordion-body">
                             <div class="row">
-                                <div class="col-md-8 border-end">
+                                <div class="col-md-8 border-end border-secondary-subtle">
                                     {% if item.tipo == 'text' %}
-                                        <div class="p-3 bg-light rounded mb-3">
-                                            <h6 class="small fw-bold text-uppercase text-muted">Palabras Clave</h6>
-                                            <div class="d-flex flex-wrap gap-2">
-                                                {% for word, count in item.stats.top_words %}
-                                                    <span class="badge bg-white text-dark border">{{ word }} <span class="text-muted ms-1">{{ count }}</span></span>
-                                                {% empty %}
-                                                    <span class="text-muted small">Sin datos suficientes.</span>
-                                                {% endfor %}
-                                            </div>
-                                        </div>
-                                        <h6 class="small fw-bold text-muted">Respuestas recientes:</h6>
                                         <ul class="list-group list-group-flush small">
                                             {% for resp in item.respuestas %}
-                                                <li class="list-group-item border-0 px-0">
-                                                    <i class="bi bi-chat-left-text me-2 text-muted"></i> "{{ resp.valor_texto }}"
+                                                <li class="list-group-item border-0 px-0 bg-transparent text-body">
+                                                    "{{ resp.valor_texto }}"
                                                 </li>
                                             {% endfor %}
                                         </ul>
@@ -257,28 +252,10 @@
                                         </div>
                                     {% endif %}
                                 </div>
-
                                 <div class="col-md-4 ps-md-4">
-                                    <h6 class="small fw-bold text-uppercase text-muted mb-3">Estadísticas</h6>
-
                                     {% if item.insight %}
-                                        <div class="alert alert-light border-start border-primary py-2 small text-muted mb-4">
-                                            <i class="bi bi-info-circle me-1"></i> {% autoescape off %}{{ item.insight }}{% endautoescape %}
-                                        </div>
-                                    {% endif %}
-
-                                    {% if item.stats.promedio %}
-                                        <ul class="list-unstyled small mb-0">
-                                            <li class="d-flex justify-content-between mb-2"><span>Promedio:</span> <strong>{{ item.stats.promedio|floatformat:1 }}</strong></li>
-                                            <li class="d-flex justify-content-between mb-2"><span>Mínimo:</span> <strong>{{ item.stats.minimo|floatformat:0 }}</strong></li>
-                                            <li class="d-flex justify-content-between mb-2"><span>Máximo:</span> <strong>{{ item.stats.maximo|floatformat:0 }}</strong></li>
-                                        </ul>
-                                    {% endif %}
-
-                                    {% if item.stats.moda %}
-                                        <div class="mt-3">
-                                            <span class="d-block small text-muted">Opción más votada:</span>
-                                            <strong class="text-primary">{{ item.stats.moda }}</strong>
+                                        <div class="alert alert-info-soft py-2 small mb-4">
+                                            {% autoescape off %}{{ item.insight }}{% endautoescape %}
                                         </div>
                                     {% endif %}
                                 </div>
@@ -288,7 +265,6 @@
                 </div>
             {% endfor %}
         </div>
-
     {% endif %}
 </div>
 {% endblock %}
@@ -296,100 +272,85 @@
 {% block scripts %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 {% if total_respuestas > 0 %}
 <script>
-    // --- 1. CARGAR DATOS DESDE DJANGO (SEGURO) ---
-    const analysisData = {{ analysis_data_json|safe }};
-    const trendData = {{ trend_data|safe }};
+    document.addEventListener('DOMContentLoaded', function() {
+        const analysisData = {{ analysis_data_json|default:"null"|safe }};
+        const trendData = {{ trend_data|default:"null"|safe }};
 
-    // Colores estándar del tema
-    const colors = {
-        primary: '#0d6efd',
-        success: '#198754',
-        bgAlpha: 'rgba(13, 110, 253, 0.1)'
-    };
+        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6';
+        const textColor = isDark ? '#adb5bd' : '#666';
 
-    // --- 2. GRÁFICO DE TENDENCIA ---
-    const trendCtx = document.getElementById('trendLineChart')?.getContext('2d');
-    if (trendCtx && trendData) {
-        new Chart(trendCtx, {
-            type: 'line',
-            data: {
-                labels: trendData.labels,
-                datasets: [{
-                    label: 'Respuestas',
-                    data: trendData.data,
-                    borderColor: colors.primary,
-                    backgroundColor: colors.bgAlpha,
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false } },
-                    y: { beginAtZero: true, ticks: { precision: 0 } }
-                }
-            }
-        });
-    }
-
-    // --- 3. GRÁFICOS POR PREGUNTA ---
-    if (analysisData) {
-        analysisData.forEach(item => {
-            // Ignorar preguntas de texto
-            if (item.tipo === 'text') return;
-
-            const canvas = document.getElementById('chart_q_' + item.id);
-            if (!canvas) return;
-
-            // Configurar tipo de gráfico
-            let type = 'bar';
-            let indexAxis = 'x';
-            let legend = false;
-
-            if (item.tipo === 'single' || item.tipo === 'multi') {
-                type = 'doughnut';
-                legend = true;
-            } else if (item.tipo === 'scale' || item.tipo === 'number') {
-                // Barras verticales para escalas
-                type = 'bar';
-            }
-
-            new Chart(canvas, {
-                type: type,
+        if (document.getElementById('trendLineChart') && trendData) {
+            new Chart(document.getElementById('trendLineChart'), {
+                type: 'line',
                 data: {
-                    labels: item.chart_labels,
+                    labels: trendData.labels,
                     datasets: [{
-                        label: 'Frecuencia',
-                        data: item.chart_data,
-                        backgroundColor: [
-                            '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b',
-                            '#858796', '#5a5c69', '#f8f9fc', '#2e59d9'
-                        ],
-                        borderWidth: 1
+                        label: 'Respuestas',
+                        data: trendData.data,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: {
-                    indexAxis: indexAxis,
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: legend, position: 'right' }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { display: type === 'bar', grid: {display: false} },
-                        y: { display: type === 'bar', beginAtZero: true }
+                        x: { grid: { display: false }, ticks: { color: textColor } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
                     }
                 }
             });
-        });
-    }
+        }
+
+        if (analysisData) {
+            analysisData.forEach(item => {
+                if (item.tipo === 'text') return;
+                const canvas = document.getElementById('chart_q_' + item.id);
+                if (!canvas) return;
+
+                let type = (item.tipo === 'single' || item.tipo === 'multi') ? 'doughnut' : 'bar';
+                let options = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: textColor } } }
+                };
+
+                if (type === 'bar') {
+                    options.scales = {
+                        x: { grid: { display: false }, ticks: { color: textColor } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
+                    };
+                } else {
+                    options.cutout = '65%';
+                    options.plugins.legend.position = 'right';
+                }
+
+                new Chart(canvas, {
+                    type: type,
+                    data: {
+                        labels: item.chart_labels,
+                        datasets: [{
+                            label: 'Votos',
+                            data: item.chart_data,
+                            backgroundColor: [
+                                '#4e73df', '#1cc88a', '#36b9cc',
+                                '#f6c23e', '#e74a3b', '#858796'
+                            ],
+                            borderColor: isDark ? '#1e1e1e' : '#fff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: options
+                });
+            });
+        }
+    });
 </script>
 {% endif %}
 {% endblock %}

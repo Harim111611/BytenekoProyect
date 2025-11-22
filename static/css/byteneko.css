@@ -1,0 +1,467 @@
+/* ============================================
+   Byteneko Design System - Unified Stylesheet
+   Adaptado para Modo Oscuro (Bootstrap 5.3)
+   ============================================ */
+
+/* VARIABLES GLOBALES (Modo Claro) */
+:root {
+    /* Sidebar */
+    --sidebar-width: 280px;
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e5e7eb;
+    --sidebar-accent: #f3f4f6;
+    --sidebar-accent-text: #111827;
+    --sidebar-text: #6b7281;
+
+    /* Cards y Contenedores */
+    --card-bg: #ffffff;
+    --card-text: #212529;
+    --card-header-bg: #ffffff;
+    --card-border-color: rgba(0,0,0,0.08);
+
+    /* Colores Accent */
+    --bk-primary: #0d6efd;
+    --bk-primary-10: rgba(13, 110, 253, 0.1);
+    --bk-info-10: rgba(59, 130, 246, 0.1);
+    --bk-success-10: rgba(16, 185, 129, 0.1);
+
+    /* Sincronizar con variables de Bootstrap */
+    --bs-card-bg: var(--card-bg);
+    --bs-card-color: var(--card-text);
+    --bs-card-border-color: var(--card-border-color);
+}
+
+/* OVERRIDES PARA MODO OSCURO (Paleta "Jet Grey" - Alto Contraste) */
+[data-bs-theme="dark"] {
+    /* Base Global */
+    --bs-body-bg: #121212;      /* Fondo casi negro */
+    --bs-body-color: #e0e0e0;   /* Texto gris claro */
+    --bs-heading-color: #ffffff;
+    --bs-border-color: #333333;
+    --bs-tertiary-bg: #2c2c2c;
+
+    /* Sidebar */
+    --sidebar-bg: #181818;
+    --sidebar-border: #333333;
+    --sidebar-accent: #333333;
+    --sidebar-accent-text: #ffffff;
+    --sidebar-text: #a0a0a0;
+
+    /* Cards (Gris Oscuro Neutro) */
+    --card-bg: #1e1e1e;
+    --card-text: #e0e0e0;
+    --card-header-bg: #1e1e1e;
+    --card-border-color: #404040;
+
+    /* Acentos más luminosos */
+    --bk-primary-10: rgba(13, 110, 253, 0.25);
+    --bk-info-10: rgba(13, 202, 240, 0.20);
+    --bk-success-10: rgba(25, 135, 84, 0.20);
+}
+
+/* Fondo global */
+body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+/* --------- Layout Sidebar --------- */
+.app-sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.app-sidebar-logo {
+    height: 70px;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+.app-sidebar-logo span { color: var(--bs-body-color) !important; }
+
+.app-sidebar-nav {
+    flex: 1;
+    padding: 1.5rem 1rem;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+
+.nav-item-button {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--sidebar-text);
+    text-decoration: none; border-radius: 0.5rem; font-weight: 500;
+    transition: all 0.2s;
+}
+
+.nav-item-button:hover {
+    background-color: var(--sidebar-accent);
+    color: var(--sidebar-accent-text);
+}
+.nav-item-button.active {
+    background-color: var(--bk-primary-10);
+    color: var(--bk-primary);
+}
+[data-bs-theme="dark"] .nav-item-button.active {
+    color: #6ea8fe; /* Azul claro en modo oscuro */
+}
+.nav-item-button i { font-size: 1.25rem; }
+
+.app-sidebar-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--sidebar-border);
+    background-color: var(--sidebar-bg);
+}
+
+/* Main Content */
+.app-content {
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+}
+
+/* --------- Componentes Globales (Tarjetas) --------- */
+
+/* APLICAR A TODAS LAS TARJETAS */
+.card, .kpi-card-modern, .chart-card, .settings-card, .q-card,
+.kpi-card-results, .insight-card { /* Añadidas clases de results.html */
+    background-color: var(--card-bg);
+    color: var(--card-text);
+    border: 1px solid var(--card-border-color);
+    border-radius: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+}
+
+[data-bs-theme="dark"] .card,
+[data-bs-theme="dark"] .kpi-card-modern,
+[data-bs-theme="dark"] .chart-card,
+[data-bs-theme="dark"] .kpi-card-results,
+[data-bs-theme="dark"] .insight-card {
+    box-shadow: none;
+}
+
+.kpi-card-modern:hover, .chart-card:hover, .card:hover,
+.kpi-card-results:hover, .insight-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--bk-primary);
+}
+
+.card-header {
+    background-color: var(--card-header-bg) !important;
+    border-bottom: 1px solid var(--card-border-color) !important;
+    font-weight: 600;
+}
+[data-bs-theme="dark"] .card-header h5,
+[data-bs-theme="dark"] .card-header h6 {
+    color: var(--bs-heading-color);
+}
+
+/* Tablas */
+.table {
+    --bs-table-color: var(--card-text);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--card-border-color);
+}
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover > * {
+    --bs-table-accent-bg: rgba(255, 255, 255, 0.05);
+}
+
+/* Iconos KPI */
+.icon-square {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+}
+
+/* --------- Survey Specifics (Resultados & Detalles) --------- */
+
+/* Acordeones (Para vista de detalles) */
+.accordion-item {
+    background-color: var(--card-bg);
+    color: var(--card-text);
+    border-color: var(--card-border-color);
+}
+.accordion-button {
+    background-color: var(--card-bg);
+    color: var(--card-text);
+    box-shadow: none; /* Quita el glow azul default */
+}
+.accordion-button:not(.collapsed) {
+    background-color: var(--bk-primary-10); /* Fondo azul suave */
+    color: var(--bk-primary);
+}
+[data-bs-theme="dark"] .accordion-button:not(.collapsed) {
+    color: #6ea8fe; /* Azul claro legible */
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.5);
+}
+/* Icono del acordeón en modo oscuro */
+[data-bs-theme="dark"] .accordion-button::after {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Elementos visuales */
+.q-index {
+    width: 2.25rem; height: 2.25rem; border-radius: 0.6rem;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bk-primary-10); color: var(--bk-primary); font-weight: 700;
+}
+[data-bs-theme="dark"] .q-index { color: #6ea8fe; }
+
+.status-badge {
+    padding: 0.35em 0.8em; font-size: 0.75rem; font-weight: 600; border-radius: 50rem;
+}
+.badge-draft { background-color: var(--bs-secondary-bg-subtle); color: var(--bs-secondary-text-emphasis); }
+.badge-active { background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+.badge-closed { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+
+.progress-thin { height: 6px; border-radius: 10px; background-color: var(--bs-tertiary-bg); }
+.text-body-emphasis { color: var(--bs-heading-color) !important; }
+.border-dashed { border-style: dashed !important; }
+
+/* ============================================
+   Byteneko Design System - Unified Stylesheet
+   Adaptado para Modo Oscuro (Bootstrap 5.3)
+   ============================================ */
+
+/* VARIABLES GLOBALES (Modo Claro) */
+:root {
+    /* Sidebar */
+    --sidebar-width: 280px;
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e5e7eb;
+    --sidebar-accent: #f3f4f6;
+    --sidebar-accent-text: #111827;
+    --sidebar-text: #6b7281;
+
+    /* Cards y Contenedores */
+    --card-bg: #ffffff;
+    --card-text: #212529;
+    --card-header-bg: #ffffff;
+    --card-border-color: rgba(0,0,0,0.08);
+
+    /* Colores Accent */
+    --bk-primary: #0d6efd;
+    --bk-primary-10: rgba(13, 110, 253, 0.1);
+    --bk-info-10: rgba(59, 130, 246, 0.1);
+    --bk-success-10: rgba(16, 185, 129, 0.1);
+
+    /* Sincronizar con variables de Bootstrap */
+    --bs-card-bg: var(--card-bg);
+    --bs-card-color: var(--card-text);
+    --bs-card-border-color: var(--card-border-color);
+}
+
+/* OVERRIDES PARA MODO OSCURO (Paleta "Jet Grey" - Alto Contraste) */
+[data-bs-theme="dark"] {
+    /* Base Global */
+    --bs-body-bg: #121212;      /* Fondo casi negro */
+    --bs-body-color: #e0e0e0;   /* Texto gris claro */
+    --bs-heading-color: #ffffff;
+    --bs-border-color: #333333;
+    --bs-tertiary-bg: #2c2c2c;
+
+    /* Sidebar */
+    --sidebar-bg: #181818;
+    --sidebar-border: #333333;
+    --sidebar-accent: #333333;
+    --sidebar-accent-text: #ffffff;
+    --sidebar-text: #a0a0a0;
+
+    /* Cards (Gris Oscuro Neutro) */
+    --card-bg: #1e1e1e;
+    --card-text: #e0e0e0;
+    --card-header-bg: #1e1e1e;
+    --card-border-color: #404040;
+
+    /* Acentos más luminosos */
+    --bk-primary-10: rgba(13, 110, 253, 0.25);
+    --bk-info-10: rgba(13, 202, 240, 0.20);
+    --bk-success-10: rgba(25, 135, 84, 0.20);
+}
+
+/* Fondo global */
+body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+/* --------- Layout Sidebar --------- */
+.app-sidebar {
+    width: var(--sidebar-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1040; /* Bootstrap offcanvas z-index is 1045, stick close */
+    transition: transform 0.3s ease-in-out, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.app-sidebar-logo {
+    height: 70px;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+.app-sidebar-logo span { color: var(--bs-body-color) !important; }
+
+.app-sidebar-nav {
+    flex: 1;
+    padding: 1.5rem 1rem;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+
+.nav-item-button {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--sidebar-text);
+    text-decoration: none; border-radius: 0.5rem; font-weight: 500;
+    transition: all 0.2s;
+}
+
+.nav-item-button:hover {
+    background-color: var(--sidebar-accent);
+    color: var(--sidebar-accent-text);
+}
+.nav-item-button.active {
+    background-color: var(--bk-primary-10);
+    color: var(--bk-primary);
+}
+[data-bs-theme="dark"] .nav-item-button.active {
+    color: #6ea8fe; /* Azul claro en modo oscuro */
+}
+.nav-item-button i { font-size: 1.25rem; }
+
+.app-sidebar-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--sidebar-border);
+    background-color: var(--sidebar-bg);
+}
+
+/* Main Content */
+.app-content {
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+    transition: margin-left 0.3s ease-in-out;
+}
+
+/* --------- RESPONSIVE (Móvil y Tablet Vertical) --------- */
+@media (max-width: 991.98px) {
+    /* 1. Ocultar Sidebar por defecto */
+    .app-sidebar {
+        transform: translateX(-100%);
+        box-shadow: none;
+    }
+
+    /* 2. Quitar margen del contenido */
+    .app-content {
+        margin-left: 0;
+    }
+
+    /* 3. Estado "Abierto" (activado por JS) */
+    body.sidebar-open .app-sidebar {
+        transform: translateX(0);
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+
+    /* 4. Overlay oscuro de fondo */
+    .sidebar-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1030; /* Debajo del sidebar (1040) */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease;
+        backdrop-filter: blur(2px);
+    }
+    body.sidebar-open .sidebar-overlay {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* --------- Componentes Globales (Tarjetas) --------- */
+.card, .kpi-card-modern, .chart-card, .settings-card, .q-card,
+.kpi-card-results, .insight-card {
+    background-color: var(--card-bg);
+    color: var(--card-text);
+    border: 1px solid var(--card-border-color);
+    border-radius: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+}
+
+[data-bs-theme="dark"] .card,
+[data-bs-theme="dark"] .kpi-card-modern,
+[data-bs-theme="dark"] .chart-card,
+[data-bs-theme="dark"] .kpi-card-results,
+[data-bs-theme="dark"] .insight-card { box-shadow: none; }
+
+.kpi-card-modern:hover, .chart-card:hover, .card:hover,
+.kpi-card-results:hover, .insight-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--bk-primary);
+}
+
+.card-header {
+    background-color: var(--card-header-bg) !important;
+    border-bottom: 1px solid var(--card-border-color) !important;
+    font-weight: 600;
+}
+[data-bs-theme="dark"] .card-header h5,
+[data-bs-theme="dark"] .card-header h6 { color: var(--bs-heading-color); }
+
+.table {
+    --bs-table-color: var(--card-text);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--card-border-color);
+}
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover > * { --bs-table-accent-bg: rgba(255, 255, 255, 0.05); }
+
+.icon-square {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+}
+
+.accordion-item {
+    background-color: var(--card-bg); color: var(--card-text); border-color: var(--card-border-color);
+}
+.accordion-button { background-color: var(--card-bg); color: var(--card-text); box-shadow: none; }
+.accordion-button:not(.collapsed) { background-color: var(--bk-primary-10); color: var(--bk-primary); }
+[data-bs-theme="dark"] .accordion-button:not(.collapsed) { color: #6ea8fe; box-shadow: inset 0 -1px 0 rgba(0,0,0,0.5); }
+[data-bs-theme="dark"] .accordion-button::after { filter: invert(1) grayscale(100%) brightness(200%); }
+
+.q-index {
+    width: 2.25rem; height: 2.25rem; border-radius: 0.6rem;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bk-primary-10); color: var(--bk-primary); font-weight: 700;
+}
+[data-bs-theme="dark"] .q-index { color: #6ea8fe; }
+
+.status-badge { padding: 0.35em 0.8em; font-size: 0.75rem; font-weight: 600; border-radius: 50rem; }
+.badge-draft { background-color: var(--bs-secondary-bg-subtle); color: var(--bs-secondary-text-emphasis); }
+.badge-active { background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+.badge-closed { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+
+.progress-thin { height: 6px; border-radius: 10px; background-color: var(--bs-tertiary-bg); }
+.text-body-emphasis { color: var(--bs-heading-color) !important; }
+.border-dashed { border-style: dashed !important; }

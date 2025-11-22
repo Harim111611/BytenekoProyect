@@ -1,0 +1,197 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{# Ya no necesitamos definir estilos locales para las tarjetas #}
+{% block page_styles %}{% endblock %}
+
+{% block app_content %}
+<div class="container-xl p-4 p-md-5">
+
+    <div class="d-flex justify-content-between align-items-end mb-5">
+        <div>
+            <h6 class="text-uppercase text-muted small fw-bold ls-1 mb-1">Panel de Control</h6>
+            <h1 class="h2 fw-bold text-body-emphasis mb-0">Hola, {{ user_name|capfirst }} 👋</h1>
+            <p class="text-muted mt-1 mb-0">Aquí está el resumen de tus estudios de mercado hoy.</p>
+        </div>
+        <div>
+            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
+                <i class="bi bi-plus-lg me-2"></i>Nueva Encuesta
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        {% for kpi in kpis %}
+        <div class="col-md-4">
+            <div class="card kpi-card-modern h-100 p-3">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-square bg-{{ kpi.color }}-subtle text-{{ kpi.color }} me-3">
+                        <i class="bi {{ kpi.icon }}"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small text-uppercase fw-bold mb-1">{{ kpi.label }}</p>
+                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ kpi.value }}</h2>
+                        <small class="text-muted">{{ kpi.subtext }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-lg-8">
+            <div class="card chart-card h-100">
+                <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                    <h5 class="h6 fw-bold m-0 text-primary"><i class="bi bi-graph-up me-2"></i>Flujo de Respuestas (15 días)</h5>
+                    <small class="text-muted">Actividad diaria</small>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <div style="height: 300px;">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card chart-card h-100">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">Estado de Proyectos</h5>
+                </div>
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <div style="height: 220px; width: 100%; position: relative;">
+                        <canvas id="statusPieChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center small text-muted">
+                        Distribución de tus encuestas
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card chart-card border-0 mb-4">
+        <div class="card-header bg-transparent py-3 px-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="h6 fw-bold mb-0 text-body-emphasis">Monitoreo de Encuestas Recientes</h5>
+                <a href="{% url 'surveys:list' %}" class="text-decoration-none small fw-bold">Ver todas <i class="bi bi-arrow-right"></i></a>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-body-tertiary text-muted small text-uppercase">
+                    <tr>
+                        <th class="px-4 py-3 border-0 rounded-start">Encuesta</th>
+                        <th class="px-4 py-3 border-0">Estado</th>
+                        <th class="px-4 py-3 border-0">Progreso de Muestra</th>
+                        <th class="px-4 py-3 border-0 text-end rounded-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recent_activity %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <div class="fw-bold text-body-emphasis">{{ item.titulo }}</div>
+                            <small class="text-muted"><i class="bi bi-clock me-1"></i>Modificada: {{ item.fecha|date:"d M, Y" }}</small>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="status-badge badge-{{ item.estado }}">
+                                {{ item.get_estado_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3" style="min-width: 200px;">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span class="fw-bold">{{ item.respuestas }}</span>
+                                <span class="text-muted">meta: {{ item.objetivo }}</span>
+                            </div>
+                            <div class="progress progress-thin">
+                                <div class="progress-bar {% if item.progreso_pct >= 100 %}bg-success{% else %}bg-primary{% endif %}"
+                                     role="progressbar"
+                                     style="width: {{ item.visual_progress }}%"></div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-end">
+                            <a href="{% url 'surveys:resultados' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill" title="Ver Resultados">
+                                <i class="bi bi-bar-chart-fill"></i>
+                            </a>
+                            <a href="{% url 'surveys:detail' item.id %}" class="btn btn-sm btn-outline-secondary rounded-pill text-muted ms-1" title="Configurar">
+                                <i class="bi bi-gear-fill"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5 text-muted">
+                            <div class="mb-2"><i class="bi bi-inbox fs-2 opacity-50"></i></div>
+                            No tienes encuestas recientes. <a href="{% url 'surveys:crear' %}">Crea una ahora</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Colores dinámicos para los gráficos
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6';
+    const textColor = isDark ? '#adb5bd' : '#666';
+
+    const ctxMain = document.getElementById('mainChart');
+    if(ctxMain) {
+        new Chart(ctxMain, {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Respuestas Diarias',
+                    data: {{ chart_data|safe }},
+                    borderColor: '#4f46e5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.05)',
+                    borderWidth: 2,
+                    tension: 0.4, fill: true, pointRadius: 3, pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: textColor, font: { size: 11 } } },
+                    y: { beginAtZero: true, border: { display: false }, grid: { color: gridColor }, ticks: { color: textColor } }
+                },
+                interaction: { mode: 'nearest', axis: 'x', intersect: false }
+            }
+        });
+    }
+
+    const ctxPie = document.getElementById('statusPieChart');
+    if(ctxPie) {
+        new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: ['Activas', 'Borrador', 'Cerradas'],
+                datasets: [{
+                    data: {{ pie_data|safe }},
+                    borderColor: isDark ? '#2b3035' : '#fff', // Borde del gráfico coincide con el fondo de la tarjeta
+                    backgroundColor: ['#10b981', '#e9ecef', '#ef4444'],
+                    hoverOffset: 4, borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '75%',
+                plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, color: textColor } } }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
