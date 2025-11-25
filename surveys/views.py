@@ -244,7 +244,6 @@ class EncuestaListView(LoginRequiredMixin, ListView):
 class EncuestaCreateView(LoginRequiredMixin, CreateView):
     model = Encuesta
     template_name = 'surveys/survey_create.html'
-    # Agregamos 'categoria' a los fields permitidos
     fields = ['titulo', 'descripcion', 'estado', 'categoria']
     success_url = reverse_lazy('surveys:list')
 
@@ -253,31 +252,42 @@ class EncuestaCreateView(LoginRequiredMixin, CreateView):
             try:
                 data = json.loads(request.body)
 
-                # Aquí guardamos la categoría que viene del JS (sea del select o del input 'otro')
                 encuesta = Encuesta.objects.create(
                     creador=request.user,
                     titulo=data['surveyInfo']['titulo'],
                     descripcion=data['surveyInfo']['descripcion'],
-                    categoria=data['surveyInfo'].get('categoria', 'General'), # Captura
+                    categoria=data['surveyInfo'].get('categoria', 'General'),
                     estado='draft'
                 )
 
-                # ... (resto de creación de preguntas igual) ...
-
                 for i, q in enumerate(data['questions']):
-                    tipo = {'text': 'text', 'number': 'number', 'scale': 'scale', 'single': 'single', 'multi': 'multi'}.get(q['tipo'], 'text')
-                    p = Pregunta.objects.create(encuesta=encuesta, texto=q['titulo'], tipo=tipo, orden=i, es_obligatoria=q.get('required', False))
+                    tipo = {'text': 'text', 'number': 'number', 'scale': 'scale', 'single': 'single',
+                            'multi': 'multi'}.get(q['tipo'], 'text')
+                    p = Pregunta.objects.create(encuesta=encuesta, texto=q['titulo'], tipo=tipo, orden=i,
+                                                es_obligatoria=q.get('required', False))
                     if q.get('opciones'):
                         for opt in q['opciones']: OpcionRespuesta.objects.create(pregunta=p, texto=opt)
 
-                return JsonResponse({'success': True, 'redirect_url': str(reverse_lazy('surveys:detail', kwargs={'pk': encuesta.pk}))})
+                # Limpiar caché del dashboard al crear vía AJAX
+                cache_key = f"dashboard_data_user_{request.user.id}"
+                cache.delete(cache_key)
+
+                return JsonResponse(
+                    {'success': True, 'redirect_url': str(reverse_lazy('surveys:detail', kwargs={'pk': encuesta.pk}))})
             except Exception as e:
                 return JsonResponse({'error': str(e)}, status=500)
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         form.instance.creador = self.request.user
-        return super().form_valid(form)
+        response = super().form_valid(form)
+
+        # Limpiar caché del dashboard al crear vía Formulario estándar
+        cache_key = f"dashboard_data_user_{self.request.user.id}"
+        cache.delete(cache_key)
+
+        return response
+
 
 class EncuestaDetailView(LoginRequiredMixin, DetailView):
     model = Encuesta
@@ -291,11 +301,28 @@ class EncuestaUpdateView(LoginRequiredMixin, UpdateView):
     template_name = 'surveys/form.html'
     success_url = reverse_lazy('surveys:list')
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        # Limpiar caché del dashboard al editar (ej. cambiar estado activa/borrador)
+        cache_key = f"dashboard_data_user_{self.request.user.id}"
+        cache.delete(cache_key)
+
+        return response
+
 
 class EncuestaDeleteView(LoginRequiredMixin, DeleteView):
     model = Encuesta
     template_name = 'surveys/confirm_delete.html'
     success_url = reverse_lazy('surveys:list')
+
+    def form_valid(self, form):
+        # Limpiar caché del dashboard ANTES o DESPUÉS de borrar
+        # super().form_valid() ejecuta el borrado real en Django DeleteView
+        cache_key = f"dashboard_data_user_{self.request.user.id}"
+        cache.delete(cache_key)
+
+        return super().form_valid(form)
 
 
 # ============================================================
@@ -400,6 +427,11 @@ def import_new_survey_view(request):
                         rp_list.append(rp)
 
                 RespuestaPregunta.objects.bulk_create(rp_list, batch_size=2000)
+
+            # Limpiar caché del dashboard tras importación
+            cache_key = f"dashboard_data_user_{request.user.id}"
+            cache.delete(cache_key)
+
             messages.success(request, f"Importación exitosa: {len(df)} registros.")
         except Exception as e:
             messages.error(request, f"Error: {e}")
@@ -464,6 +496,11 @@ def responder(request, pk):
                             if op: RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p, opcion=op)
                         else:
                             RespuestaPregunta.objects.create(respuesta_encuesta=respuesta, pregunta=p, valor_texto=val)
+
+        # Opcional: Limpiar caché si quieres que las nuevas respuestas se reflejen instantáneamente en el dashboard del creador
+        # Pero como 'responder' lo usa un usuario final y no necesariamente el creador, obtener el ID del creador requiere queries extra.
+        # Generalmente, esperar 5 min para ver nuevas respuestas es aceptable. Para encuestas creadas/borradas NO.
+
         return redirect('surveys:thanks')
     return render(request, 'surveys/fill.html', {'encuesta': encuesta})
 
