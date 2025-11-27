@@ -23,69 +23,404 @@
     .top-survey-item:hover {
         transform: translateY(-2px);
     }
+
+    /* Evitar que el texto se salga */
+    .min-width-0 {
+        min-width: 0;
+    }
+    .text-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* Badge de tendencia */
+    .trend-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+    
+    /* Estilos específicos para impresión */
+    @media print {
+        /* Forzar modo claro en todo el documento */
+        :root {
+            color-scheme: light only !important;
+        }
+        
+        html,
+        html[data-bs-theme="dark"],
+        html[data-bs-theme="dark"] body,
+        body {
+            background-color: #ffffff !important;
+            color: #212529 !important;
+            filter: none !important;
+        }
+        
+        /* Forzar todos los elementos a modo claro */
+        * {
+            background-color: inherit !important;
+            color: inherit !important;
+            border-color: #dee2e6 !important;
+        }
+        
+        /* Tarjetas y contenedores */
+        .card,
+        .kpi-card,
+        .bg-dark,
+        div[class*="bg-"] {
+            background-color: #ffffff !important;
+            color: #212529 !important;
+            border: 1px solid #dee2e6 !important;
+        }
+        
+        .card-body,
+        .card-header {
+            background-color: #ffffff !important;
+            color: #212529 !important;
+        }
+        
+        /* Canvas de gráficos */
+        canvas {
+            background-color: #ffffff !important;
+            filter: none !important;
+        }
+        
+        /* Encabezados */
+        h1, h2, h3, h4, h5, h6,
+        .text-white,
+        .text-light,
+        .text-muted {
+            color: #212529 !important;
+        }
+        
+        /* Tablas */
+        table,
+        th,
+        td {
+            background-color: #ffffff !important;
+            color: #212529 !important;
+            border-color: #dee2e6 !important;
+        }
+        
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #f8f9fa !important;
+        }
+        
+        body { 
+            background: white !important;
+            color: #212529 !important;
+            font-size: 11pt;
+        }
+        
+        .container-xl {
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+        
+        /* Ocultar elementos no necesarios */
+        .btn, button, .d-print-none {
+            display: none !important;
+        }
+        
+        /* Ajustar tarjetas para impresión */
+        .kpi-card-modern, .chart-card {
+            box-shadow: none !important;
+            border: 1px solid #dee2e6 !important;
+            page-break-inside: avoid;
+            background-color: white !important;
+        }
+        
+        /* Forzar texto oscuro en todos los elementos */
+        .text-muted {
+            color: #6c757d !important;
+        }
+        
+        .text-body-emphasis,
+        h1, h2, h3, h4, h5, h6 {
+            color: #212529 !important;
+        }
+        
+        /* Encabezado para impresión */
+        .print-header {
+            display: block !important;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #0d6efd !important;
+        }
+        
+        /* Forzar impresión en color para gráficos */
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+        
+        /* Saltos de página estratégicos */
+        .page-break-before {
+            page-break-before: always;
+        }
+        
+        .page-break-avoid {
+            page-break-inside: avoid;
+        }
+        
+        /* Mantener colores de fondo en KPIs */
+        .bg-primary-subtle,
+        .bg-success-subtle,
+        .bg-info-subtle,
+        .bg-secondary-subtle,
+        .bg-soft-blue {
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+        }
+        
+        /* Forzar fondos claros en tarjetas KPI */
+        .kpi-card-modern.bg-primary-subtle {
+            background-color: #e7f1ff !important;
+        }
+        
+        .kpi-card-modern.bg-success-subtle {
+            background-color: #d1f4e0 !important;
+        }
+        
+        .kpi-card-modern.bg-info-subtle {
+            background-color: #d1ecf1 !important;
+        }
+        
+        .kpi-card-modern.bg-secondary-subtle {
+            background-color: #e9ecef !important;
+        }
+        
+        /* Forzar colores de texto en KPIs */
+        .text-primary {
+            color: #0d6efd !important;
+        }
+        
+        .text-success {
+            color: #198754 !important;
+        }
+        
+        .text-info {
+            color: #0dcaf0 !important;
+        }
+        
+        .text-secondary {
+            color: #6c757d !important;
+        }
+        
+        /* Forzar fondos blancos en cards */
+        .card, .chart-card {
+            background-color: white !important;
+            border: 1px solid #dee2e6 !important;
+        }
+        
+        /* Tablas con fondo claro */
+        table {
+            background-color: white !important;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa !important;
+        }
+        
+        .bg-body-tertiary {
+            background-color: #f8f9fa !important;
+        }
+    }
+    
+    /* Ocultar en pantalla, mostrar en impresión */
+    .d-print-only {
+        display: none;
+    }
+    
+    @media print {
+        .d-print-only {
+            display: block !important;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block app_content %}
 <div class="container-xl p-4 p-md-5">
 
-    <div class="d-flex justify-content-between align-items-end mb-5">
-        <div>
-            <h6 class="text-uppercase text-muted small fw-bold ls-1 mb-1">Análisis Global</h6>
-            <h1 class="h2 fw-bold text-body-emphasis mb-0">Resultados de Encuestas</h1>
-            <p class="text-muted mt-1 mb-0">Métricas agregadas de todas tus encuestas.</p>
+    {# Encabezado para impresión (solo visible al imprimir) #}
+    <div class="d-print-only print-header">
+        <div class="row align-items-center">
+            <div class="col-8">
+                <h1 class="h3 fw-bold mb-1">Vista Global de Resultados</h1>
+                <p class="text-muted mb-0">Reporte generado el {{ "now"|date:"d/m/Y H:i" }}</p>
+            </div>
+            <div class="col-4 text-end">
+                <img src="{% static 'img/byteneko_logo.png' %}" alt="Byteneko" style="height: 40px;" onerror="this.style.display='none'">
+            </div>
         </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-end mb-4 d-print-none">
         <div>
+            <h6 class="text-uppercase text-primary small fw-bold ls-1 mb-1">
+                <i class="bi bi-bar-chart-fill me-1"></i>Análisis Consolidado
+            </h6>
+            <h1 class="h2 fw-bold text-body-emphasis mb-0">Vista Global de Resultados</h1>
+            <p class="text-muted mt-1 mb-0">Métricas agregadas y análisis comparativo de todas tus surveys activas.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary fw-medium">
+                <i class="bi bi-house-door me-1"></i>Dashboard
+            </a>
             <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
                 <i class="bi bi-plus-lg me-2"></i>Nueva Encuesta
             </a>
         </div>
     </div>
 
-    <div class="row g-4 mb-5">
+    {# Filtros rápidos #}
+    <div class="card border-0 shadow-sm mb-4 d-print-none">
+        <div class="card-body p-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <label class="small fw-bold text-muted mb-0">PERÍODO:</label>
+                </div>
+                <div class="col-auto">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="periodo" id="periodo7" autocomplete="off" {% if periodo == '7' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="periodo7">7 días</label>
+                        
+                        <input type="radio" class="btn-check" name="periodo" id="periodo30" autocomplete="off" {% if periodo == '30' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="periodo30">30 días</label>
+                        
+                        <input type="radio" class="btn-check" name="periodo" id="periodo90" autocomplete="off" {% if periodo == '90' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="periodo90">90 días</label>
+                        
+                        <input type="radio" class="btn-check" name="periodo" id="periodoAll" autocomplete="off" {% if periodo == 'all' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary" for="periodoAll">Todo</label>
+                    </div>
+                </div>
+                <div class="col-auto ms-auto">
+                    <a href="{% url 'global_results_pdf' %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-file-pdf me-1"></i>Descargar PDF
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Sección NPS Global si existe #}
+    {% if global_nps %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-3 text-center border-end">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">NPS Global</h6>
+                    <h1 class="display-4 fw-bold mb-0 {% if global_nps >= 50 %}text-success{% elif global_nps >= 0 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ global_nps|floatformat:0 }}
+                    </h1>
+                    <p class="small text-muted mb-0">Net Promoter Score</p>
+                </div>
+                <div class="col-md-9">
+                    <div class="row g-3 text-center">
+                        <div class="col-4">
+                            <div class="p-3 bg-success-subtle rounded">
+                                <i class="bi bi-emoji-heart-eyes fs-3 text-success mb-2 d-block"></i>
+                                <h4 class="fw-bold text-success mb-0">{{ promoters|default:"0" }}%</h4>
+                                <small class="text-success">Promotores</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 bg-soft-blue rounded">
+                                <i class="bi bi-emoji-neutral fs-3 text-soft-blue mb-2 d-block"></i>
+                                <h4 class="fw-bold text-soft-blue mb-0">{{ passives|default:"0" }}%</h4>
+                                <small class="text-soft-blue">Pasivos</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-3 bg-danger-subtle rounded">
+                                <i class="bi bi-emoji-frown fs-3 text-danger mb-2 d-block"></i>
+                                <h4 class="fw-bold text-danger mb-0">{{ detractors|default:"0" }}%</h4>
+                                <small class="text-danger">Detractores</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4 mb-5 page-break-avoid">
         {# KPI: Total Respuestas #}
-        <div class="col-md-4">
-            <div class="card kpi-card-modern h-100 p-3">
-                <div class="card-body d-flex align-items-center">
-                    <div class="icon-square bg-primary-subtle text-primary me-3">
+        <div class="col-md-3 col-6">
+            <div class="card kpi-card-modern h-100 p-3 border-0 bg-primary-subtle">
+                <div class="card-body d-flex align-items-center p-0">
+                    <div class="icon-square bg-primary text-white me-3">
                         <i class="bi bi-people-fill"></i>
                     </div>
-                    <div>
-                        <p class="text-muted small text-uppercase fw-bold mb-1">Respuestas Totales</p>
-                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ total_responses|default:"0" }}</h2>
-                        <small class="text-muted">En todas las encuestas</small>
+                    <div class="flex-grow-1">
+                        <p class="text-primary small text-uppercase fw-bold mb-1">Respuestas</p>
+                        <h2 class="h3 fw-bold mb-0 text-primary">{{ total_responses|default:"0"|floatformat:0 }}</h2>
+                        <small class="text-primary opacity-75">
+                            Acumuladas
+                            {% if weekly_change %}
+                                <span class="trend-badge {% if weekly_change >= 0 %}bg-success text-white{% else %}bg-danger text-white{% endif %} ms-1">
+                                    <i class="bi bi-arrow-{% if weekly_change >= 0 %}up{% else %}down{% endif %}"></i>
+                                    {{ weekly_change|floatformat:1 }}%
+                                </span>
+                            {% endif %}
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
 
         {# KPI: Satisfacción Global #}
-        <div class="col-md-4">
-            <div class="card kpi-card-modern h-100 p-3">
-                <div class="card-body d-flex align-items-center">
-                    <div class="icon-square bg-success-subtle text-success me-3">
-                        <i class="bi bi-emoji-heart-eyes-fill"></i>
+        <div class="col-md-3 col-6">
+            <div class="card kpi-card-modern h-100 p-3 border-0 bg-success-subtle">
+                <div class="card-body d-flex align-items-center p-0">
+                    <div class="icon-square bg-success text-white me-3">
+                        <i class="bi bi-emoji-smile-fill"></i>
                     </div>
-                    <div>
-                        <p class="text-muted small text-uppercase fw-bold mb-1">Sat. Global (Escala)</p>
-                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ global_satisfaction|default:"0"|floatformat:1 }} <small class="text-muted">/10</small></h2>
-                        <small class="text-muted">Promedio en encuestas de escala</small>
+                    <div class="flex-grow-1">
+                        <p class="text-success small text-uppercase fw-bold mb-1">Satisfacción</p>
+                        <h2 class="h3 fw-bold mb-0 text-success">
+                            {{ global_satisfaction|default:"0"|floatformat:1 }} 
+                            <small class="opacity-75 fs-6">/10</small>
+                        </h2>
+                        <small class="text-success opacity-75">Promedio global</small>
                     </div>
                 </div>
             </div>
         </div>
 
         {# KPI: Encuestas Activas #}
-        <div class="col-md-4">
-            <div class="card kpi-card-modern h-100 p-3">
-                <div class="card-body d-flex align-items-center">
-                    <div class="icon-square bg-info-subtle text-info me-3">
+        <div class="col-md-3 col-6">
+            <div class="card kpi-card-modern h-100 p-3 border-0 bg-info-subtle">
+                <div class="card-body d-flex align-items-center p-0">
+                    <div class="icon-square bg-info text-white me-3">
                         <i class="bi bi-broadcast-pin"></i>
                     </div>
-                    <div>
-                        <p class="text-muted small text-uppercase fw-bold mb-1">Encuestas Activas</p>
-                        <h2 class="h3 fw-bold mb-0 text-body-emphasis">{{ total_active|default:"0" }}</h2>
-                        <small class="text-muted">Generando datos</small>
+                    <div class="flex-grow-1">
+                        <p class="text-info small text-uppercase fw-bold mb-1">Activas</p>
+                        <h2 class="h3 fw-bold mb-0 text-info">{{ total_active|default:"0" }}</h2>
+                        <small class="text-info opacity-75">de {{ total_surveys }} totales</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# KPI: Total Encuestas #}
+        <div class="col-md-3 col-6">
+            <div class="card kpi-card-modern h-100 p-3 border-0 bg-secondary-subtle">
+                <div class="card-body d-flex align-items-center p-0">
+                    <div class="icon-square bg-secondary text-white me-3">
+                        <i class="bi bi-collection-fill"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <p class="text-secondary small text-uppercase fw-bold mb-1">Total</p>
+                        <h2 class="h3 fw-bold mb-0 text-secondary">{{ total_surveys|default:"0" }}</h2>
+                        <small class="text-secondary opacity-75">Encuestas</small>
                     </div>
                 </div>
             </div>
@@ -94,10 +429,10 @@
 
     <div class="row g-4 mb-5">
         <div class="col-lg-8">
-            <div class="card chart-card h-100">
+            <div class="card chart-card h-100 page-break-avoid">
                 <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="h6 fw-bold m-0 text-primary"><i class="bi bi-graph-up me-2"></i>Tendencia de Respuestas (30 días)</h5>
-                    <small class="text-muted">Todas las encuestas</small>
+                    <small class="text-muted">Todas las surveys</small>
                 </div>
                 <div class="card-body px-4 pb-4">
                     <div style="height: 300px;">
@@ -108,31 +443,133 @@
         </div>
 
         <div class="col-lg-4">
-            <div class="card chart-card h-100">
+            <div class="card chart-card h-100 page-break-avoid">
                 <div class="card-header bg-transparent border-0 pt-4 px-4">
-                    <h5 class="h6 fw-bold m-0 text-body-emphasis">Top 5 Encuestas</h5>
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis"><i class="bi bi-pie-chart me-2"></i>Encuestas por Estado</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div style="height: 280px;">
+                        <canvas id="categoriaDonutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Nueva sección: Top Preguntas y Top Encuestas #}
+    <div class="row g-4 mb-5">
+        <div class="col-lg-6">
+            <div class="card chart-card h-100 page-break-avoid">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-trophy me-2 text-warning"></i>Top 10 Preguntas Mejor Valoradas
+                    </h5>
+                    <small class="text-muted">Escalas con al menos 5 respuestas</small>
+                </div>
+                <div class="card-body p-4">
+                    {% if top_preguntas %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 5%;">#</th>
+                                        <th>Pregunta</th>
+                                        <th style="width: 15%;" class="text-center">Promedio</th>
+                                        <th style="width: 15%;" class="text-center">Respuestas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for question in top_preguntas %}
+                                    <tr>
+                                        <td class="text-muted fw-bold">{{ forloop.counter }}</td>
+                                        <td class="text-truncate" style="max-width: 300px;" title="{{ question.text }}">
+                                            <a href="{% url 'surveys:resultados' question.survey.id %}" class="text-decoration-none text-body">
+                                                {{ question.text }}
+                                            </a>
+                                            <br>
+                                            <small class="text-muted">{{ question.survey.title|truncatechars:40 }}</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {% if question.avg_score >= 8 %}bg-success{% elif question.avg_score >= 6 %}bg-primary{% else %}bg-warning{% endif %} rounded-pill">
+                                                {{ question.avg_score|floatformat:1 }} / 10
+                                            </span>
+                                        </td>
+                                        <td class="text-center text-muted">{{ question.num_responses }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-3 mb-2 d-block"></i>
+                            <small>No hay datos suficientes para mostrar ranking</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card chart-card h-100 page-break-avoid">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-star me-2 text-primary"></i>Top 5 Encuestas por Participación
+                    </h5>
                 </div>
                 <div class="card-body p-4">
                     <ul class="list-group list-group-flush">
                         {% for survey in top_surveys %}
                         <li class="list-group-item px-0 bg-transparent border-secondary-subtle top-survey-item">
-                            <div class="d-flex justify-content-between align-items-center py-2">
-                                <div>
-                                    <h6 class="mb-0 fw-bold text-body-emphasis">{{ survey.titulo }}</h6>
-                                    <small class="text-muted">{{ survey.response_count }} respuestas</small>
+                            <div class="d-flex justify-content-between align-items-start gap-2 py-2">
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-primary rounded-circle" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+                                            {{ forloop.counter }}
+                                        </span>
+                                        <h6 class="mb-0 fw-bold text-body-emphasis text-truncate flex-grow-1" title="{{ survey.title }}">
+                                            {{ survey.title }}
+                                        </h6>
+                                    </div>
+                                    <div class="ms-5">
+                                        <small class="text-muted">
+                                            <i class="bi bi-people-fill me-1"></i>{{ survey.response_count }} respuestas
+                                        </small>
+                                        {% if survey.status == 'active' %}
+                                            <span class="badge bg-success-subtle text-success ms-2">Activa</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <a href="{% url 'surveys:resultados' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                <a href="{% url 'surveys:resultados' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill flex-shrink-0">
                                     Ver <i class="bi bi-arrow-right"></i>
                                 </a>
                             </div>
                         </li>
                         {% empty %}
                         <li class="list-group-item px-0 bg-transparent border-0 text-center py-4 text-muted">
-                            <i class="bi bi-journal-x fs-4 mb-2"></i><br>
-                            No hay datos para mostrar top encuestas.
+                            <i class="bi bi-journal-x fs-4 mb-2 d-block"></i>
+                            <small>No hay datos para mostrar</small>
                         </li>
                         {% endfor %}
                     </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Sección de tendencia semanal #}
+    <div class="row g-4 mb-5">
+        <div class="col-12">
+            <div class="card chart-card page-break-avoid">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-calendar-week me-2"></i>Tendencia Semanal (Últimas 4 Semanas)
+                    </h5>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <div style="height: 200px;">
+                        <canvas id="weeklyTrendChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -151,7 +588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6';
     const textColor = isDark ? '#adb5bd' : '#666';
 
-    // 2. Configurar el gráfico de área (Tendencias)
+    // 2. Configurar el gráfico de área (Tendencias 30 días)
     var ctx = document.getElementById("globalAreaChart");
     if (ctx) {
         var chartLabels = {{ chart_labels|default:"[]"|safe }};
@@ -208,6 +645,128 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // 3. Gráfico de dona (Distribución por estado)
+    var ctxDonut = document.getElementById("categoriaDonutChart");
+    if (ctxDonut) {
+        var categoriaLabels = {{ categoria_labels|default:"[]"|safe }};
+        var categoriaData = {{ categoria_data|default:"[]"|safe }};
+
+        if (categoriaLabels.length > 0) {
+            // Colores según el estado
+            const colores = categoriaLabels.map(label => {
+                if (label.includes('Activa')) return 'rgba(28, 200, 138, 0.8)'; // Verde
+                if (label.includes('Borrador')) return 'rgba(246, 194, 62, 0.8)'; // Amarillo
+                if (label.includes('Cerrada')) return 'rgba(231, 74, 59, 0.8)'; // Rojo
+                if (label.includes('Archivada')) return 'rgba(133, 135, 150, 0.8)'; // Gris
+                return 'rgba(78, 115, 223, 0.8)'; // Azul por defecto
+            });
+            
+            new Chart(ctxDonut, {
+                type: 'doughnut',
+                data: {
+                    labels: categoriaLabels,
+                    datasets: [{
+                        data: categoriaData,
+                        backgroundColor: colores,
+                        borderColor: isDark ? '#212529' : '#ffffff',
+                        borderWidth: 2,
+                    }],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: textColor,
+                                padding: 15,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: isDark ? 'rgba(33, 37, 41, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                            titleColor: isDark ? '#f8f9fa' : '#333',
+                            bodyColor: isDark ? '#dee2e6' : '#666',
+                            borderColor: isDark ? '#495057' : '#dddfeb',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%',
+                }
+            });
+        }
+    }
+
+    // 4. Gráfico de barras (Tendencia semanal)
+    var ctxWeekly = document.getElementById("weeklyTrendChart");
+    if (ctxWeekly) {
+        var weeklyData = {{ weekly_trend|default:"[]"|safe }};
+        var weekLabels = ['Hace 4 semanas', 'Hace 3 semanas', 'Hace 2 semanas', 'Última semana'];
+
+        new Chart(ctxWeekly, {
+            type: 'bar',
+            data: {
+                labels: weekLabels,
+                datasets: [{
+                    label: 'Respuestas por semana',
+                    data: weeklyData,
+                    backgroundColor: 'rgba(78, 115, 223, 0.8)',
+                    borderColor: 'rgba(78, 115, 223, 1)',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? 'rgba(33, 37, 41, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                        titleColor: isDark ? '#f8f9fa' : '#333',
+                        bodyColor: isDark ? '#dee2e6' : '#666',
+                        borderColor: isDark ? '#495057' : '#dddfeb',
+                        borderWidth: 1,
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { 
+                            color: textColor,
+                            precision: 0
+                        },
+                        grid: { 
+                            color: gridColor,
+                            borderDash: [2]
+                        }
+                    },
+                },
+            }
+        });
+    }
+    
+    // Manejar cambio de período
+    document.querySelectorAll('input[name="periodo"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const periodo = this.id.replace('periodo', '').toLowerCase();
+            const periodoParam = periodo === 'all' ? 'all' : periodo;
+            window.location.href = `?periodo=${periodoParam}`;
+        });
+    });
 });
 </script>
 {% endblock %}

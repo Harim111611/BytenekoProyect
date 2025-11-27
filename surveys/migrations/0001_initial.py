@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 ('tipo', models.CharField(choices=[('text', 'Respuesta de texto'), ('multiple-choice', 'Opción múltiple'), ('satisfaction', 'Escala de satisfacción (ej. 1-10)'), ('nps', 'Net Promoter Score (NPS)')], default='text', max_length=20)),
                 ('es_obligatoria', models.BooleanField(default=False)),
                 ('orden', models.PositiveIntegerField(default=0)),
-                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='preguntas', to='surveys.encuesta')),
+                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questions', to='surveys.encuesta')),
             ],
         ),
         migrations.CreateModel(
@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('texto', models.CharField(max_length=255)),
-                ('pregunta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='opciones', to='surveys.pregunta')),
+                ('pregunta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='options', to='surveys.pregunta')),
             ],
         ),
     ]

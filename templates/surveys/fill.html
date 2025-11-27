@@ -2,6 +2,60 @@
 {% load static %}
 
 {% block content %}
+<style>
+    .hover-card {
+        transition: all 0.2s ease;
+    }
+    .hover-card:hover {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        border-color: var(--bs-primary) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-check-input:checked ~ .form-check-label {
+        font-weight: 600;
+    }
+    .form-check:has(.form-check-input:checked) {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        border-color: var(--bs-primary) !important;
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.15);
+    }
+    
+    /* Hacer que toda la card sea clickeable */
+    .option-card {
+        position: relative;
+    }
+    .option-card .form-check-input {
+        pointer-events: none;
+    }
+    .option-card .form-check-label {
+        pointer-events: none;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Hacer que toda la card sea clickeable
+    document.querySelectorAll('.option-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            // No hacer nada si se clickea directamente el input
+            if (e.target.classList.contains('form-check-input')) return;
+            
+            const input = this.querySelector('.form-check-input');
+            if (input) {
+                if (input.type === 'radio') {
+                    input.checked = true;
+                } else if (input.type === 'checkbox') {
+                    input.checked = !input.checked;
+                }
+                // Trigger change event para validaciones
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    });
+});
+</script>
+
 <div class="min-vh-100 d-flex align-items-center py-5" style="background-color: #f3f4f6;">
     <div class="container">
         <div class="row justify-content-center">
@@ -14,9 +68,9 @@
                     <div class="card-body p-4 p-md-5">
 
                         <div class="mb-5">
-                            <h1 class="h3 fw-bold text-body mb-2">{{ encuesta.titulo }}</h1>
-                            {% if encuesta.descripcion %}
-                                <p class="text-muted">{{ encuesta.descripcion }}</p>
+                            <h1 class="h3 fw-bold text-body mb-2">{{ survey.title }}</h1>
+                            {% if survey.descripcion %}
+                                <p class="text-muted">{{ survey.descripcion }}</p>
                             {% endif %}
                         </div>
 
@@ -34,28 +88,28 @@
                             {% csrf_token %}
 
                             <div class="vstack gap-4">
-                                {% for pregunta in encuesta.preguntas.all %}
+                                {% for question in survey.questions.all %}
                                     <div class="question-group">
                                         <label class="form-label fw-semibold text-body mb-2 d-block">
-                                            {{ pregunta.texto }}
-                                            {% if pregunta.es_obligatoria %}
+                                            {{ question.text }}
+                                            {% if question.is_required %}
                                                 <span class="text-danger" title="Obligatoria">*</span>
                                             {% endif %}
                                         </label>
 
-                                        {% if pregunta.tipo == 'text' %}
+                                        {% if question.type == 'text' %}
                                             <textarea class="form-control form-control-lg bg-body-tertiary border-0"
-                                                      name="pregunta_{{ pregunta.id }}" rows="3"
+                                                      name="pregunta_{{ question.id }}" rows="3"
                                                       placeholder="Escribe tu respuesta aquí..."
-                                                      {% if pregunta.es_obligatoria %}required{% endif %}></textarea>
+                                                      {% if question.is_required %}required{% endif %}></textarea>
 
-                                        {% elif pregunta.tipo == 'number' %}
+                                        {% elif question.type == 'number' %}
                                             <input type="number" class="form-control form-control-lg bg-body-tertiary border-0"
-                                                   name="pregunta_{{ pregunta.id }}"
+                                                   name="pregunta_{{ question.id }}"
                                                    placeholder="0"
-                                                   {% if pregunta.es_obligatoria %}required{% endif %}>
+                                                   {% if question.is_required %}required{% endif %}>
 
-                                        {% elif pregunta.tipo == 'scale' %}
+                                        {% elif question.type == 'scale' %}
                                             <div class="mb-2">
                                                 <div class="d-flex justify-content-between small text-muted mb-1 px-1">
                                                     <span>0 - Nada probable</span>
@@ -65,50 +119,50 @@
                                                     {% for i in "0123456789"|make_list %}
                                                         <div class="flex-fill text-center">
                                                             <input type="radio" class="btn-check"
-                                                                   name="pregunta_{{ pregunta.id }}"
-                                                                   id="scale_{{ pregunta.id }}_{{ i }}"
+                                                                   name="pregunta_{{ question.id }}"
+                                                                   id="scale_{{ question.id }}_{{ i }}"
                                                                    value="{{ i }}"
-                                                                   {% if pregunta.es_obligatoria %}required{% endif %}>
-                                                            <label class="btn btn-outline-secondary w-100" for="scale_{{ pregunta.id }}_{{ i }}">{{ i }}</label>
+                                                                   {% if question.is_required %}required{% endif %}>
+                                                            <label class="btn btn-outline-secondary w-100" for="scale_{{ question.id }}_{{ i }}">{{ i }}</label>
                                                         </div>
                                                     {% endfor %}
                                                     <div class="flex-fill text-center">
                                                         <input type="radio" class="btn-check"
-                                                               name="pregunta_{{ pregunta.id }}"
-                                                               id="scale_{{ pregunta.id }}_10"
+                                                               name="pregunta_{{ question.id }}"
+                                                               id="scale_{{ question.id }}_10"
                                                                value="10"
-                                                               {% if pregunta.es_obligatoria %}required{% endif %}>
-                                                        <label class="btn btn-outline-secondary w-100" for="scale_{{ pregunta.id }}_10">10</label>
+                                                               {% if question.is_required %}required{% endif %}>
+                                                        <label class="btn btn-outline-secondary w-100" for="scale_{{ question.id }}_10">10</label>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                        {% elif pregunta.tipo == 'single' %}
+                                        {% elif question.type == 'single' %}
                                             <div class="d-flex flex-column gap-2">
-                                                {% for opcion in pregunta.opciones.all %}
-                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary">
+                                                {% for option in question.options.all %}
+                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary hover-card option-card" style="cursor: pointer;">
                                                         <input class="form-check-input" type="radio"
-                                                               name="pregunta_{{ pregunta.id }}"
-                                                               id="opt_{{ opcion.id }}"
-                                                               value="{{ opcion.id }}"
-                                                               {% if pregunta.es_obligatoria %}required{% endif %}>
-                                                        <label class="form-check-label w-100 stretched-link" for="opt_{{ opcion.id }}">
-                                                            {{ opcion.texto }}
+                                                               name="pregunta_{{ question.id }}"
+                                                               id="opt_{{ option.id }}"
+                                                               value="{{ option.id }}"
+                                                               {% if question.is_required %}required{% endif %}>
+                                                        <label class="form-check-label w-100" for="opt_{{ option.id }}">
+                                                            {{ option.text }}
                                                         </label>
                                                     </div>
                                                 {% endfor %}
                                             </div>
 
-                                        {% elif pregunta.tipo == 'multi' %}
+                                        {% elif question.type == 'multi' %}
                                             <div class="d-flex flex-column gap-2">
-                                                {% for opcion in pregunta.opciones.all %}
-                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary">
+                                                {% for option in question.options.all %}
+                                                    <div class="form-check p-3 border rounded-3 bg-body-tertiary hover-card option-card" style="cursor: pointer;">
                                                         <input class="form-check-input" type="checkbox"
-                                                               name="pregunta_{{ pregunta.id }}"
-                                                               id="opt_{{ opcion.id }}"
-                                                               value="{{ opcion.id }}">
-                                                        <label class="form-check-label w-100 stretched-link" for="opt_{{ opcion.id }}">
-                                                            {{ opcion.texto }}
+                                                               name="pregunta_{{ question.id }}"
+                                                               id="opt_{{ option.id }}"
+                                                               value="{{ option.id }}">
+                                                        <label class="form-check-label w-100" for="opt_{{ option.id }}">
+                                                            {{ option.text }}
                                                         </label>
                                                     </div>
                                                 {% endfor %}

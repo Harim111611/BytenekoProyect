@@ -38,7 +38,7 @@
 
     <div class="mb-4">
         <h1 class="h2 fw-semibold text-body-emphasis">Crear Encuesta</h1>
-        <p class="text-muted">Sigue los pasos para crear tu encuesta profesional</p>
+        <p class="text-muted">Sigue los pasos para crear tu survey profesional</p>
     </div>
 
     <div class="mb-4">
@@ -68,8 +68,8 @@
                 <div class="d-flex align-items-start gap-3">
                     <div class="step-icon d-flex align-items-center justify-content-center rounded-circle bg-secondary-subtle text-muted fs-5 fw-semibold">2</div>
                     <div>
-                        <h3 class="h6 mb-1 fw-semibold text-body-emphasis">Agregar preguntas</h3>
-                        <p class="text-muted small mb-0">Construye tu encuesta</p>
+                        <h3 class="h6 mb-1 fw-semibold text-body-emphasis">Agregar questions</h3>
+                        <p class="text-muted small mb-0">Construye tu survey</p>
                     </div>
                 </div>
             </div>
@@ -95,29 +95,14 @@
                     <i class="bi bi-info-circle-fill text-info fs-5"></i>
                     <div>
                         <h5 class="alert-heading h6 text-info-emphasis">Paso 1: Información básica</h5>
-                        <p class="mb-0 small text-body-secondary">Define el nombre y la categoría para organizar tu estudio.</p>
+                        <p class="mb-0 small text-body-secondary">Define el nombre de tu survey para comenzar.</p>
                     </div>
                 </div>
 
-                <div class="row g-4 mt-3">
-                    <div class="col-md-6">
-                        <label for="surveyTitle" class="form-label fw-medium text-body">Nombre de la encuesta <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control bg-body-tertiary" id="surveyTitle" placeholder="ej. Satisfacción de clientes Q1 2025">
-                    </div>
-
-                    <div class="col-md-6">
-                        <label for="surveyCategory" class="form-label fw-medium text-body">Categoría <span class="text-danger">*</span></label>
-                        <input class="form-control bg-body-tertiary" list="categoryOptions" id="surveyCategory" placeholder="Escribe o selecciona...">
-                        <datalist id="categoryOptions">
-                            <option value="Investigación de Mercado">
-                            <option value="Satisfacción del Cliente">
-                            <option value="Recursos Humanos">
-                            <option value="Educación">
-                            <option value="Producto">
-                            <option value="Tecnología">
-                        </datalist>
-                        <div class="form-text small text-muted">Escribe libremente si no está en la lista.</div>
-                    </div>
+                <div class="mt-3">
+                    <label for="surveyTitle" class="form-label fw-medium text-body">Nombre de la survey <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control bg-body-tertiary" id="surveyTitle" placeholder="ej. Satisfacción de clientes Q1 2025">
+                    <div class="form-text small text-muted">Un título claro y descriptivo ayudará a organizar tus estudios.</div>
                 </div>
 
                 <div class="mt-4">
@@ -127,7 +112,7 @@
 
                 <div class="d-flex justify-content-end pt-4 mt-5 border-top border-secondary-subtle">
                     <button class="btn btn-primary" id="btn-next-1">
-                        Continuar a preguntas <i class="bi bi-arrow-right ms-1"></i>
+                        Continuar a questions <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </div>
             </div>
@@ -136,14 +121,17 @@
                 <div class="alert alert-info-subtle border border-info-subtle d-flex gap-3" role="alert">
                     <i class="bi bi-info-circle-fill text-info fs-5"></i>
                     <div>
-                        <h5 class="alert-heading h6 text-info-emphasis">Paso 2: Construye tu encuesta</h5>
-                        <p class="mb-0 small text-body-secondary">Añade las preguntas que necesites.</p>
+                        <h5 class="alert-heading h6 text-info-emphasis">Paso 2: Construye tu survey</h5>
+                        <p class="mb-0 small text-body-secondary">Añade las questions que necesites.</p>
                     </div>
                 </div>
 
                 <div class="text-center my-4">
+                    <button class="btn btn-primary btn-lg shadow-sm me-2" id="btn-suggest-questions">
+                        <i class="bi bi-magic me-2"></i> Generar questions sugeridas
+                    </button>
                     <button class="btn btn-outline-secondary btn-lg border-dashed text-body" id="btn-add-custom-question">
-                        <i class="bi bi-plus-lg me-2"></i> Crear pregunta personalizada
+                        <i class="bi bi-plus-lg me-2"></i> Crear question personalizada
                     </button>
                 </div>
 
@@ -154,7 +142,7 @@
                         <i class="bi bi-arrow-left me-1"></i> Volver
                     </button>
                     <button class="btn btn-primary" id="btn-next-2">
-                        Revisar encuesta <i class="bi bi-arrow-right ms-1"></i>
+                        Revisar survey <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </div>
             </div>
@@ -179,8 +167,8 @@
                                     <span class="fw-bold text-body-emphasis" id="review-title">...</span>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="small text-muted d-block">Categoría</label>
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="review-category">...</span>
+                                    <label class="small text-muted d-block">Descripción</label>
+                                    <span class="small text-body-emphasis" id="review-description">Sin descripción</span>
                                 </div>
                                 <div class="mb-3">
                                     <label class="small text-muted d-block">Preguntas</label>
@@ -190,7 +178,7 @@
                                 <hr class="border-secondary-subtle">
 
                                 <div class="small text-muted">
-                                    <i class="bi bi-info-circle me-1"></i> Al publicar, la encuesta quedará activa inmediatamente.
+                                    <i class="bi bi-info-circle me-1"></i> Al publicar, la survey quedará activa inmediatamente.
                                 </div>
                             </div>
                         </div>
@@ -223,11 +211,126 @@
                         <i class="bi bi-arrow-left me-1"></i> Volver a editar
                     </button>
                     <button class="btn btn-success px-4 fw-bold shadow-sm" id="btn-publish">
-                        <i class="bi bi-rocket-takeoff me-2"></i> Publicar encuesta
+                        <i class="bi bi-rocket-takeoff me-2"></i> Publicar survey
                     </button>
                 </div>
             </div>
 
+        </div>
+    </div>
+</div>
+
+<!-- Modal para seleccionar tipo de questions sugeridas -->
+<div class="modal fade" id="suggestQuestionsModal" tabindex="-1" aria-labelledby="suggestQuestionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="suggestQuestionsModalLabel">
+                    <i class="bi bi-magic me-2"></i>Selecciona el tipo de questions
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-4">Elige qué tipo de questions deseas agregar a tu survey:</p>
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="satisfaccion">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-emoji-smile fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Satisfacción del Cliente</div>
+                                    <small class="text-muted">NPS, calificaciones, mejoras</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="mercado">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-graph-up fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Investigación de Mercado</div>
+                                    <small class="text-muted">Demografía, preferencias, competencia</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="rrhh">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-people fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Recursos Humanos</div>
+                                    <small class="text-muted">Clima laboral, retención, beneficios</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="educacion">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-book fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Educación</div>
+                                    <small class="text-muted">Calidad de enseñanza, recursos</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="producto">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-box fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Producto</div>
+                                    <small class="text-muted">Usabilidad, expectativas, features</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="tecnologia">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-laptop fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Tecnología</div>
+                                    <small class="text-muted">UX, problemas técnicos, funcionalidades</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="evento">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-calendar-event fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">Evento</div>
+                                    <small class="text-muted">Organización, experiencia, logística</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="general">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="bi bi-star fs-3"></i>
+                                <div>
+                                    <div class="fw-bold">General</div>
+                                    <small class="text-muted">Preguntas básicas y versátiles</small>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -250,7 +353,7 @@
             </div>
 
             <div class="mb-3">
-                <input type="text" class="form-control question-title fw-medium bg-body-tertiary" placeholder="Escribe tu pregunta aquí..." required>
+                <input type="text" class="form-control question-title fw-medium bg-body-tertiary" placeholder="Escribe tu question aquí..." required>
             </div>
 
             <div class="form-check mb-3">

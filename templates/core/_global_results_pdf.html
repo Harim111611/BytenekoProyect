@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados Globales - Byteneko</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.7cm 1cm;
+            @bottom-center {
+                content: "Byteneko Analytics v1.0 • Página " counter(page) " de " counter(pages);
+                font-size: 6.5pt;
+                color: #6c757d;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 8pt;
+            line-height: 1.3;
+            color: #212529 !important;
+            background-color: #ffffff !important;
+        }
+
+        .header {
+            border-bottom: 3px solid #0d6efd;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            page-break-after: avoid;
+        }
+
+        .header h1 {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #0d6efd;
+            margin-bottom: 3px;
+            letter-spacing: -0.5px;
+        }
+
+        .header .subtitle {
+            font-size: 8.5pt;
+            color: #6c757d;
+            margin-bottom: 2px;
+        }
+
+        .header .date {
+            font-size: 7pt;
+            color: #adb5bd;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+
+        .kpi-card {
+            border: 3px solid;
+            border-radius: 8px;
+            padding: 10px 8px;
+            text-align: center;
+            page-break-inside: avoid;
+            position: relative;
+        }
+
+        .kpi-card.primary { 
+            background-color: #e7f1ff; 
+            border-color: #0d6efd;
+            border-style: solid;
+        }
+        
+        .kpi-card.success { 
+            background-color: #d1f4e0; 
+            border-color: #198754;
+            border-style: solid;
+        }
+        
+        .kpi-card.info { 
+            background-color: #d1ecf1; 
+            border-color: #0dcaf0;
+            border-style: solid;
+        }
+        
+        .kpi-card.secondary { 
+            background-color: #e9ecef; 
+            border-color: #6c757d;
+            border-style: solid;
+        }
+
+        .kpi-card .icon {
+            font-size: 16pt;
+            margin-bottom: 4px;
+            margin-top: 2px;
+        }
+
+        .kpi-card .label {
+            font-size: 6.5pt;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: 0.3px;
+        }
+
+        .kpi-card .value {
+            font-size: 18pt;
+            font-weight: 800;
+            margin-bottom: 2px;
+            line-height: 1;
+        }
+
+        .kpi-card .subtext {
+            font-size: 6pt;
+            opacity: 0.75;
+            font-weight: 500;
+        }
+
+        .kpi-card.primary .label,
+        .kpi-card.primary .value { color: #0d6efd; }
+        .kpi-card.success .label,
+        .kpi-card.success .value { color: #198754; }
+        .kpi-card.info .label,
+        .kpi-card.info .value { color: #0dcaf0; }
+        .kpi-card.secondary .label,
+        .kpi-card.secondary .value { color: #6c757d; }
+
+        .nps-section {
+            border: 2px solid #0d6efd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .nps-header {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .nps-header h3 {
+            font-size: 8.5pt;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+
+        .nps-score {
+            font-size: 28pt;
+            font-weight: 800;
+            margin: 4px 0;
+            line-height: 1;
+        }
+
+        .nps-score.excellent { color: #198754; }
+        .nps-score.good { color: #ffc107; }
+        .nps-score.poor { color: #dc3545; }
+
+        .nps-label {
+            font-size: 7pt;
+            color: #6c757d;
+            font-weight: 600;
+        }
+
+        .interpretation-note {
+            font-size: 6pt;
+            color: #6c757d;
+            margin-top: 8px;
+            padding: 6px 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1.5px solid #dee2e6;
+            font-style: italic;
+        }
+
+        .nps-breakdown {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .nps-item {
+            text-align: center;
+            padding: 8px 5px;
+            border-radius: 5px;
+            border: 1.5px solid;
+        }
+
+        .nps-item.promoters { 
+            background-color: #d1f4e0; 
+            border-color: #198754;
+        }
+        .nps-item.passives { 
+            background-color: #dbeafe; 
+            border-color: #3b82f6;
+        }
+        .nps-item.detractors { 
+            background-color: #ffe0e0; 
+            border-color: #dc3545;
+        }
+
+        .nps-item .emoji {
+            font-size: 14pt;
+            margin-bottom: 3px;
+        }
+
+        .nps-item .label {
+            font-size: 6.5pt;
+            font-weight: 700;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+        }
+
+        .nps-item.promoters .label { color: #198754; }
+        .nps-item.passives .label { color: #3b82f6; }
+        .nps-item.detractors .label { color: #dc3545; }
+
+        .nps-item .percentage {
+            font-size: 16pt;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .nps-item.promoters .percentage { color: #198754; }
+        .nps-item.passives .percentage { color: #3b82f6; }
+        .nps-item.detractors .percentage { color: #dc3545; }
+
+        .section-title {
+            font-size: 9pt;
+            font-weight: 700;
+            color: #0d6efd;
+            margin: 8px 0 6px 0;
+            padding-bottom: 3px;
+            border-bottom: 2px solid #0d6efd;
+            page-break-after: avoid;
+        }
+
+        .section-title .icon {
+            font-size: 11pt;
+            margin-right: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0;
+            page-break-inside: avoid;
+            border: 1.5px solid #dee2e6;
+            border-radius: 5px;
+            overflow: hidden;
+            font-size: 7.5pt;
+        }
+
+        table thead {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            color: white;
+        }
+
+        table th {
+            padding: 7px 6px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 7pt;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        table td {
+            padding: 6px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+
+        table tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 6pt;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .badge.success { 
+            background-color: #198754; 
+            color: white; 
+        }
+        .badge.primary { 
+            background-color: #0d6efd; 
+            color: white; 
+        }
+        .badge.warning { 
+            background-color: #ffc107; 
+            color: #000; 
+        }
+        .badge.active {
+            background-color: #d1f4e0;
+            color: #198754;
+            border: 1px solid #198754;
+        }
+
+        .top-survey-item {
+            padding: 8px 10px;
+            margin: 6px 0;
+            background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
+            page-break-inside: avoid;
+            border-radius: 4px;
+            border: 2px solid #dee2e6;
+        }
+
+        .top-survey-item .number {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 22px;
+            font-weight: 800;
+            font-size: 7.5pt;
+            margin-right: 8px;
+        }
+
+        .top-survey-item .title {
+            font-weight: 700;
+            font-size: 8pt;
+            color: #212529;
+            margin-bottom: 3px;
+        }
+
+        .top-survey-item .meta {
+            font-size: 6.5pt;
+            color: #6c757d;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            page-break-inside: avoid;
+        }
+
+        .trend-badge {
+            display: inline-block;
+            padding: 1px 4px;
+            border-radius: 6px;
+            font-size: 5.5pt;
+            font-weight: 700;
+            margin-left: 2px;
+            white-space: nowrap;
+        }
+
+        .trend-badge.positive {
+            background-color: #198754;
+            color: white;
+        }
+
+        .trend-badge.negative {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .categoria-item {
+            padding: 8px 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border: 2px solid #dee2e6;
+        }
+
+        .categoria-item .nombre {
+            font-weight: 600;
+            color: #212529;
+            font-size: 8pt;
+            margin-bottom: 4px;
+        }
+
+        .categoria-item .bar {
+            height: 6px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .categoria-item .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%);
+            border-radius: 3px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .stat-box {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #dee2e6;
+        }
+
+        .stat-box .label {
+            font-size: 6.5pt;
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .stat-box .value {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #0d6efd;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 15px 10px;
+            color: #6c757d;
+        }
+
+        .empty-state .icon {
+            font-size: 24pt;
+            margin-bottom: 5px;
+            opacity: 0.3;
+        }
+
+        .rank-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            border-radius: 50%;
+            font-weight: 800;
+            font-size: 6.5pt;
+        }
+
+        .rank-number.gold {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+        }
+
+        .rank-number.silver {
+            background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+            color: #000;
+        }
+
+        .rank-number.bronze {
+            background: linear-gradient(135deg, #cd7f32 0%, #f4a460 100%);
+            color: #000;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 2px solid #0d6efd;
+            margin-top: 12px; 
+            page-break-inside: avoid;
+        }
+
+        .summary-box h3 {
+            font-size: 9.5pt; 
+            font-weight: 700; 
+            color: #0d6efd; 
+            margin-bottom: 8px;
+        }
+
+        .summary-box ul {
+            list-style: none; 
+            padding: 0; 
+            margin: 0;
+        }
+
+        .summary-box li {
+            padding: 5px 0; 
+            border-bottom: 1px solid #dee2e6;
+            font-size: 7.5pt;
+            line-height: 1.4;
+        }
+
+        .summary-box li:last-child {
+            border-bottom: none;
+        }
+
+        .insight-box {
+            background: linear-gradient(135deg, #e7f1ff 0%, #f8f9fa 100%);
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #0d6efd;
+            margin: 8px 0;
+            page-break-inside: avoid;
+        }
+
+        .insight-box h4 {
+            font-size: 8pt;
+            font-weight: 700;
+            color: #0d6efd;
+            margin-bottom: 5px;
+        }
+
+        .insight-box p {
+            font-size: 7pt;
+            color: #495057;
+            margin: 3px 0;
+            line-height: 1.4;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .mini-stat {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #e9ecef;
+        }
+
+        .mini-stat .label {
+            font-size: 6pt;
+            color: #6c757d;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .mini-stat .value {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #0d6efd;
+        }
+
+        .progress-bar-container {
+            background: #e9ecef;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0d6efd 0%, #0a58ca 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .tip-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 5px;
+            padding: 8px;
+            margin: 8px 0;
+        }
+
+        .tip-box .tip-title {
+            font-size: 7pt;
+            font-weight: 700;
+            color: #997404;
+            margin-bottom: 4px;
+        }
+
+        .tip-box .tip-content {
+            font-size: 6.5pt;
+            color: #856404;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Vista Global de Resultados</h1>
+        <p class="subtitle">Análisis consolidado de todas tus surveys - Un vistazo rápido a cómo van las cosas</p>
+        <p class="date">Reporte generado el {{ fecha_generacion }}</p>
+    </div>
+
+    <!-- KPIs principales -->
+    <div class="kpi-grid">
+        <div class="kpi-card primary">
+            <div class="icon">👥</div>
+            <div class="label">Respuestas Recibidas</div>
+            <div class="value">{{ total_responses|default:"0" }}</div>
+            <div class="subtext">
+                Personas que completaron surveys{% if weekly_change and weekly_change != 0 %}<br>
+                <span class="trend-badge {% if weekly_change >= 0 %}positive{% else %}negative{% endif %}">
+                    {% if weekly_change >= 0 %}▲{% else %}▼{% endif %}{{ weekly_change|floatformat:1 }}% vs semana pasada
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="kpi-card success">
+            <div class="icon">😊</div>
+            <div class="label">Nivel de Satisfacción</div>
+            <div class="value">{{ global_satisfaction|floatformat:1 }}</div>
+            <div class="subtext">de 10 puntos posibles</div>
+        </div>
+
+        <div class="kpi-card info">
+            <div class="icon">📡</div>
+            <div class="label">Encuestas Activas</div>
+            <div class="value">{{ total_active }}</div>
+            <div class="subtext">Recibiendo respuestas ahora</div>
+        </div>
+
+        <div class="kpi-card secondary">
+            <div class="icon">📋</div>
+            <div class="label">Total Encuestas</div>
+            <div class="value">{{ total_surveys }}</div>
+            <div class="subtext">Creadas en total</div>
+        </div>
+    </div>
+
+    <!-- Sección NPS -->
+    {% if global_nps is not None %}
+    <div class="nps-section">
+        <div class="nps-header">
+            <h3>¿Qué tan probable es que te recomienden?</h3>
+            <div class="nps-score {% if global_nps >= 50 %}excellent{% elif global_nps >= 0 %}good{% else %}poor{% endif %}">
+                {{ global_nps|default:"0"|floatformat:0 }}
+            </div>
+            <p class="nps-label">Indicador de Recomendación (NPS) • {% if global_nps >= 50 %}Excelente{% elif global_nps >= 0 %}Bueno{% else %}Necesita mejorar{% endif %}</p>
+        </div>
+
+        <div class="nps-breakdown">
+            <div class="nps-item promoters">
+                <div class="emoji">😍</div>
+                <div class="label">Te recomiendan</div>
+                <div class="percentage">{{ promoters|default:"0"|floatformat:0 }}%</div>
+            </div>
+            <div class="nps-item passives">
+                <div class="emoji">😐</div>
+                <div class="label">Están neutrales</div>
+                <div class="percentage">{{ passives|default:"0"|floatformat:0 }}%</div>
+            </div>
+            <div class="nps-item detractors">
+                <div class="emoji">😞</div>
+                <div class="label">No recomiendan</div>
+                <div class="percentage">{{ detractors|default:"0"|floatformat:0 }}%</div>
+            </div>
+        </div>
+        <div class="interpretation-note">
+            💡 <strong>¿Qué significa esto?</strong> El indicador se calcula restando el % de personas que no te recomiendan del % que sí te recomiendan. Un valor mayor a 50 es excelente, mayor a 0 es bueno.
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Preguntas y Top Encuestas -->
+    <div class="two-column">
+        <div>
+            <h2 class="section-title"><span class="icon">🏆</span>Preguntas Mejor Valoradas</h2>
+            <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Las questions que obtuvieron las calificaciones más altas de tus usuarios</p>
+            {% if top_preguntas %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 8%;">#</th>
+                            <th>Pregunta</th>
+                            <th style="width: 20%; text-align: center;">Calificación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for question in top_preguntas %}
+                        <tr>
+                            <td style="text-align: center;">
+                                <span class="rank-number {% if forloop.counter == 1 %}gold{% elif forloop.counter == 2 %}silver{% elif forloop.counter == 3 %}bronze{% endif %}">
+                                    {{ forloop.counter }}
+                                </span>
+                            </td>
+                            <td>
+                                <div style="font-weight: 700; color: #212529;">{{ question.text|truncatechars:45 }}</div>
+                                <div style="font-size: 6pt; color: #6c757d;">{{ question.survey.title|truncatechars:30 }}</div>
+                            </td>
+                            <td style="text-align: center;">
+                                <span class="badge {% if question.avg_score >= 8 %}success{% elif question.avg_score >= 6 %}primary{% else %}warning{% endif %}">
+                                    {{ question.avg_score|floatformat:1 }}/10
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">
+                    <div class="icon">📊</div>
+                    <p style="font-size: 7pt;">Aún no hay suficientes respuestas</p>
+                    <p style="font-size: 6pt; margin-top: 2px;">Se necesitan al menos 5 respuestas por question</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div>
+            <h2 class="section-title"><span class="icon">⭐</span>Encuestas Más Populares</h2>
+            <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Las surveys que han recibido más participación</p>
+            {% if top_surveys %}
+                {% for survey in top_surveys %}
+                <div class="top-survey-item">
+                    <span class="number">{{ forloop.counter }}</span>
+                    <div style="display: inline-block; vertical-align: top; width: calc(100% - 28px);">
+                        <div class="title">{{ survey.title|truncatechars:40 }}</div>
+                        <div class="meta">
+                            👥 {{ survey.response_count }} persona{{ survey.response_count|pluralize }}
+                            {% if survey.status == 'active' %}
+                                <span class="badge active">● Activa</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div class="icon">📋</div>
+                    <p style="font-size: 7pt;">Aún no has creado surveys</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Distribución por categoría (Compacta) -->
+    {% if categoria_distribution %}
+    <h2 class="section-title"><span class="icon">📊</span>Tus Encuestas por Tema</h2>
+    <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Cómo se distribuyen tus surveys según su categoría o temática</p>
+    <div style="margin-bottom: 12px;">
+        {% for label, count in categoria_distribution %}
+        <div class="categoria-item">
+            <div class="nombre">
+                {{ label }}
+                <span style="float: right; font-weight: 700; color: #0d6efd; font-size: 7pt;">{{ count }}</span>
+            </div>
+            <div class="bar">
+                <div class="bar-fill" style="width: {% widthratio count total_surveys 100 %}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Resumen ejecutivo compacto -->
+    <div class="summary-box">
+        <h3>💡 En Resumen</h3>
+        <ul>
+            <li><strong>Has recibido {{ total_responses|default:"0" }} respuesta{{ total_responses|default:0|pluralize }}</strong> con una satisfacción promedio de <strong>{{ global_satisfaction|default:"0"|floatformat:1 }} de 10</strong>{% if global_nps is not None %}. Tu indicador de recomendación es <strong>{{ global_nps|floatformat:0 }}</strong> ({% if global_nps >= 50 %}¡Excelente!{% elif global_nps >= 0 %}Bien{% else %}Mejorable{% endif %}){% endif %}</li>
+            <li><strong>{{ total_active|default:"0" }} de tus {{ total_surveys|default:"0" }} survey{{ total_surveys|default:0|pluralize }}</strong> {% if total_active == 1 %}está activa{% else %}están activas{% endif %} ({{ total_surveys|default:0|yesno:"{% widthratio total_active total_surveys 100 %}%,0%" }}){% if weekly_change and weekly_change != 0 %}. {% if weekly_change >= 0 %}Has tenido un <strong>aumento del {{ weekly_change|floatformat:1 }}%</strong> en respuestas esta semana{% else %}Has tenido una <strong>disminución del {{ weekly_change|floatformat:1|cut:"-" }}%</strong> en respuestas esta semana{% endif %}{% endif %}</li>
+        </ul>
+    </div>
+
+    <!-- Sección de Actividad Reciente -->
+    {% if recent_surveys %}
+    <h2 class="section-title"><span class="icon">🕒</span>Actividad Reciente</h2>
+    <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 6px 0; font-style: italic;">Tus últimas surveys creadas</p>
+    <table style="margin-bottom: 10px;">
+        <thead>
+            <tr>
+                <th style="width: 50%;">Encuesta</th>
+                <th style="width: 20%; text-align: center;">Creada</th>
+                <th style="width: 15%; text-align: center;">Estado</th>
+                <th style="width: 15%; text-align: center;">Respuestas</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for survey in recent_surveys %}
+            <tr>
+                <td>
+                    <div style="font-weight: 700; color: #212529; font-size: 7pt;">{{ survey.title|truncatechars:50 }}</div>
+                    {% if survey.categoria %}
+                        <div style="font-size: 6pt; color: #6c757d;">📁 {{ survey.categoria }}</div>
+                    {% endif %}
+                </td>
+                <td style="text-align: center; font-size: 6.5pt; color: #6c757d;">
+                    {{ survey.fecha_creacion|date:"d/m/Y" }}
+                </td>
+                <td style="text-align: center;">
+                    {% if survey.status == 'active' %}
+                        <span class="badge success" style="font-size: 5.5pt;">Activa</span>
+                    {% elif survey.status == 'draft' %}
+                        <span class="badge" style="background-color: #6c757d; color: white; font-size: 5.5pt;">Borrador</span>
+                    {% else %}
+                        <span class="badge warning" style="font-size: 5.5pt;">Cerrada</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center; font-weight: 700; color: #0d6efd; font-size: 7pt;">
+                    {{ survey.respuestas.count }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Sección de Análisis y Recomendaciones -->
+    <h2 class="section-title"><span class="icon">💡</span>Análisis y Recomendaciones</h2>
+    
+    <div class="stat-row">
+        <div class="mini-stat">
+            <div class="label">Promedio por Encuesta</div>
+            <div class="value">
+                {% if total_surveys > 0 %}
+                    {% widthratio total_responses total_surveys 1 %}
+                {% else %}
+                    0
+                {% endif %}
+            </div>
+        </div>
+        <div class="mini-stat">
+            <div class="label">Tasa de Actividad</div>
+            <div class="value" style="font-size: 12pt;">
+                {% if total_surveys > 0 %}
+                    {% widthratio total_active total_surveys 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </div>
+        </div>
+        <div class="mini-stat">
+            <div class="label">Nivel General</div>
+            <div class="value" style="font-size: 10pt; {% if global_satisfaction >= 7 %}color: #198754{% elif global_satisfaction >= 5 %}color: #ffc107{% else %}color: #dc3545{% endif %}">
+                {% if global_satisfaction >= 7 %}⭐ Bueno{% elif global_satisfaction >= 5 %}⚠️ Regular{% else %}❌ Bajo{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights personalizados -->
+    {% if global_satisfaction >= 7 %}
+    <div class="insight-box" style="border-left-color: #198754; background: linear-gradient(135deg, #d1f4e0 0%, #f8f9fa 100%);">
+        <h4 style="color: #198754;">🎉 ¡Excelente trabajo!</h4>
+        <p>Tu nivel de satisfacción promedio de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> está por encima del promedio. Tus usuarios están contentos con las surveys.</p>
+    </div>
+    {% elif global_satisfaction >= 5 %}
+    <div class="insight-box" style="border-left-color: #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);">
+        <h4 style="color: #997404;">📊 Vas por buen camino</h4>
+        <p>Tu nivel de satisfacción de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> es aceptable, pero hay espacio para mejorar. Considera revisar las questions con calificaciones más bajas.</p>
+    </div>
+    {% else %}
+    <div class="insight-box" style="border-left-color: #dc3545; background: linear-gradient(135deg, #f8d7da 0%, #f8f9fa 100%);">
+        <h4 style="color: #dc3545;">⚠️ Área de mejora</h4>
+        <p>Tu nivel de satisfacción de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> sugiere que deberías revisar el contenido y formato de tus surveys para mejorar la experiencia.</p>
+    </div>
+    {% endif %}
+
+    {% if weekly_change > 50 %}
+    <div class="insight-box" style="border-left-color: #198754; background: linear-gradient(135deg, #d1f4e0 0%, #f8f9fa 100%);">
+        <h4 style="color: #198754;">🚀 Crecimiento acelerado</h4>
+        <p>Has tenido un <strong>aumento del {{ weekly_change|floatformat:1 }}%</strong> en respuestas esta semana. ¡Mantén el impulso compartiendo tus surveys activamente!</p>
+    </div>
+    {% elif weekly_change < -30 %}
+    <div class="insight-box" style="border-left-color: #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);">
+        <h4 style="color: #997404;">💻 Actividad reducida</h4>
+        <p>Has tenido una <strong>disminución del {{ weekly_change|floatformat:1|cut:"-" }}%</strong> en respuestas esta semana. Considera reactivar tus surveys o crear contenido nuevo.</p>
+    </div>
+    {% endif %}
+
+    {% if total_active == 0 and total_surveys > 0 %}
+    <div class="tip-box">
+        <div class="tip-title">💡 Consejo</div>
+        <div class="tip-content">No tienes surveys activas en este momento. Activa al menos una survey para empezar a recolectar respuestas y obtener feedback valioso.</div>
+    </div>
+    {% elif total_surveys == 0 %}
+    <div class="tip-box">
+        <div class="tip-title">🎓 Primeros pasos</div>
+        <div class="tip-content">Aún no has creado ninguna survey. Crea tu primera survey para empezar a recopilar opiniones y datos de tus usuarios.</div>
+    </div>
+    {% elif total_responses < 10 %}
+    <div class="tip-box">
+        <div class="tip-title">📢 Promoción</div>
+        <div class="tip-content">Tienes pocas respuestas. Comparte tus surveys en redes sociales, email o donde esté tu audiencia para obtener más participación.</div>
+    </div>
+    {% endif %}
+
+    <!-- Desglose visual de participación -->
+    {% if total_surveys > 0 %}
+    <h3 style="font-size: 8pt; font-weight: 700; color: #6c757d; margin: 10px 0 6px 0;">📊 Nivel de Participación</h3>
+    <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #dee2e6;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <span style="font-size: 7pt; color: #495057;">Respuestas totales:</span>
+            <span style="font-size: 8pt; font-weight: 700; color: #0d6efd;">{{ total_responses|default:"0" }}</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width: {% if total_responses > 100 %}100{% else %}{{ total_responses }}{% endif %}%;"></div>
+        </div>
+        <div style="font-size: 6pt; color: #6c757d; margin-top: 3px; text-align: center;">
+            {% if total_responses < 50 %}Objetivo: Alcanzar 50 respuestas{% elif total_responses < 100 %}Objetivo: Alcanzar 100 respuestas{% else %}¡Meta alcanzada!{% endif %}
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html>

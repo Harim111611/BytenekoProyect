@@ -81,7 +81,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('creado_en', models.DateTimeField(auto_now_add=True)),
                 ('anonima', models.BooleanField(default=True)),
-                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas', to='surveys.encuesta')),
+                ('encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='responses', to='surveys.encuesta')),
                 ('usuario', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
             ],
             options={
@@ -98,7 +98,7 @@ class Migration(migrations.Migration):
                 ('valor_numerico', models.IntegerField(blank=True, null=True)),
                 ('opcion', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='surveys.opcionrespuesta')),
                 ('pregunta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='surveys.pregunta')),
-                ('respuesta_encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas_pregunta', to='surveys.respuestaencuesta')),
+                ('respuesta_encuesta', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='question_responses', to='surveys.respuestaencuesta')),
             ],
             options={
                 'verbose_name': 'Respuesta de Pregunta',

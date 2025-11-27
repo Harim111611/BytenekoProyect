@@ -20,7 +20,8 @@ urlpatterns = [
 
     # Apps (Core)
     path("dashboard/", core_views.dashboard_view, name="dashboard"),
-    path("resultados/", core_views.results_dashboard_view, name="results"),
+    path("resultados/", core_views.dashboard_results_view, name="results"),
+    path("resultados/pdf/", core_views.global_results_pdf_view, name="global_results_pdf"),
     path("reportes/", core_views.reports_page_view, name="reports"),
 
     # --- NUEVA RUTA AGREGADA AQUÍ ---

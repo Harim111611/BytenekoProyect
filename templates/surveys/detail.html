@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block app_content %}
+{% csrf_token %}
 <div class="container-xl p-4 p-md-5">
 
     <div class="mb-5 border-bottom border-secondary-subtle pb-4">
@@ -18,21 +19,21 @@
                     <i class="bi bi-clipboard-data"></i>
                 </div>
                 <div>
-                    <h1 class="h2 fw-bold text-body-emphasis mb-1">{{ encuesta.titulo }}</h1>
+                    <h1 class="h2 fw-bold text-body-emphasis mb-1">{{ survey.title }}</h1>
                     <p class="text-muted fs-5 mb-0 text-balance" style="max-width: 700px;">
-                        {{ encuesta.descripcion|default:"Sin descripción definida para este proyecto." }}
+                        {{ survey.descripcion|default:"Sin descripción definida para este proyecto." }}
                     </p>
                 </div>
             </div>
 
             <div class="d-flex flex-wrap gap-2">
-                <a href="{% url 'surveys:editar' encuesta.pk %}" class="btn btn-white border shadow-sm text-body fw-medium">
+                <a href="{% url 'surveys:editar' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium">
                     <i class="bi bi-pencil me-2"></i>Editar
                 </a>
-                <a href="{% url 'surveys:exportar' encuesta.pk %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
+                <a href="{% url 'surveys:exportar' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
                     <i class="bi bi-download me-2"></i>Exportar
                 </a>
-                <a href="{% url 'surveys:resultados' encuesta.pk %}" class="btn btn-primary shadow-sm fw-medium px-4">
+                <a href="{% url 'surveys:resultados' survey.pk %}" class="btn btn-primary shadow-sm fw-medium">
                     <i class="bi bi-bar-chart-fill me-2"></i>Ver Resultados
                 </a>
             </div>
@@ -45,32 +46,32 @@
             <div class="card border-0 shadow-sm h-100"> <div class="card-header bg-transparent py-3 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold text-body-emphasis mb-0">Cuestionario</h5>
                     <span class="badge bg-body-tertiary text-body border border-dashed">
-                        {{ encuesta.preguntas.count }} Reactivos
+                        {{ survey.questions.count }} Reactivos
                     </span>
                 </div>
 
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush">
-                        {% for pregunta in encuesta.preguntas.all %}
+                        {% for question in survey.questions.all %}
                         <div class="list-group-item px-4 py-3 border-bottom-dashed bg-transparent">
                             <div class="d-flex gap-3">
                                 <div class="q-index flex-shrink-0">P{{ forloop.counter }}</div>
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <h6 class="fw-bold text-body mb-0 pt-1">{{ pregunta.texto }}</h6>
-                                        {% if pregunta.es_obligatoria %}
+                                        <h6 class="fw-bold text-body mb-0 pt-1">{{ question.text }}</h6>
+                                        {% if question.is_required %}
                                             <span class="badge bg-danger-subtle text-danger rounded-pill ms-2" style="font-size: 0.65rem;">Requerida</span>
                                         {% endif %}
                                     </div>
                                     <div class="small text-muted mb-2">
-                                        <i class="bi bi-ui-radios me-1"></i> {{ pregunta.get_tipo_display }}
+                                        <i class="bi bi-ui-radios me-1"></i> {{ question.get_tipo_display }}
                                     </div>
 
-                                    {% if pregunta.opciones.exists %}
+                                    {% if question.options.exists %}
                                     <div class="d-flex flex-wrap gap-2 mt-2">
-                                        {% for opcion in pregunta.opciones.all %}
+                                        {% for option in question.options.all %}
                                             <span class="badge bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                                {{ opcion.texto }}
+                                                {{ option.text }}
                                             </span>
                                         {% endfor %}
                                     </div>
@@ -83,8 +84,8 @@
                             <div class="mb-3">
                                 <i class="bi bi-file-earmark-plus fs-1 opacity-25"></i>
                             </div>
-                            <p class="mb-3">No hay preguntas configuradas.</p>
-                            <a href="{% url 'surveys:editar' encuesta.pk %}" class="btn btn-sm btn-outline-primary">Agregar Preguntas</a>
+                            <p class="mb-3">No hay questions configuradas.</p>
+                            <a href="{% url 'surveys:editar' survey.pk %}" class="btn btn-sm btn-outline-primary">Agregar Preguntas</a>
                         </div>
                         {% endfor %}
                     </div>
@@ -98,26 +99,30 @@
                 <div class="card border-0 shadow-sm">
                     <div class="card-body p-4">
                         <h6 class="text-uppercase text-muted small fw-bold mb-3">Estado del Proyecto</h6>
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <span class="status-badge badge-{{ encuesta.estado }} fs-6 px-3 py-2">
-                                {{ encuesta.get_estado_display }}
-                            </span>
+                        <div class="mb-3">
+                            <select class="form-select" id="estadoSelect" onchange="cambiarEstado({{ survey.pk }}, this.value)">
+                                <option value="draft" {% if survey.status == 'draft' %}selected{% endif %}>📝 Borrador</option>
+                                <option value="active" {% if survey.status == 'active' %}selected{% endif %}>✅ Activa</option>
+                                <option value="closed" {% if survey.status == 'closed' %}selected{% endif %}>🔒 Cerrada</option>
+                            </select>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">Total de respuestas</span>
                             <div class="text-end">
-                                <div class="h3 fw-bold text-body-emphasis mb-0">{{ encuesta.respuestas.count }}</div>
-                                <small class="text-muted">Respuestas</small>
+                                <div class="h4 fw-bold text-body-emphasis mb-0">{{ survey.respuestas.count }}</div>
                             </div>
                         </div>
 
                         <label class="form-label small text-muted fw-bold">Enlace público</label>
                         <div class="input-group mb-2">
                             <input type="text" class="form-control bg-body-tertiary border-0 small text-muted"
-                                   value="{{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' encuesta.pk %}"
+                                   value="{{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' survey.pk %}"
                                    readonly id="shareLink">
                             <button class="btn btn-outline-secondary bg-body-tertiary border-0" type="button" onclick="copyLink()">
                                 <i class="bi bi-clipboard"></i>
                             </button>
                         </div>
-                        <a href="{% url 'surveys:responder' encuesta.pk %}" target="_blank" class="small fw-bold text-primary text-decoration-none">
+                        <a href="{% url 'surveys:responder' survey.pk %}" target="_blank" class="small fw-bold text-primary text-decoration-none">
                             <i class="bi bi-box-arrow-up-right me-1"></i>Probar enlace
                         </a>
                     </div>
@@ -127,7 +132,7 @@
                     <div class="card-body p-4 text-center">
                         <h6 class="text-uppercase text-muted small fw-bold mb-3">Acceso Rápido Móvil</h6>
                         <div class="bg-white p-2 d-inline-block rounded-3 border">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' encuesta.pk %}"
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' survey.pk %}"
                                  alt="QR Code" class="img-fluid" style="width: 120px; height: 120px;">
                         </div>
                         <p class="small text-muted mt-3 mb-0">Escanea para testear en móvil.</p>
@@ -140,7 +145,7 @@
                     </div>
                     <div class="card-body p-0">
                         <ul class="list-group list-group-flush small">
-                            {% for respuesta in encuesta.respuestas.all|slice:":3" %}
+                            {% for respuesta in survey.respuestas.all|slice:":3" %}
                             <li class="list-group-item px-4 py-3 bg-transparent d-flex justify-content-between align-items-center border-bottom-dashed">
                                 <div class="d-flex align-items-center text-truncate">
                                     <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 24px; height: 24px; font-size: 0.75rem;">
@@ -150,7 +155,7 @@
                                         {% if respuesta.anonima %}Anónimo{% else %}{{ respuesta.usuario.username|default:"Usuario" }}{% endif %}
                                     </span>
                                 </div>
-                                <span class="text-muted" style="font-size: 0.75rem;">{{ respuesta.creado_en|timesince }}</span>
+                                <span class="text-muted" style="font-size: 0.75rem;">{{ respuesta.created_at|timesince }}</span>
                             </li>
                             {% empty %}
                             <li class="list-group-item px-4 py-4 text-center text-muted bg-transparent border-0">
@@ -159,9 +164,9 @@
                             </li>
                             {% endfor %}
                         </ul>
-                        {% if encuesta.respuestas.count > 0 %}
+                        {% if survey.respuestas.count > 0 %}
                         <div class="card-footer bg-transparent text-center border-0 py-2">
-                            <a href="{% url 'surveys:resultados' encuesta.pk %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
+                            <a href="{% url 'surveys:resultados' survey.pk %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
                                 Ver todos los resultados <i class="bi bi-arrow-right"></i>
                             </a>
                         </div>
@@ -175,6 +180,36 @@
 </div>
 
 <script>
+    function cambiarEstado(encuestaId, nuevoEstado) {
+        fetch(`/surveys/${encuestaId}/cambiar-estado/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ estado: nuevoEstado })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Mostrar notificación de éxito
+                const select = document.getElementById('estadoSelect');
+                select.classList.add('border-success');
+                setTimeout(() => {
+                    select.classList.remove('border-success');
+                }, 1000);
+            } else {
+                alert('Error al cambiar el estado');
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al cambiar el estado');
+            location.reload();
+        });
+    }
+    
     function copyLink() {
         var copyText = document.getElementById("shareLink");
         copyText.select();

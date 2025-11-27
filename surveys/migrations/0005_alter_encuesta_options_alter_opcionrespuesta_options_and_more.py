@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='opcionrespuesta',
             name='pregunta',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='opciones', to='surveys.pregunta', verbose_name='Question'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='options', to='surveys.pregunta', verbose_name='Question'),
         ),
         migrations.AlterField(
             model_name='opcionrespuesta',
@@ -86,7 +86,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='pregunta',
             name='encuesta',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='preguntas', to='surveys.encuesta', verbose_name='Survey'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questions', to='surveys.encuesta', verbose_name='Survey'),
         ),
         migrations.AlterField(
             model_name='pregunta',
@@ -121,7 +121,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='respuestaencuesta',
             name='encuesta',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas', to='surveys.encuesta', verbose_name='Survey'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='responses', to='surveys.encuesta', verbose_name='Survey'),
         ),
         migrations.AlterField(
             model_name='respuestaencuesta',
@@ -141,7 +141,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='respuestapregunta',
             name='respuesta_encuesta',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='respuestas_pregunta', to='surveys.respuestaencuesta', verbose_name='Survey Response'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='question_responses', to='surveys.respuestaencuesta', verbose_name='Survey Response'),
         ),
         migrations.AlterField(
             model_name='respuestapregunta',

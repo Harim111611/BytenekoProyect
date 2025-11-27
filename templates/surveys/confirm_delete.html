@@ -13,15 +13,15 @@
             Confirmar Eliminación
         </div>
         <div class="card-body p-4">
-            <p>¿Estás seguro de que quieres eliminar la encuesta?</p>
-            <h4 class="fw-bold text-danger">"{{ encuesta.titulo }}"</h4>
+            <p>¿Estás seguro de que quieres eliminar la survey?</p>
+            <h4 class="fw-bold text-danger">"{{ survey.title }}"</h4>
             <p class="text-muted">Esta acción es permanente y no se puede deshacer.</p>
 
-            <form method="post">
+            <form method="post" id="deleteForm">
                 {% csrf_token %}
                 <div class="d-flex justify-content-end gap-2 pt-3">
                     <a href="{% url 'surveys:list' %}" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-danger">Sí, eliminar permanentemente</button>
+                    <button type="submit" class="btn btn-danger" id="deleteBtn">Sí, eliminar permanentemente</button>
                 </div>
             </form>
         </div>
@@ -29,4 +29,13 @@
         </div>
     </div>
 </div>
+
+<script>
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    const btn = document.getElementById('deleteBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+});
+</script>
+
 {% endblock %}

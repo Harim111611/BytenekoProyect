@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnNext2 = document.getElementById('btn-next-2');
     const btnPrev3 = document.getElementById('btn-to-step-2-from-3');
     const btnAddQuestion = document.getElementById('btn-add-custom-question');
+    const btnSuggestQuestions = document.getElementById('btn-suggest-questions');
     const btnPublish = document.getElementById('btn-publish');
 
     const stepCards = [
@@ -35,10 +36,155 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btnNext2) btnNext2.addEventListener('click', () => validateAndGo(3));
     if(btnPrev3) btnPrev3.addEventListener('click', () => goToStep(2));
     if(btnAddQuestion) btnAddQuestion.addEventListener('click', addQuestion);
+    if(btnSuggestQuestions) btnSuggestQuestions.addEventListener('click', suggestQuestions);
     if(btnPublish) btnPublish.addEventListener('click', submitSurvey);
 
     // Iniciar el Wizard en el Paso 1
     goToStep(1);
+
+    // --- TEMPLATES DE PREGUNTAS SUGERIDAS POR CATEGORÍA ---
+    const questionTemplates = {
+        'satisfaccion': [
+            { texto: '¿Qué tan satisfecho estás con nuestro producto/servicio?', tipo: 'scale', required: true },
+            { texto: '¿Qué tan probable es que recomiendes nuestro producto/servicio a un amigo o colega?', tipo: 'scale', required: true },
+            { texto: '¿Qué es lo que más te gusta de nuestro producto/servicio?', tipo: 'text', required: false },
+            { texto: '¿Qué podríamos mejorar?', tipo: 'text', required: false },
+            { texto: '¿Con qué frecuencia utilizas nuestro producto/servicio?', tipo: 'single', opciones: ['Diariamente', 'Semanalmente', 'Mensualmente', 'Raramente'], required: true }
+        ],
+        'mercado': [
+            { texto: '¿Cuál es tu rango de edad?', tipo: 'single', opciones: ['18-24', '25-34', '35-44', '45-54', '55+'], required: true },
+            { texto: '¿Cuál es tu nivel de ingresos mensual?', tipo: 'single', opciones: ['Menos de $500', '$500-$1000', '$1000-$2000', '$2000-$5000', 'Más de $5000'], required: false },
+            { texto: '¿Qué factores son más importantes para ti al comprar este tipo de producto?', tipo: 'multi', opciones: ['Precio', 'Calidad', 'Marca', 'Recomendaciones', 'Disponibilidad'], required: true },
+            { texto: 'En una escala del 1 al 10, ¿qué tan importante es la sostenibilidad ambiental en tus decisiones de compra?', tipo: 'scale', required: true },
+            { texto: '¿Qué otras marcas consideras al hacer esta compra?', tipo: 'text', required: false }
+        ],
+        'rrhh': [
+            { texto: '¿Qué tan satisfecho estás con tu ambiente de trabajo actual?', tipo: 'scale', required: true },
+            { texto: '¿Te sientes valorado en tu puesto de trabajo?', tipo: 'scale', required: true },
+            { texto: '¿Qué aspectos de tu trabajo te gustaría que mejoraran?', tipo: 'multi', opciones: ['Salario', 'Beneficios', 'Balance vida-trabajo', 'Oportunidades de crecimiento', 'Cultura organizacional', 'Herramientas y tecnología'], required: true },
+            { texto: '¿Qué tan probable es que sigas trabajando aquí en los próximos 12 meses?', tipo: 'scale', required: true },
+            { texto: '¿Tienes algún comentario o sugerencia adicional?', tipo: 'text', required: false }
+        ],
+        'educacion': [
+            { texto: '¿Qué tan satisfecho estás con la calidad de la enseñanza?', tipo: 'scale', required: true },
+            { texto: '¿Los materiales y recursos proporcionados son adecuados?', tipo: 'scale', required: true },
+            { texto: '¿Qué aspectos del curso/programa te gustaría mejorar?', tipo: 'multi', opciones: ['Contenido', 'Metodología', 'Evaluaciones', 'Comunicación', 'Recursos digitales'], required: true },
+            { texto: '¿Qué tan útil ha sido este curso para tu desarrollo profesional?', tipo: 'scale', required: true },
+            { texto: 'Comparte cualquier comentario adicional', tipo: 'text', required: false }
+        ],
+        'producto': [
+            { texto: '¿Qué tan fácil fue usar nuestro producto?', tipo: 'scale', required: true },
+            { texto: '¿El producto cumplió con tus expectativas?', tipo: 'scale', required: true },
+            { texto: '¿Qué características te gustaría que añadiéramos?', tipo: 'text', required: false },
+            { texto: '¿Qué tan probable es que vuelvas a comprar este producto?', tipo: 'scale', required: true },
+            { texto: '¿Cómo calificarías la relación calidad-precio?', tipo: 'scale', required: true }
+        ],
+        'tecnologia': [
+            { texto: '¿Qué tan satisfecho estás con la interfaz de usuario?', tipo: 'scale', required: true },
+            { texto: '¿Has experimentado algún problema técnico?', tipo: 'single', opciones: ['Sí, frecuentemente', 'Sí, ocasionalmente', 'Raramente', 'Nunca'], required: true },
+            { texto: '¿Qué funcionalidades utilizas más?', tipo: 'multi', opciones: ['Dashboard', 'Reportes', 'Configuración', 'Integraciones', 'Análisis'], required: true },
+            { texto: '¿Qué tan intuitiva encuentras la plataforma?', tipo: 'scale', required: true },
+            { texto: '¿Qué mejoras sugerirías?', tipo: 'text', required: false }
+        ],
+        'evento': [
+            { texto: '¿Qué tan satisfecho estás con la organización del evento?', tipo: 'scale', required: true },
+            { texto: '¿Cómo calificarías la calidad del contenido presentado?', tipo: 'scale', required: true },
+            { texto: '¿Qué aspecto del evento te gustó más?', tipo: 'multi', opciones: ['Ponentes', 'Networking', 'Logística', 'Ubicación', 'Catering', 'Materiales'], required: true },
+            { texto: '¿El evento cumplió con tus expectativas?', tipo: 'single', opciones: ['Superó expectativas', 'Cumplió expectativas', 'Estuvo bien', 'No cumplió expectativas'], required: true },
+            { texto: '¿Qué recomendarías mejorar para futuros eventos?', tipo: 'text', required: false }
+        ],
+        'general': [
+            { texto: '¿Cómo calificarías tu experiencia general?', tipo: 'scale', required: true },
+            { texto: '¿Qué es lo que más te gustó?', tipo: 'text', required: false },
+            { texto: '¿Qué aspectos crees que deberíamos mejorar?', tipo: 'text', required: false },
+            { texto: '¿Volverías a utilizar nuestros servicios?', tipo: 'single', opciones: ['Definitivamente sí', 'Probablemente sí', 'No estoy seguro', 'Probablemente no', 'Definitivamente no'], required: true }
+        ]
+    };
+
+    function suggestQuestions() {
+        // Abrir modal de selección
+        const modal = new bootstrap.Modal(document.getElementById('suggestQuestionsModal'));
+        modal.show();
+    }
+
+    // Event listeners para las opciones del modal
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.template-option')) {
+            const btn = e.target.closest('.template-option');
+            const templateKey = btn.dataset.template;
+            const template = questionTemplates[templateKey];
+            
+            if (template) {
+                // Cerrar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('suggestQuestionsModal'));
+                if (modal) modal.hide();
+                
+                // Agregar preguntas
+                template.forEach(q => {
+                    addQuestionFromTemplate(q);
+                });
+                
+                // Scroll al primer elemento agregado
+                setTimeout(() => {
+                    const firstQuestion = document.querySelector('.question-item');
+                    if (firstQuestion) {
+                        firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 500);
+            }
+        }
+    });
+
+    function addQuestionFromTemplate(templateData) {
+        questionCount++;
+        const container = document.getElementById('questions-list');
+        const template = document.getElementById('questionTemplate');
+
+        if (!container || !template) return;
+
+        const clone = template.content.cloneNode(true);
+
+        // Asignar datos del template
+        clone.querySelector('.question-number').textContent = `Pregunta ${questionCount}`;
+        clone.querySelector('.question-title').value = templateData.texto;
+        clone.querySelector('.question-type').value = templateData.tipo;
+        clone.querySelector('.question-required').checked = templateData.required || false;
+
+        // Si tiene opciones, agregarlas
+        if (templateData.opciones && ['single', 'multi'].includes(templateData.tipo)) {
+            const optsContainer = clone.querySelector('.options-container');
+            optsContainer.classList.remove('d-none');
+            clone.querySelector('.question-options').value = templateData.opciones.join(', ');
+        }
+
+        // IDs únicos para el checkbox
+        const uid = `req_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+        const check = clone.querySelector('.question-required');
+        const label = clone.querySelector('.form-check-label');
+
+        if (check) check.id = uid;
+        if (label) label.setAttribute('for', uid);
+
+        // Eventos internos de la tarjeta
+        const typeSelect = clone.querySelector('.question-type');
+        const optsDiv = clone.querySelector('.options-container');
+
+        typeSelect.addEventListener('change', function() {
+            if(['single', 'multi'].includes(this.value)) {
+                optsDiv.classList.remove('d-none');
+                setTimeout(() => optsDiv.querySelector('input').focus(), 100);
+            } else {
+                optsDiv.classList.add('d-none');
+            }
+        });
+
+        // Botón Eliminar
+        clone.querySelector('.btn-close').addEventListener('click', function() {
+            this.closest('.question-item').remove();
+        });
+
+        container.appendChild(clone);
+    }
 
     function goToStep(step) {
         // 1. Ocultar y mostrar contenido
@@ -66,10 +212,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validaciones Paso 1
         if (targetStep === 2) {
             const title = document.getElementById('surveyTitle').value.trim();
-            const category = document.getElementById('surveyCategory').value.trim();
 
-            if (!title) return alert('Falta el título.');
-            if (!category) return alert('Falta la categoría.');
+            if (!title) return alert('Por favor, ingresa un título para tu encuesta.');
         }
 
         // Validaciones Paso 2
@@ -146,11 +290,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // 1. Info General
         const title = document.getElementById('surveyTitle').value;
         const desc = document.getElementById('surveyDescription').value;
-        const cat = document.getElementById('surveyCategory').value;
 
         // Inyectar al resumen
         document.getElementById('review-title').innerText = title;
-        document.getElementById('review-category').innerText = cat;
+        document.getElementById('review-description').innerText = desc || 'Sin descripción';
 
         // Inyectar al simulador (encabezado)
         document.getElementById('preview-header-title').innerText = title;
@@ -214,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function() {
             surveyInfo: {
                 titulo: document.getElementById('surveyTitle').value,
                 descripcion: document.getElementById('surveyDescription').value,
-                categoria: document.getElementById('surveyCategory').value
+                categoria: 'General'
             },
             questions: []
         };

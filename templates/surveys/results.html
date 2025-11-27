@@ -12,6 +12,19 @@
     }
     .insight-icon-box { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 
+    /* Mejorar formato de texto en insights */
+    .insight-card .card-text {
+        text-align: justify;
+        hyphens: auto;
+        word-spacing: -0.05em;
+        line-height: 1.6;
+    }
+    
+    .insight-card .card-text small {
+        display: block;
+        text-align: justify;
+    }
+
     /* Barra de filtros */
     .filter-bar {
         background-color: var(--card-bg);
@@ -30,7 +43,7 @@
         <nav aria-label="breadcrumb" class="mb-2">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}" class="text-decoration-none">Mis Encuestas</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ encuesta.titulo }}</li>
+                <li class="breadcrumb-item active" aria-current="page">{{ survey.title }}</li>
             </ol>
         </nav>
         <div class="d-flex justify-content-between align-items-center">
@@ -39,7 +52,7 @@
                 <p class="text-muted mb-0">Explora los datos y segmenta tu audiencia.</p>
             </div>
             <div class="d-flex gap-2">
-                <a href="{% url 'surveys:exportar' encuesta.pk %}" class="btn btn-outline-primary">
+                <a href="{% url 'surveys:exportar' survey.pk %}" class="btn btn-outline-primary">
                     <i class="bi bi-download me-1"></i> Exportar
                 </a>
             </div>
@@ -69,28 +82,31 @@
 
             <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted text-uppercase">Segmentar por Pregunta</label>
-                <select name="segment_col" class="form-select bg-body-tertiary border-0">
+                <select name="segment_col" id="segmentSelect" class="form-select bg-body-tertiary border-0">
                     <option value="">-- Sin segmentar --</option>
                     {% for p in preguntas_filtro %}
                         <option
-                            value="{{ p.texto }}"
-                            {% if filter_col == p.texto %}
+                            value="{{ p.text }}"
+                            data-tipo="{{ p.type }}"
+                            data-question-id="{{ p.id }}"
+                            {% if filter_col == p.text %}
                                 selected
                             {% endif %}
                         >
-                            {{ p.texto|truncatechars:30 }}
+                            {{ p.text|truncatechars:40 }}
                         </option>
                     {% endfor %}
                 </select>
             </div>
 
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted text-uppercase">Valor (Contiene)</label>
+                <label class="form-label small fw-bold text-muted text-uppercase">Valor</label>
                 <input
                     type="text"
                     name="segment_val"
+                    id="segmentValInput"
                     class="form-control bg-body-tertiary border-0"
-                    placeholder="Ej. Empresarial"
+                    placeholder="Ej. Marketing"
                     value="{{ filter_val|default:'' }}"
                 >
             </div>
@@ -108,8 +124,8 @@
             <div class="card-body text-center">
                 <i class="bi bi-search fs-1 text-muted mb-3"></i>
                 <h3 class="fw-bold text-body-emphasis">No se encontraron resultados</h3>
-                <p class="text-muted">Intenta ajustar los filtros o comparte tu encuesta para recibir datos.</p>
-                <a href="{% url 'surveys:resultados' encuesta.pk %}" class="btn btn-outline-secondary mt-2">Limpiar Filtros</a>
+                <p class="text-muted">Intenta ajustar los filtros o comparte tu survey para recibir datos.</p>
+                <a href="{% url 'surveys:resultados' survey.pk %}" class="btn btn-outline-secondary mt-2">Limpiar Filtros</a>
             </div>
         </div>
     {% else %}
@@ -122,16 +138,30 @@
                         <div>
                             <div class="small text-uppercase fw-bold opacity-75">Muestra</div>
                             <div class="h3 fw-bold mb-0 text-body-emphasis">{{ total_respuestas }}</div>
+                            <div class="small text-muted mt-1">respuestas totales</div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 col-6">
-                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow position-relative">
                     <div class="card-body d-flex flex-column justify-content-center">
-                        <div class="text-muted small text-uppercase fw-bold">NPS Segmento</div>
-                        <div class="h3 fw-bold mb-0 {% if nps_score > 0 %}text-success{% elif nps_score < 0 %}text-danger{% else %}text-muted{% endif %}">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">
+                            NPS Segmento
+                            {% if nps_data.insight %}
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-1" data-bs-toggle="modal" data-bs-target="#npsModal">
+                                <i class="bi bi-info-circle text-primary"></i>
+                            </button>
+                            {% else %}
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" 
+                               title="Net Promoter Score: Mide lealtad. De -100 a +100. Más alto = mejor"></i>
+                            {% endif %}
+                        </div>
+                        <div class="h3 fw-bold mb-0 {% if nps_score > 50 %}text-success{% elif nps_score > 0 %}text-primary{% elif nps_score < 0 %}text-danger{% else %}text-muted{% endif %}">
                             {{ nps_score|default:"--" }}
+                        </div>
+                        <div class="small text-muted mt-1">
+                            {% if nps_score >= 70 %}Excelente{% elif nps_score >= 50 %}Muy bueno{% elif nps_score >= 30 %}Bueno{% elif nps_score >= 0 %}Regular{% elif nps_score %}Crítico{% endif %}
                         </div>
                     </div>
                 </div>
@@ -139,19 +169,92 @@
              <div class="col-md-3 col-6">
                 <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
                     <div class="card-body d-flex flex-column justify-content-center">
-                        <div class="text-muted small text-uppercase fw-bold">Satisfacción</div>
+                        <div class="text-muted small text-uppercase fw-bold mb-1">
+                            Satisfacción
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" 
+                               title="Promedio de questions de escala 0-10. Más alto = mayor satisfacción"></i>
+                        </div>
                         <div class="h3 fw-bold mb-0 text-body-emphasis">
                             {{ metrics.promedio_satisfaccion|default:"--" }}
                         </div>
+                        <div class="small text-muted mt-1">de 10 puntos</div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Modal de interpretación del NPS -->
+        {% if nps_data.insight %}
+        <div class="modal fade" id="npsModal" tabindex="-1" aria-labelledby="npsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-primary bg-gradient text-white border-0">
+                        <h5 class="modal-title fw-bold" id="npsModalLabel">
+                            <i class="bi bi-lightbulb-fill me-2"></i>¿Qué significa tu NPS?
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="d-flex align-items-start mb-4">
+                            <div class="flex-shrink-0">
+                                <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                                    <i class="bi bi-graph-up-arrow fs-2 text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-4">
+                                <h6 class="fw-bold text-primary mb-2">Tu Puntuación: {{ nps_score }}</h6>
+                                <div class="text-muted">
+                                    {% autoescape off %}{{ nps_data.insight }}{% endautoescape %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if nps_data.promotores is not None %}
+                        <div class="row g-3 mt-3">
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-success bg-opacity-10 rounded">
+                                    <div class="text-success fw-bold">
+                                        <i class="bi bi-hand-thumbs-up-fill"></i> Promotores
+                                    </div>
+                                    <div class="h4 fw-bold text-success mb-0 mt-2">{{ nps_data.pct_promotores|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.promotores }} personas</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-soft-blue rounded">
+                                    <div class="text-soft-blue fw-bold">
+                                        <i class="bi bi-dash-circle-fill"></i> Pasivos
+                                    </div>
+                                    <div class="h4 fw-bold text-soft-blue mb-0 mt-2">{{ nps_data.pct_pasivos|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.pasivos }} personas</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-danger bg-opacity-10 rounded">
+                                    <div class="text-danger fw-bold">
+                                        <i class="bi bi-hand-thumbs-down-fill"></i> Detractores
+                                    </div>
+                                    <div class="h4 fw-bold text-danger mb-0 mt-2">{{ nps_data.pct_detractores|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.detractores }} personas</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer border-0 bg-light">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                            <i class="bi bi-check-circle me-1"></i>Entendido
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {% if analysis_data %}
         <div class="mb-5">
             <h4 class="fw-bold mb-3 text-body-emphasis">
-                <i class="bi bi-stars text-warning me-2"></i>
+                <i class="bi bi-stars text-soft-blue me-2"></i>
                 Hallazgos del Segmento
             </h4>
             <div class="row g-3">
@@ -159,7 +262,7 @@
                     <div class="col-md-4">
                         <div class="card h-100 insight-card shadow-sm hover-shadow">
                             <div class="card-body p-4 d-flex flex-column">
-                                <h6 class="fw-bold text-body-emphasis mb-2">{{ item.texto|truncatechars:40 }}</h6>
+                                <h6 class="fw-bold text-body-emphasis mb-2">{{ item.text|truncatechars:40 }}</h6>
                                 <p class="card-text text-secondary flex-grow-1 small">
                                     {% if item.insight %}
                                         {% autoescape off %}{{ item.insight }}{% endautoescape %}
@@ -196,7 +299,11 @@
             <div class="col-lg-4">
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-header bg-transparent py-3">
-                        <h6 class="m-0 fw-bold text-primary">Correlaciones</h6>
+                        <h6 class="m-0 fw-bold text-primary">
+                            Correlaciones
+                            <i class="bi bi-info-circle ms-1 text-muted" data-bs-toggle="tooltip" 
+                               title="Mide relación entre questions numéricas. Requiere al menos 2 questions de escala."></i>
+                        </h6>
                     </div>
                     <div class="card-body p-4 d-flex align-items-center justify-content-center">
                         {% if heatmap_image %}
@@ -206,7 +313,16 @@
                                 style="max-height: 280px;"
                             >
                         {% else %}
-                            <p class="text-muted small">Sin datos suficientes en este segmento.</p>
+                            <div class="text-center py-4">
+                                <i class="bi bi-diagram-3 fs-1 text-muted opacity-50 d-block mb-3"></i>
+                                <p class="text-muted mb-2">
+                                    <strong>Correlaciones no disponibles</strong>
+                                </p>
+                                <small class="text-muted">
+                                    Se requieren al menos 2 questions numéricas<br>
+                                    con suficientes respuestas en este segmento.
+                                </small>
+                            </div>
                         {% endif %}
                     </div>
                 </div>
@@ -226,8 +342,8 @@
                             data-bs-toggle="collapse"
                             data-bs-target="#collapse{{ item.id }}"
                         >
-                            <span class="fw-bold me-2 opacity-50">{{ item.orden }}.</span>
-                            {{ item.texto }}
+                            <span class="fw-bold me-2 opacity-50">{{ item.order }}.</span>
+                            {{ item.text }}
                         </button>
                     </h2>
                     <div
@@ -238,14 +354,34 @@
                         <div class="accordion-body">
                             <div class="row">
                                 <div class="col-md-8 border-end border-secondary-subtle">
-                                    {% if item.tipo == 'text' %}
-                                        <ul class="list-group list-group-flush small">
-                                            {% for resp in item.respuestas %}
-                                                <li class="list-group-item border-0 px-0 bg-transparent text-body">
-                                                    "{{ resp.valor_texto }}"
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
+                                    {% if item.type == 'text' %}
+                                        {% if item.samples_texto %}
+                                            <div class="mb-3">
+                                                <h6 class="text-muted small text-uppercase mb-3">
+                                                    <i class="bi bi-chat-left-quote me-1"></i>
+                                                    Muestra de Comentarios Recientes ({{ item.total_respuestas }} total)
+                                                </h6>
+                                                <ul class="list-group list-group-flush">
+                                                    {% for texto in item.samples_texto %}
+                                                        <li class="list-group-item border-0 px-0 py-2 bg-transparent">
+                                                            <i class="bi bi-quote text-primary me-2"></i>
+                                                            <span class="text-body">{{ texto }}</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                {% if item.total_respuestas > 5 %}
+                                                    <p class="text-muted small mt-2 mb-0">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        Mostrando 5 de {{ item.total_respuestas }} respuestas
+                                                    </p>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted text-center py-4">
+                                                <i class="bi bi-chat-left-text fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin respuestas de texto aún
+                                            </p>
+                                        {% endif %}
                                     {% else %}
                                         <div style="height: 250px;">
                                             <canvas id="chart_q_{{ item.id }}"></canvas>
@@ -254,8 +390,45 @@
                                 </div>
                                 <div class="col-md-4 ps-md-4">
                                     {% if item.insight %}
-                                        <div class="alert alert-info-soft py-2 small mb-4">
+                                        <div class="alert alert-info-soft py-2 small mb-3">
+                                            <i class="bi bi-lightbulb me-1"></i>
                                             {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if item.type == 'text' and item.top_words %}
+                                        <div class="card border-0 bg-body-tertiary">
+                                            <div class="card-body p-3">
+                                                <h6 class="card-title text-uppercase small fw-bold mb-2">
+                                                    <i class="bi bi-tag me-1"></i>Palabras Clave
+                                                </h6>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    {% for word in item.top_words %}
+                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                            {{ word.palabra }} ({{ word.frecuencia }})
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if item.type == 'text' and item.top_bigrams %}
+                                        <div class="card border-0 bg-body-tertiary mt-3">
+                                            <div class="card-body p-3">
+                                                <h6 class="card-title text-uppercase small fw-bold mb-2">
+                                                    <i class="bi bi-chat-dots me-1"></i>Frases Frecuentes
+                                                </h6>
+                                                <ul class="list-unstyled mb-0 small">
+                                                    {% for bigram in item.top_bigrams %}
+                                                        <li class="mb-1">
+                                                            <i class="bi bi-arrow-right-short text-primary"></i>
+                                                            <strong>{{ bigram.frase }}</strong>
+                                                            <span class="text-muted">({{ bigram.frecuencia }}x)</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
                                         </div>
                                     {% endif %}
                                 </div>
@@ -272,6 +445,15 @@
 {% block scripts %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Inicializar tooltips de Bootstrap
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% if total_respuestas > 0 %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -309,22 +491,62 @@
         }
 
         if (analysisData) {
+            console.log('Analysis data received:', analysisData);
+            
             analysisData.forEach(item => {
-                if (item.tipo === 'text') return;
+                if (item.type === 'text') return;
+                
                 const canvas = document.getElementById('chart_q_' + item.id);
-                if (!canvas) return;
+                if (!canvas) {
+                    console.warn('Canvas not found for question', item.id);
+                    return;
+                }
 
-                let type = (item.tipo === 'single' || item.tipo === 'multi') ? 'doughnut' : 'bar';
+                // Validar que hay datos para graficar
+                if (!item.chart_labels || !item.chart_data || item.chart_labels.length === 0) {
+                    console.warn('No chart data for question', item.id, item);
+                    canvas.parentElement.innerHTML = '<p class="text-muted text-center">Sin datos suficientes para graficar</p>';
+                    return;
+                }
+
+                console.log('Creating chart for question', item.id, 'with', item.chart_labels.length, 'points');
+
+                let type = (item.type === 'single' || item.type === 'multi') ? 'doughnut' : 'bar';
                 let options = {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: textColor } } }
+                    plugins: { 
+                        legend: { 
+                            labels: { color: textColor },
+                            display: type === 'doughnut'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed.y || context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return type === 'doughnut' 
+                                        ? `${label}: ${value} (${percentage}%)`
+                                        : `${label}: ${value}`;
+                                }
+                            }
+                        }
+                    }
                 };
 
                 if (type === 'bar') {
                     options.scales = {
-                        x: { grid: { display: false }, ticks: { color: textColor } },
-                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: textColor, maxRotation: 45, minRotation: 0 }
+                        },
+                        y: { 
+                            grid: { color: gridColor }, 
+                            ticks: { color: textColor, precision: 0 },
+                            beginAtZero: true
+                        }
                     };
                 } else {
                     options.cutout = '65%';
@@ -336,11 +558,12 @@
                     data: {
                         labels: item.chart_labels,
                         datasets: [{
-                            label: 'Votos',
+                            label: type === 'bar' ? 'Respuestas' : 'Votos',
                             data: item.chart_data,
                             backgroundColor: [
                                 '#4e73df', '#1cc88a', '#36b9cc',
-                                '#f6c23e', '#e74a3b', '#858796'
+                                '#f6c23e', '#e74a3b', '#858796',
+                                '#5a5c69', '#224abe', '#169b6b'
                             ],
                             borderColor: isDark ? '#1e1e1e' : '#fff',
                             borderWidth: 2
@@ -351,6 +574,48 @@
             });
         }
     });
+
+    // Actualizar placeholder del campo de segmentación según el tipo de question
+    const segmentSelect = document.getElementById('segmentSelect');
+    const segmentValInput = document.getElementById('segmentValInput');
+    
+    if (segmentSelect && segmentValInput) {
+        segmentSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const tipo = selectedOption.dataset.type;
+            
+            if (!tipo) {
+                segmentValInput.placeholder = 'Selecciona una question primero';
+                segmentValInput.disabled = true;
+                return;
+            }
+            
+            segmentValInput.disabled = false;
+            
+            if (tipo === 'text') {
+                segmentValInput.placeholder = 'Texto a buscar (Ej. "excelente")';
+                segmentValInput.type = 'text';
+            } else if (tipo === 'single') {
+                segmentValInput.placeholder = 'Opción exacta (Ej. "Marketing")';
+                segmentValInput.type = 'text';
+            } else if (tipo === 'scale') {
+                segmentValInput.placeholder = 'Valor numérico (Ej. 5)';
+                segmentValInput.type = 'number';
+                segmentValInput.step = 'any';
+            } else {
+                segmentValInput.placeholder = 'Valor a filtrar';
+                segmentValInput.type = 'text';
+            }
+        });
+        
+        // Trigger inicial si ya hay una question seleccionada
+        if (segmentSelect.value) {
+            segmentSelect.dispatchEvent(new Event('change'));
+        } else {
+            segmentValInput.disabled = true;
+            segmentValInput.placeholder = 'Selecciona una question primero';
+        }
+    }
 </script>
 {% endif %}
 {% endblock %}

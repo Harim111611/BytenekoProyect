@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Encuesta - {{ encuesta.titulo }}</title>
+    <title>Reporte de Encuesta - {{ survey.title }}</title>
     <style>
         /* --- CONFIGURACIÓN DE PÁGINA --- */
         @page {
@@ -193,12 +193,13 @@
 
     <div class="cover-page">
         <div class="cover-container">
-            <div class="cover-title">{{ encuesta.titulo }}</div>
+            <div class="cover-title">{{ survey.title }}</div>
             <div class="cover-subtitle">Reporte Ejecutivo de Resultados</div>
 
             <div class="cover-meta">
                 <p><strong>Generado el:</strong> {% now "d \d\e F \d\e Y" %}</p>
-                <p><strong>Autor:</strong> {{ encuesta.creador.username|title }}</p>
+                <p><strong>Autor:</strong> {{ survey.author.username|title }}</p>
+                
                 {% if start_date or end_date %}
                     <p><strong>Periodo:</strong> {{ start_date|default:"Inicio" }} — {{ end_date|default:"Hoy" }}</p>
                 {% endif %}
@@ -251,7 +252,7 @@
         <div class="question-container">
 
             <div class="question-header">
-                <h3>{{ item.orden }}. {{ item.texto }}</h3>
+                <h3>{{ item.order }}. {{ item.text }}</h3>
                 <span class="question-type">{{ item.tipo_display }}</span>
             </div>
 
@@ -268,7 +269,7 @@
                     <img src="data:image/png;base64,{{ item.chart_image }}" class="chart-img">
                 {% endif %}
 
-                {% if item.tipo == 'text' %}
+                {% if item.type == 'text' %}
                     <h4 style="margin-top: 15px;">Muestra de opiniones:</h4>
                     <ul class="text-responses">
                         {% for resp in item.samples_texto %}
@@ -277,7 +278,7 @@
                     </ul>
                 {% endif %}
 
-                {% if item.estadisticas and item.tipo != 'text' %}
+                {% if item.estadisticas and item.type != 'text' %}
                     <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px;">
                         <table style="width: 100%;">
                             <tr>
@@ -289,7 +290,7 @@
                     </div>
                 {% endif %}
 
-                {% if include_table and item.opciones %}
+                {% if include_table and item.options %}
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -299,7 +300,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for op in item.opciones %}
+                            {% for op in item.options %}
                                 <tr>
                                     <td>{{ op.label }}</td>
                                     <td style="text-align: center;">{{ op.count }}</td>
@@ -311,7 +312,7 @@
                 {% endif %}
 
             {% else %}
-                <p class="text-muted small" style="font-style: italic;">No se registraron respuestas para esta pregunta en el periodo seleccionado.</p>
+                <p class="text-muted small" style="font-style: italic;">No se registraron respuestas para esta question en el periodo seleccionado.</p>
             {% endif %}
 
         </div>

@@ -1,54 +1,211 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
+{% block page_styles %}
+<style>
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    .status-badge.active {
+        background-color: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-badge.draft {
+        background-color: rgba(156, 163, 175, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(156, 163, 175, 0.3);
+    }
+    .status-badge.closed {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .info-card {
+        background: linear-gradient(135deg, var(--bs-primary-bg-subtle) 0%, var(--bs-secondary-bg-subtle) 100%);
+        border-left: 4px solid var(--bs-primary);
+    }
+    
+    /* Estilizar el select de estado */
+    #id_estado option {
+        padding: 0.75rem;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
 {% block app_content %}
-<div class="container-fluid p-4 p-md-5">
+<div class="container-xl p-4 p-md-5">
+
+    <!-- Breadcrumb y Header -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'surveys:detail' object.pk %}">{{ object.title|truncatechars:30 }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Editar</li>
+        </ol>
+    </nav>
 
     <div class="mb-4">
-        <h1 class="h2 fw-semibold mb-0">Editar Encuesta</h1>
-        <p class="text-muted">Modifica los detalles básicos de tu encuesta.</p>
+        <h1 class="h2 fw-bold mb-1">Editar Encuesta</h1>
+        <p class="text-muted mb-0">Actualiza la información básica de tu survey</p>
     </div>
 
-        <div class="row justify-content-center">\n        <div class="col-12 col-lg-10 col-xl-8">\n            <div class="card border-0 shadow-sm">
-        <div class="card-body p-4 p-lg-5">
-            <form method="post">
-                {% csrf_token %}
+    <div class="row g-4">
+        <!-- Columna Principal - Formulario -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <form method="post">
+                        {% csrf_token %}
 
-                <div class="mb-3">
-                    <label for="id_titulo" class="form-label fw-medium">Título</label>
-                    {{ form.titulo }}
+                        <!-- Título -->
+                        <div class="mb-4">
+                            <label for="id_titulo" class="form-label fw-semibold text-body">
+                                Título de la survey
+                                <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-lg bg-body-tertiary border-0" 
+                                   id="id_titulo" 
+                                   name="titulo" 
+                                   value="{{ form.title.value }}" 
+                                   placeholder="ej. Satisfacción del Cliente Q1 2025"
+                                   required>
+                            {% if form.title.errors %}
+                                <div class="text-danger small mt-1">{{ form.title.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Descripción -->
+                        <div class="mb-4">
+                            <label for="id_descripcion" class="form-label fw-semibold text-body">
+                                Descripción
+                            </label>
+                            <textarea class="form-control bg-body-tertiary border-0" 
+                                      id="id_descripcion" 
+                                      name="descripcion" 
+                                      rows="4" 
+                                      placeholder="Describe brevemente el objetivo de esta survey...">{{ form.descripcion.value|default:"" }}</textarea>
+                            <div class="form-text small text-muted">Ayuda a los participantes a entender el propósito de la survey</div>
+                            {% if form.descripcion.errors %}
+                                <div class="text-danger small mt-1">{{ form.descripcion.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Estado -->
+                        <div class="mb-4">
+                            <label for="id_estado" class="form-label fw-semibold text-body">
+                                Estado de la survey
+                                <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select form-select-lg bg-body-tertiary border-0" 
+                                    id="id_estado" 
+                                    name="estado" 
+                                    required>
+                                <option value="draft" {% if form.status.value == 'draft' %}selected{% endif %}>
+                                    <i class="bi bi-file-earmark-text"></i> Borrador - No visible para responder
+                                </option>
+                                <option value="active" {% if form.status.value == 'active' %}selected{% endif %}>
+                                    <i class="bi bi-play-circle"></i> Activa - Aceptando respuestas
+                                </option>
+                                <option value="closed" {% if form.status.value == 'closed' %}selected{% endif %}>
+                                    <i class="bi bi-lock"></i> Cerrada - No acepta más respuestas
+                                </option>
+                            </select>
+                            <div class="form-text small text-muted">
+                                Solo las surveys activas pueden recibir respuestas
+                            </div>
+                            {% if form.status.errors %}
+                                <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Botones de Acción -->
+                        <div class="d-flex justify-content-between align-items-center pt-4 mt-4 border-top">
+                            <a href="{% url 'surveys:detail' object.pk %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg me-2"></i>Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg px-4">
+                                <i class="bi bi-check-lg me-2"></i>Guardar Cambios
+                            </button>
+                        </div>
+                    </form>
                 </div>
-
-                <div class="mb-3">
-                    <label for="id_descripcion" class="form-label fw-medium">Descripción</label>
-                    {{ form.descripcion }}
-                </div>
-
-                <div class="row g-3">
-                    <div class="col-md-6 mb-3">
-                        <label for="id_estado" class="form-label fw-medium">Estado</label>
-                        {{ form.estado }}
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="id_objetivo_muestra" class="form-label fw-medium">Objetivo de Muestra</label>
-                        {{ form.objetivo_muestra }}
-                    </div>
-                </div>
-
-                <p class="small text-muted mt-3">
-                    <i class="bi bi-info-circle-fill"></i>
-                    Para editar las preguntas, debes hacerlo desde el creador de encuestas (próximamente).
-                </p>
-
-                <div class="d-flex justify-content-end gap-2 pt-4 mt-4 border-top">
-                    <a href="{% url 'surveys:list' %}" class="btn btn-secondary">Cancelar</a>
-                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-                </div>
-            </form>
+            </div>
         </div>
-    </div>
+
+        <!-- Columna Lateral - Información y Acciones -->
+        <div class="col-lg-4">
+            <!-- Estadísticas Rápidas -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        <i class="bi bi-bar-chart-fill me-2"></i>Estadísticas
+                    </h6>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small text-muted">Respuestas</span>
+                            <span class="h4 mb-0 fw-bold text-primary">{{ object.respuestas.count }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small text-muted">Preguntas</span>
+                            <span class="h4 mb-0 fw-bold text-body-emphasis">{{ object.questions.count }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-0">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small text-muted">Creada</span>
+                            <span class="small fw-medium">{{ object.fecha_creacion|date:"d M Y" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones Rápidas -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
+                        <i class="bi bi-lightning-fill me-2"></i>Acciones Rápidas
+                    </h6>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'surveys:resultados' object.pk %}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-graph-up me-2"></i>Ver Resultados
+                        </a>
+                        <a href="{% url 'surveys:responder' object.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+                            <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
+                        </a>
+                        <a href="{% url 'surveys:exportar' object.pk %}" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-download me-2"></i>Exportar CSV
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información Importante -->
+            <div class="card info-card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-2">
+                        <i class="bi bi-info-circle-fill me-2"></i>Nota Importante
+                    </h6>
+                    <p class="small mb-0 text-body-secondary">
+                        Desde aquí solo puedes editar la información básica. Para modificar las questions, necesitarás crear una nueva survey o contactar a soporte.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
 {% endblock %}

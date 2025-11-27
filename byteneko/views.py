@@ -1,7 +1,7 @@
 # byteneko/views.py
 from django.shortcuts import render
 
-def pagina_inicio(request):
+def home_page_view(request):
     """
     Vista para la página de inicio (el index.html)
     """
