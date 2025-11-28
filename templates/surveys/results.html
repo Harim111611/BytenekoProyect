@@ -81,18 +81,24 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted text-uppercase">Segmentar por Pregunta</label>
+                <label class="form-label small fw-bold text-muted text-uppercase">Segmentar por Pregunta
+                    <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Segmentación por pregunta" data-bs-content="Selecciona una pregunta para segmentar el análisis; en 'Valor' indica la opción o valor a filtrar. Para preguntas de texto, ingresa una palabra clave. Para escala, ingresa un número.">
+                        <i class="bi bi-question-circle"></i>
+                    </a>
+                </label>
                 <select name="segment_col" id="segmentSelect" class="form-select bg-body-tertiary border-0">
                     <option value="">-- Sin segmentar --</option>
                     {% for p in preguntas_filtro %}
-                        <option
-                            value="{{ p.text }}"
-                            data-tipo="{{ p.type }}"
-                            data-question-id="{{ p.id }}"
-                            {% if filter_col == p.text %}
-                                selected
-                            {% endif %}
-                        >
+                            <option
+                                value="{{ p.id }}"
+                                data-type="{{ p.type }}"
+                                data-question-id="{{ p.id }}"
+                                data-is-demographic="{{ p.is_demographic|yesno:'1,0' }}"
+                                data-demo-type="{{ p.demographic_type|default:'' }}"
+                                {% if filter_col|default:'' == p.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
                             {{ p.text|truncatechars:40 }}
                         </option>
                     {% endfor %}
@@ -109,6 +115,27 @@
                     placeholder="Ej. Marketing"
                     value="{{ filter_val|default:'' }}"
                 >
+
+                <!-- Contexto demográfico: aparece solo si la pregunta seleccionada es demográfica -->
+                <div id="demographicContext" class="mt-2 d-none">
+                    <label class="form-label small fw-bold text-muted">Filtro demográfico</label>
+                    <select id="demographicSelect" class="form-select bg-body-tertiary border-0">
+                        <option value="">-- Selecciona --</option>
+                        <option value="age_18_24">Edad: 18-24</option>
+                        <option value="age_25_34">Edad: 25-34</option>
+                        <option value="age_35_44">Edad: 35-44</option>
+                        <option value="age_45_64">Edad: 45-64</option>
+                        <option value="age_65_plus">Edad: 65+</option>
+                        <option value="gender_male">Género: Hombre</option>
+                        <option value="gender_female">Género: Mujer</option>
+                        <option value="gender_other">Género: Otro</option>
+                        <option value="location_country">Ubicación: País</option>
+                        <option value="occupation">Ocupación</option>
+                        <option value="custom">Otro (especificar)</option>
+                    </select>
+                    <input type="hidden" name="segment_demo" id="segmentDemoInput" value="">
+                    <input type="text" id="segmentDemoCustom" class="form-control bg-body-tertiary border-0 mt-2 d-none" placeholder="Especifica valor demográfico">
+                </div>
             </div>
 
             <div class="col-md-1">
@@ -301,29 +328,41 @@
                     <div class="card-header bg-transparent py-3">
                         <h6 class="m-0 fw-bold text-primary">
                             Correlaciones
-                            <i class="bi bi-info-circle ms-1 text-muted" data-bs-toggle="tooltip" 
-                               title="Mide relación entre questions numéricas. Requiere al menos 2 questions de escala."></i>
+                                     <i class="bi bi-info-circle ms-1 text-muted" data-bs-toggle="tooltip" 
+                                         title="Mide relación entre preguntas numéricas. Requiere al menos 2 preguntas de escala."></i>
                         </h6>
                     </div>
                     <div class="card-body p-4 d-flex align-items-center justify-content-center">
                         {% if heatmap_image %}
-                            <img
-                                src="data:image/png;base64,{{ heatmap_image }}"
-                                class="img-fluid rounded shadow-sm"
-                                style="max-height: 280px;"
-                            >
+                            <div class="w-100 text-center">
+                                <img
+                                    src="data:image/png;base64,{{ heatmap_image }}"
+                                    class="img-fluid rounded shadow-sm mb-2"
+                                    style="max-height: 220px; cursor:pointer;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#globalImageModal"
+                                    data-image-src="data:image/png;base64,{{ heatmap_image }}"
+                                    alt="Heatmap de correlaciones"
+                                >
+                                <div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#globalImageModal" data-image-src="data:image/png;base64,{{ heatmap_image }}">
+                                        <i class="bi bi-arrows-fullscreen me-1"></i>Ver en grande
+                                    </button>
+                                </div>
+                            </div>
                         {% else %}
                             <div class="text-center py-4">
                                 <i class="bi bi-diagram-3 fs-1 text-muted opacity-50 d-block mb-3"></i>
                                 <p class="text-muted mb-2">
                                     <strong>Correlaciones no disponibles</strong>
                                 </p>
-                                <small class="text-muted">
-                                    Se requieren al menos 2 questions numéricas<br>
-                                    con suficientes respuestas en este segmento.
-                                </small>
+                                        <small class="text-muted">
+                                            Se requieren al menos 2 preguntas numéricas<br>
+                                            con suficientes respuestas en este segmento.
+                                        </small>
                             </div>
                         {% endif %}
+                        <!-- Correlación: el modal global se encuentra en `base.html` -->
                     </div>
                 </div>
             </div>
@@ -331,6 +370,11 @@
 
         <h4 class="fw-bold mb-4 pb-2 border-bottom border-secondary-subtle text-body-emphasis">
             Detalle por Pregunta
+            <span class="ms-2">
+                <a tabindex="0" class="text-primary small fw-normal" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo interpretar esta sección?" data-bs-content="Cada bloque muestra el análisis de una pregunta de tu encuesta. Observa el promedio, la distribución de respuestas y los comentarios destacados. Los colores y etiquetas te indican si el resultado es positivo, regular o crítico. Usa los íconos de información para obtener detalles sobre cada métrica.">
+                    <i class="bi bi-question-circle"></i> ¿Cómo interpretar?
+                </a>
+            </span>
         </h4>
         <div class="accordion" id="questionsAccordion">
             {% for item in analysis_data %}
@@ -383,9 +427,20 @@
                                             </p>
                                         {% endif %}
                                     {% else %}
-                                        <div style="height: 250px;">
-                                            <canvas id="chart_q_{{ item.id }}"></canvas>
-                                        </div>
+                                        {% if item.chart_labels and item.chart_data %}
+                                            <div style="height: 250px;">
+                                                <canvas id="chart_q_{{ item.id }}"></canvas>
+                                            </div>
+                                        {% elif item.chart_image %}
+                                            <div class="text-center">
+                                                <img src="data:image/png;base64,{{ item.chart_image }}" class="img-fluid rounded shadow-sm" alt="Gráfica">
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted text-center py-4">
+                                                <i class="bi bi-bar-chart fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin datos suficientes para graficar
+                                            </p>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                                 <div class="col-md-4 ps-md-4">
@@ -393,8 +448,22 @@
                                         <div class="alert alert-info-soft py-2 small mb-3">
                                             <i class="bi bi-lightbulb me-1"></i>
                                             {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                                            <span class="ms-2">
+                                                <a tabindex="0" class="text-primary small fw-normal" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Qué significa este análisis?" data-bs-content="Esta interpretación te ayuda a entender si el resultado es bueno, regular o crítico según el tipo de pregunta. Si tienes dudas, consulta la leyenda de colores o los íconos de información.">
+                                                    <i class="bi bi-info-circle"></i>
+                                                </a>
+                                            </span>
                                         </div>
                                     {% endif %}
+                                    <script>
+                                        // Inicializar popovers de Bootstrap
+                                        document.addEventListener('DOMContentLoaded', function() {
+                                            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+                                            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+                                                return new bootstrap.Popover(popoverTriggerEl);
+                                            });
+                                        });
+                                    </script>
                                     
                                     {% if item.type == 'text' and item.top_words %}
                                         <div class="card border-0 bg-body-tertiary">
@@ -445,12 +514,32 @@
 {% block scripts %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Data labels plugin to render values cleanly above bars -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script>
     // Inicializar tooltips de Bootstrap
     document.addEventListener('DOMContentLoaded', function() {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+    // Manejo del modal global para imágenes: inyecta la imagen desde el trigger
+    document.addEventListener('DOMContentLoaded', function() {
+        var globalEl = document.getElementById('globalImageModal');
+        if (!globalEl) return;
+
+        globalEl.addEventListener('show.bs.modal', function (event) {
+            var trigger = event.relatedTarget;
+            if (!trigger) return;
+            var imgSrc = trigger.getAttribute('data-image-src');
+            var imgEl = document.getElementById('globalModalImage');
+            if (imgEl) imgEl.src = imgSrc || '';
+        });
+
+        globalEl.addEventListener('hidden.bs.modal', function () {
+            var imgEl = document.getElementById('globalModalImage');
+            if (imgEl) imgEl.src = '';
         });
     });
 </script>
@@ -512,6 +601,11 @@
                 console.log('Creating chart for question', item.id, 'with', item.chart_labels.length, 'points');
 
                 let type = (item.type === 'single' || item.type === 'multi') ? 'doughnut' : 'bar';
+                // Register datalabels plugin and configure default per-chart options
+                if (typeof ChartDataLabels !== 'undefined') {
+                    try { Chart.register(ChartDataLabels); } catch (e) { /* already registered */ }
+                }
+
                 let options = {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -537,10 +631,12 @@
                 };
 
                 if (type === 'bar') {
+                    // Configure bar-specific display options to improve readability
                     options.scales = {
                         x: { 
                             grid: { display: false }, 
-                            ticks: { color: textColor, maxRotation: 45, minRotation: 0 }
+                            ticks: { color: textColor, maxRotation: 45, minRotation: 0 },
+                            stacked: false
                         },
                         y: { 
                             grid: { color: gridColor }, 
@@ -548,10 +644,38 @@
                             beginAtZero: true
                         }
                     };
+
+                    // Data labels for bars: render values above each bar with small font,
+                    // allow overlap prevention by adjusting offset and anchor
+                    options.plugins.datalabels = {
+                        color: '#fff',
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.6)',
+                        borderRadius: 4,
+                        padding: 4,
+                        anchor: 'end',
+                        align: 'end',
+                        offset: -6,
+                        formatter: function(value) { return value; },
+                        font: { weight: '600', size: 10 },
+                        clamp: true,
+                        clip: true
+                    };
+                    // Hide datalabels when there are too many bars to avoid clutter
+                    if (item.chart_labels.length > 40) {
+                        options.plugins.datalabels.display = false;
+                    }
+                    // Reduce bar thickness when many labels exist
+                    // These are Chart.js dataset options applied below when creating the chart
                 } else {
                     options.cutout = '65%';
                     options.plugins.legend.position = 'right';
                 }
+
+                // adjust bar thickness based on number of bars to avoid visual overcrowding
+                let maxBarThickness = 30;
+                if (item.chart_labels.length > 40) maxBarThickness = 10;
+                else if (item.chart_labels.length > 25) maxBarThickness = 16;
+                else if (item.chart_labels.length > 12) maxBarThickness = 22;
 
                 new Chart(canvas, {
                     type: type,
@@ -565,6 +689,9 @@
                                 '#f6c23e', '#e74a3b', '#858796',
                                 '#5a5c69', '#224abe', '#169b6b'
                             ],
+                            maxBarThickness: maxBarThickness,
+                            barPercentage: 0.85,
+                            categoryPercentage: 0.9,
                             borderColor: isDark ? '#1e1e1e' : '#fff',
                             borderWidth: 2
                         }]
@@ -575,30 +702,54 @@
         }
     });
 
-    // Actualizar placeholder del campo de segmentación según el tipo de question
-    const segmentSelect = document.getElementById('segmentSelect');
-    const segmentValInput = document.getElementById('segmentValInput');
-    
-    if (segmentSelect && segmentValInput) {
+    // Actualizar placeholder del campo de segmentación según el tipo de pregunta
+    document.addEventListener('DOMContentLoaded', function() {
+        const segmentSelect = document.getElementById('segmentSelect');
+        const segmentValInput = document.getElementById('segmentValInput');
+        const demographicContext = document.getElementById('demographicContext');
+        const demographicSelect = document.getElementById('demographicSelect');
+        const segmentDemoInput = document.getElementById('segmentDemoInput');
+        const segmentDemoCustom = document.getElementById('segmentDemoCustom');
+
+        if (!segmentSelect || !segmentValInput) return;
+
         segmentSelect.addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
             const tipo = selectedOption.dataset.type;
-            
+            const isDemographic = selectedOption.dataset.isDemographic === '1' || selectedOption.dataset.isDemographic === 'true';
+            const demoType = selectedOption.dataset.demoType || '';
+
+            // Si la pregunta está marcada como demográfica por el modelo
+            if (isDemographic) {
+                if (demographicContext) demographicContext.classList.remove('d-none');
+                if (segmentValInput) { segmentValInput.classList.add('d-none'); segmentValInput.disabled = true; }
+                // reset demo inputs
+                if (demographicSelect) demographicSelect.value = '';
+                if (segmentDemoInput) segmentDemoInput.value = '';
+                if (segmentDemoCustom) { segmentDemoCustom.value = ''; segmentDemoCustom.classList.add('d-none'); }
+                // Optionally, you could tailor demographicSelect options based on demoType here
+                return;
+            }
+
+            // No es demográfica: mostrar input libre
+            if (demographicContext) demographicContext.classList.add('d-none');
+            if (segmentValInput) { segmentValInput.classList.remove('d-none'); segmentValInput.disabled = false; }
+
             if (!tipo) {
-                segmentValInput.placeholder = 'Selecciona una question primero';
+                segmentValInput.placeholder = 'Selecciona una pregunta primero';
                 segmentValInput.disabled = true;
                 return;
             }
-            
+
             segmentValInput.disabled = false;
-            
+
             if (tipo === 'text') {
                 segmentValInput.placeholder = 'Texto a buscar (Ej. "excelente")';
                 segmentValInput.type = 'text';
             } else if (tipo === 'single') {
                 segmentValInput.placeholder = 'Opción exacta (Ej. "Marketing")';
                 segmentValInput.type = 'text';
-            } else if (tipo === 'scale') {
+            } else if (tipo === 'scale' || tipo === 'number') {
                 segmentValInput.placeholder = 'Valor numérico (Ej. 5)';
                 segmentValInput.type = 'number';
                 segmentValInput.step = 'any';
@@ -607,15 +758,36 @@
                 segmentValInput.type = 'text';
             }
         });
-        
-        // Trigger inicial si ya hay una question seleccionada
+
+        // Trigger inicial si ya hay una pregunta seleccionada
         if (segmentSelect.value) {
             segmentSelect.dispatchEvent(new Event('change'));
         } else {
             segmentValInput.disabled = true;
-            segmentValInput.placeholder = 'Selecciona una question primero';
+            segmentValInput.placeholder = 'Selecciona una pregunta primero';
         }
-    }
+
+        // Manejo del selector demográfico: copiar valor a input oculto y mostrar campo custom si corresponde
+        if (demographicSelect) {
+            demographicSelect.addEventListener('change', function() {
+                const val = this.value;
+                if (segmentDemoInput) segmentDemoInput.value = val || '';
+
+                if (val === 'custom') {
+                    if (segmentDemoCustom) segmentDemoCustom.classList.remove('d-none');
+                } else {
+                    if (segmentDemoCustom) { segmentDemoCustom.classList.add('d-none'); segmentDemoCustom.value = ''; }
+                }
+            });
+        }
+
+        // Si el usuario escribe en el campo custom, sincronizar con el input oculto
+        if (segmentDemoCustom) {
+            segmentDemoCustom.addEventListener('input', function() {
+                if (segmentDemoInput) segmentDemoInput.value = this.value;
+            });
+        }
+    });
 </script>
 {% endif %}
 {% endblock %}

@@ -190,8 +190,8 @@ class PermissionHelper:
                 'unauthorized_encuesta_access',
                 severity='WARNING',
                 user_id=user.id,
-                encuesta_id=survey.id,
-                encuesta_creador_id=survey.author.id
+                encuesta_id=encuesta.id,
+                encuesta_creador_id=encuesta.author.id
             )
             
             logger.warning(

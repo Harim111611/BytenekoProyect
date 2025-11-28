@@ -57,6 +57,16 @@ class Question(models.Model):
         ('multi', 'Opción múltiple'),
     ]
 
+    # Tipos demográficos (si la pregunta se usa para segmentación demográfica)
+    DEMOGRAPHIC_TYPES = [
+        ('age', 'Edad'),
+        ('gender', 'Género'),
+        ('location', 'Ubicación'),
+        ('occupation', 'Ocupación'),
+        ('marital_status', 'Estado civil'),
+        ('other', 'Otro'),
+    ]
+
     survey = models.ForeignKey(
         Survey,
         on_delete=models.CASCADE,
@@ -68,6 +78,9 @@ class Question(models.Model):
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name='Type', db_index=True)
     is_required = models.BooleanField(default=False, verbose_name='Required')
     order = models.PositiveIntegerField(default=0, verbose_name='Order')
+    # Marca si la pregunta es demográfica y su tipo (opcional)
+    is_demographic = models.BooleanField(default=False, verbose_name='Is Demographic', db_index=True)
+    demographic_type = models.CharField(max_length=50, choices=DEMOGRAPHIC_TYPES, null=True, blank=True, verbose_name='Demographic Type')
 
     def __str__(self):
         return self.text

@@ -220,6 +220,16 @@ class QuestionAnalyzer:
         
         # 2. Context
         subject = ContextHelper.get_subject_label(question.survey.category)
+
+        # Text analysis for text responses (for samples_texto, top_words, top_bigrams)
+        qs_text = QuestionResponse.objects.filter(
+            question=question,
+            survey_response__in=responses_queryset
+        ).exclude(text_value__isnull=True).exclude(text_value__exact="")
+        words, bigrams, _ = TextAnalyzer.analyze_text_responses(qs_text)
+        result['samples_texto'] = list(qs_text.values_list('text_value', flat=True)[:5])
+        result['top_words'] = [{'palabra': w[0], 'frecuencia': w[1]} for w in words]
+        result['top_bigrams'] = [{'frase': b[0], 'frecuencia': b[1]} for b in bigrams]
         text_lower = question.text.lower()
         
         negative_metrics = ['tiempo', 'espera', 'demora', 'tardanza', 'errores', 'fallos', 'problemas', 'quejas', 'costo']
@@ -384,7 +394,19 @@ class QuestionAnalyzer:
             labels = [item['text'] for item in top_10]
             data = [item['count'] for item in top_10]
             result['chart_data'] = {'labels': labels, 'data': data}
-            result['chart_image'] = ChartGenerator.generate_vertical_bar_chart(labels, data, "Frecuencia")
+            # Prefer donut/pie image for choice questions when option count is small (better visual)
+            try:
+                if len(labels) <= 10:
+                    img = ChartGenerator.generate_pie_chart(labels, data, "Frecuencia")
+                    if img:
+                        result['chart_image'] = img
+                    else:
+                        result['chart_image'] = ChartGenerator.generate_vertical_bar_chart(labels, data, "Frecuencia")
+                else:
+                    result['chart_image'] = ChartGenerator.generate_vertical_bar_chart(labels, data, "Frecuencia")
+            except Exception:
+                # Fallback a barra en caso de error en la generación de dona
+                result['chart_image'] = ChartGenerator.generate_vertical_bar_chart(labels, data, "Frecuencia")
         
         return result
     

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 from decouple import config, Csv
 
@@ -24,15 +25,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-&69d)w6%xs*b)=^s3dj++^a5jq6vsf9$h9u_uyh*)z3g7(m$9q')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+
 DEBUG = config('DEBUG', default=True, cast=bool)
-
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+print(f"[settings.py] DEBUG={DEBUG} ALLOWED_HOSTS={ALLOWED_HOSTS} DJANGO_ENV={os.environ.get('DJANGO_ENV')}")
 
+# Basic settings needed for imports
+TIME_ZONE = 'UTC'
 
 # Application definition
-
-# byteneko/settings.py
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -45,6 +46,10 @@ INSTALLED_APPS = [
     # Mis Apps (MODIFICADO)
     'core.apps.CoreConfig',  # <-- Cambiado de 'core'
     'surveys.apps.SurveysConfig',  # <-- Cambiado de 'surveys'
+
+    # Development tools
+    'django_extensions',
+    'sslserver',
 ]
 
 MIDDLEWARE = [
@@ -80,28 +85,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'byteneko.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
-        'NAME': config('DB_NAME', default='byteneko_db'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default=''),
-        'HOST': config('DB_HOST', default='127.0.0.1'),
-        'PORT': config('DB_PORT', default='5433'),
+# Only set DATABASES if not already set by environment-specific imports
+if 'DATABASES' not in globals():
+    DATABASES = {
+        'default': {
+            'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+            'NAME': config('DB_NAME', default='byteneko_db'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default=''),
+            'HOST': config('DB_HOST', default='127.0.0.1'),
+            'PORT': config('DB_PORT', default='5433'),
+        }
     }
-}
-
-# SQLite (backup - descomentado si hay problemas con PostgreSQL)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
 
 
 # Password validation
@@ -137,7 +135,6 @@ LANGUAGES = [
 LOCALE_PATHS = [
     BASE_DIR / 'locale',
 ]
-TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
@@ -157,6 +154,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGIN_URL = 'login'

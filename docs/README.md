@@ -67,7 +67,7 @@ Este proyecto usa `WeasyPrint` para generar PDFs, el cual depende de la bibliote
     6.  Reinicia tu computadora o, como mínimo, tu editor (PyCharm/VSCode) para que detecte el nuevo `PATH`.
 
 ### 5. Base de Datos
-Este proyecto usa SQLite por defecto, por lo que no requiere configuración adicional. Ejecuta las migraciones para crear la base de datos:
+Este proyecto usa PostgreSQL como base de datos principal. Asegúrate de tener PostgreSQL instalado y configurado. Ejecuta las migraciones para crear la base de datos:
 
 ```bash
 python manage.py migrate

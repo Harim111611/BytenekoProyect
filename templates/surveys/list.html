@@ -74,8 +74,8 @@
             <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
         </div>
 
-        <div class="d-flex gap-2">
-            <button type="button" class="btn btn-outline-secondary border-dashed fw-medium" data-bs-toggle="modal" data-bs-target="#importModalPreview">
+            <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary border-dashed fw-medium" data-bs-toggle="modal" data-bs-target="#importModalPreview" data-bs-content="Sube uno o más archivos CSV. Si subes varios archivos, se crearán varias surveys automáticamente." data-bs-trigger="focus" title="Importar CSV">
                 <i class="bi bi-cloud-upload me-2"></i>Importar CSV
             </button>
 
@@ -154,13 +154,13 @@
                             </p>
 
                             <div class="d-flex align-items-center text-secondary small mb-4 bg-body-tertiary rounded-3 p-2 border border-dashed">
-                                <div class="d-flex align-items-center me-3">
+                                    <div class="d-flex align-items-center me-3">
                                     <i class="bi bi-people-fill me-2 text-primary"></i>
                                     <strong class="text-body">{{ survey.respuestas.count }}</strong>&nbsp;respuestas
                                 </div>
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-layers-fill me-2 text-primary"></i>
-                                    <strong class="text-body">{{ survey.questions.count }}</strong>&nbsp;questions
+                                    <strong class="text-body">{{ survey.questions.count }}</strong>&nbsp;preguntas
                                 </div>
                             </div>
 
@@ -325,10 +325,10 @@
             <div id="step-loading" class="modal-body text-center py-5" style="display:none;">
                 <div class="mb-4" id="loading-animation">
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Loading...</span>
+                        <span class="visually-hidden">Cargando...</span>
                     </div>
                 </div>
-                <h5 class="mb-3" id="loading-title">Processing Data</h5>
+                <h5 class="mb-3" id="loading-title">Procesando datos</h5>
                 <p class="text-muted" id="loading-text">Analizando...</p>
                 <div class="progress mx-auto" style="max-width: 300px; height: 8px;">
                     <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
@@ -390,9 +390,9 @@ document.addEventListener('DOMContentLoaded', function() {
             showStep('loading');
             const loadingAnimation = document.getElementById('loading-animation');
             // 2. USO CORRECTO DE LA VARIABLE
-            loadingAnimation.innerHTML = '<img src="' + loadingImgUrl + '" alt="Loading..." style="width: 128px; height: 128px;">';
-            document.getElementById('loading-title').textContent = 'Importing Data';
-            document.getElementById('loading-text').textContent = `Importando ${files.length} survey${files.length > 1 ? 's' : ''}... Por favor espera.`;
+            loadingAnimation.innerHTML = '<img src="' + loadingImgUrl + '" alt="Cargando..." style="width: 128px; height: 128px;">';
+            document.getElementById('loading-title').textContent = 'Importando datos';
+            document.getElementById('loading-text').textContent = `Importando ${files.length} encuesta${files.length > 1 ? 's' : ''}... Por favor espera.`;
             
             const startTime = Date.now();
             
@@ -534,8 +534,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             showStep('loading');
             const loadingAnimation = document.getElementById('loading-animation');
-            loadingAnimation.innerHTML = '<div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Loading...</span></div>';
-            document.getElementById('loading-title').textContent = 'Analyzing File';
+            loadingAnimation.innerHTML = '<div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Cargando...</span></div>';
+            document.getElementById('loading-title').textContent = 'Analizando archivo';
             document.getElementById('loading-text').textContent = 'Analizando estructura del archivo...';
             
             const startTime = Date.now();

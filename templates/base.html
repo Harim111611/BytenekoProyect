@@ -29,7 +29,33 @@
         {% endblock %}
     </div>
 
+    <!-- Global image modal (direct child of body to avoid stacking-context flicker) -->
+    <div class="modal fade" id="globalImageModal" tabindex="-1" aria-labelledby="globalImageModalLabel" aria-hidden="true" data-bs-focus="false">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary bg-gradient text-white border-0">
+                    <h5 class="modal-title fw-bold" id="globalImageModalLabel">
+                        <i class="bi bi-arrows-fullscreen me-2"></i>Vista ampliada
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4 text-center">
+                    <img id="globalModalImage" src="" class="img-fluid rounded shadow" style="max-height: 80vh; max-width: 100%;" alt="Imagen ampliada">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Inicializar popovers globalmente para ayudar al usuario en toda la app
+        document.addEventListener('DOMContentLoaded', function() {
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
+        });
+    </script>
 
     {% block scripts %}
     {% endblock %}

@@ -7,11 +7,11 @@ import pandas as pd
 
 # Probar cada archivo
 archivos = [
-    'encuesta_satisfaccion_clientes.csv',
-    'encuesta_clima_laboral.csv',
-    'encuesta_satisfaccion_universitaria.csv',
-    'encuesta_hospital_servicios.csv',
-    'encuesta_hotel_huespedes.csv'
+    'data/samples/encuesta_satisfaccion_clientes.csv',
+    'data/samples/encuesta_clima_laboral.csv',
+    'data/samples/encuesta_satisfaccion_universitaria.csv',
+    'data/samples/encuesta_hospital_servicios.csv',
+    'data/samples/encuesta_hotel_huespedes.csv'
 ]
 
 for archivo in archivos:

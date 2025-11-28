@@ -137,6 +137,44 @@ class ChartGenerator:
         
         plt.tight_layout()
         return ChartGenerator._fig_to_base64(fig)
+
+    @staticmethod
+    def generate_pie_chart(labels, counts, title):
+        """
+        Genera un gráfico de dona (pie con hueco central) para distribuciones de opciones.
+        """
+        ChartGenerator._configure_pyplot()
+        # Filtrar valores nulos
+        filtered = [(l, c) for l, c in zip(labels, counts) if c is not None and c >= 0]
+        if not filtered:
+            return None
+
+        labels_f, counts_f = zip(*filtered)
+
+        # Elegir paleta de colores
+        palette = sns.color_palette('tab10' if len(labels_f) <= 10 else 'hls', n_colors=len(labels_f))
+        colors = [tuple(int(x * 255) for x in p) for p in palette]
+        # Convertir a hex
+        colors_hex = ['#%02x%02x%02x' % c for c in colors]
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        wedges, texts, autotexts = ax.pie(
+            counts_f,
+            labels=labels_f,
+            autopct='%1.0f%%',
+            startangle=90,
+            colors=colors_hex,
+            pctdistance=0.75,
+            textprops=dict(color="#333333", fontsize=9)
+        )
+
+        # Agregar círculo central para efecto dona
+        centre_circle = plt.Circle((0, 0), 0.60, fc='white')
+        fig.gca().add_artist(centre_circle)
+
+        ax.set_title(title, fontsize=11, weight='bold', color='#111827', pad=10)
+        plt.tight_layout()
+        return ChartGenerator._fig_to_base64(fig)
     
     @staticmethod
     def generate_horizontal_bar_chart(labels, counts, title):

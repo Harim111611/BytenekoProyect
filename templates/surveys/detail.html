@@ -109,7 +109,7 @@
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="text-muted small">Total de respuestas</span>
                             <div class="text-end">
-                                <div class="h4 fw-bold text-body-emphasis mb-0">{{ survey.respuestas.count }}</div>
+                                <div class="h4 fw-bold text-body-emphasis mb-0">{{ survey.responses.count }}</div>
                             </div>
                         </div>
 
@@ -145,14 +145,14 @@
                     </div>
                     <div class="card-body p-0">
                         <ul class="list-group list-group-flush small">
-                            {% for respuesta in survey.respuestas.all|slice:":3" %}
+                            {% for respuesta in survey.responses.all|slice:":3" %}
                             <li class="list-group-item px-4 py-3 bg-transparent d-flex justify-content-between align-items-center border-bottom-dashed">
                                 <div class="d-flex align-items-center text-truncate">
                                     <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 24px; height: 24px; font-size: 0.75rem;">
                                         <i class="bi bi-person-fill"></i>
                                     </div>
                                     <span class="text-body fw-medium">
-                                        {% if respuesta.anonima %}Anónimo{% else %}{{ respuesta.usuario.username|default:"Usuario" }}{% endif %}
+                                        {% if respuesta.is_anonymous %}Anónimo{% else %}{{ respuesta.user.username|default:"Usuario" }}{% endif %}
                                     </span>
                                 </div>
                                 <span class="text-muted" style="font-size: 0.75rem;">{{ respuesta.created_at|timesince }}</span>
@@ -164,7 +164,7 @@
                             </li>
                             {% endfor %}
                         </ul>
-                        {% if survey.respuestas.count > 0 %}
+                        {% if survey.responses.count > 0 %}
                         <div class="card-footer bg-transparent text-center border-0 py-2">
                             <a href="{% url 'surveys:resultados' survey.pk %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
                                 Ver todos los resultados <i class="bi bi-arrow-right"></i>
@@ -187,7 +187,7 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             },
-            body: JSON.stringify({ estado: nuevoEstado })
+            body: JSON.stringify({ status: nuevoEstado })
         })
         .then(response => response.json())
         .then(data => {

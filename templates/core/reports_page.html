@@ -22,7 +22,11 @@
                     <div class="card-body p-4">
 
                         <div class="mb-4">
-                            <label for="survey_id" class="form-label fw-medium">Selecciona survey</label>
+                            <label for="survey_id" class="form-label fw-medium">Selecciona survey
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Selecciona la survey" data-bs-content="Escoge la survey cuyos datos deseas incluir en el reporte. Si no hay resultados, asegúrate de que la survey tenga respuestas.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
+                            </label>
                             <select class="form-select" id="survey_id" name="survey_id" required>
                                 <option value="" disabled selected>Selecciona una survey...</option>
                                 {% for survey in surveys %}
@@ -32,7 +36,11 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-medium">Rango de Análisis</label>
+                            <label class="form-label fw-medium">Rango de Análisis
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Rango de Análisis" data-bs-content="Selecciona si quieres todo el histórico o solo los últimos días. Para comparaciones específicas, usa 'Rango personalizado'.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
+                            </label>
                             <select class="form-select mb-3" id="window_days" name="window_days">
                                 <option value="all" selected>Todo el histórico (Completo)</option>
                                 <option value="15">Últimos 15 días (Tendencia)</option>
@@ -61,7 +69,11 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-medium">Secciones a incluir</label>
+                            <label class="form-label fw-medium">Secciones a incluir
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Qué incluir en el reporte?" data-bs-content="Marca KPIs, gráficos y tablas según lo que necesites exportar. Menos secciones reduce tamaño y tiempo de generación.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
+                            </label>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="include_kpis" id="include_kpis" checked>
                                 <label class="form-check-label" for="include_kpis">KPIs de resumen</label>

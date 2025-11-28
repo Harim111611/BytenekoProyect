@@ -53,7 +53,11 @@ def invalidate_pattern(pattern):
     """
     try:
         # Intenta usar delete_pattern de django-redis
-        cache.delete_pattern(pattern)
+        if hasattr(cache, 'delete_pattern'):
+            cache.delete_pattern(pattern)
+        else:
+            # Fallback para backends sin delete_pattern (silencioso en desarrollo)
+            pass
         logger.debug(f"Cache invalidated with pattern: {pattern}")
     except AttributeError:
         # Fallback para backends sin delete_pattern (silencioso en desarrollo)

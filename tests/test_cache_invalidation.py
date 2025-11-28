@@ -1,17 +1,13 @@
-#!/usr/bin/env python
-"""
-Test script to verify intelligent cache invalidation works.
-"""
+import pytest
 import os
 import django
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
 django.setup()
-
 from surveys.models import Survey, SurveyResponse
 from django.contrib.auth.models import User
 from django.core.cache import cache
 
+@pytest.mark.django_db
 def test_cache_invalidation():
     print("\n=== Testing Intelligent Cache Invalidation ===\n")
     

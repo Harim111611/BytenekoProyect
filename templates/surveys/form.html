@@ -33,7 +33,7 @@
     }
     
     /* Estilizar el select de estado */
-    #id_estado option {
+    #id_status option {
         padding: 0.75rem;
         font-weight: 500;
     }
@@ -70,6 +70,9 @@
                             <label for="id_titulo" class="form-label fw-semibold text-body">
                                 Título de la survey
                                 <span class="text-danger">*</span>
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo nombrar la survey?" data-bs-content="Incluye objetivo y periodo (ej. 'Satisfacción Q1 2025') para identificar fácilmente el análisis.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
                             </label>
                             <input type="text" 
                                    class="form-control form-control-lg bg-body-tertiary border-0" 
@@ -101,13 +104,16 @@
 
                         <!-- Estado -->
                         <div class="mb-4">
-                            <label for="id_estado" class="form-label fw-semibold text-body">
+                            <label for="id_status" class="form-label fw-semibold text-body">
                                 Estado de la survey
                                 <span class="text-danger">*</span>
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Estados de la survey" data-bs-content="Borrador: editable y no visible; Activa: recibe respuestas; Cerrada: ya no acepta respuestas.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
                             </label>
                             <select class="form-select form-select-lg bg-body-tertiary border-0" 
-                                    id="id_estado" 
-                                    name="estado" 
+                                    id="id_status" 
+                                    name="status" 
                                     required>
                                 <option value="draft" {% if form.status.value == 'draft' %}selected{% endif %}>
                                     <i class="bi bi-file-earmark-text"></i> Borrador - No visible para responder
@@ -153,7 +159,7 @@
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <span class="small text-muted">Respuestas</span>
-                            <span class="h4 mb-0 fw-bold text-primary">{{ object.respuestas.count }}</span>
+                            <span class="h4 mb-0 fw-bold text-primary">{{ object.responses.count }}</span>
                         </div>
                     </div>
 
@@ -167,7 +173,7 @@
                     <div class="mb-0">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <span class="small text-muted">Creada</span>
-                            <span class="small fw-medium">{{ object.fecha_creacion|date:"d M Y" }}</span>
+                            <span class="small fw-medium">{{ object.created_at|date:"d M Y" }}</span>
                         </div>
                     </div>
                 </div>
@@ -201,7 +207,7 @@
                         <i class="bi bi-info-circle-fill me-2"></i>Nota Importante
                     </h6>
                     <p class="small mb-0 text-body-secondary">
-                        Desde aquí solo puedes editar la información básica. Para modificar las questions, necesitarás crear una nueva survey o contactar a soporte.
+                        Desde aquí solo puedes editar la información básica. Para modificar las preguntas, necesitarás crear una nueva encuesta o contactar a soporte.
                     </p>
                 </div>
             </div>

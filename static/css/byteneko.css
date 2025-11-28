@@ -698,3 +698,26 @@ body {
 }
 
 .border-dashed { border-style: dashed !important; }
+
+/* When a Bootstrap modal is open the body receives the class `modal-open`.
+   Some hover/transform rules on cards and fixed elements can trigger repaints
+   and cause a visible flicker on certain browsers. Disable those transforms
+   while a modal is open to avoid the flicker. */
+body.modal-open .card,
+body.modal-open .kpi-card-modern,
+body.modal-open .chart-card,
+body.modal-open .settings-card,
+body.modal-open .q-card,
+body.modal-open .kpi-card-results,
+body.modal-open .insight-card {
+    transform: none !important;
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+/* Also reduce sidebar/overlay transitions while modal is open to avoid
+   interactions between backdrop/stacking contexts and fixed elements. */
+body.modal-open .app-sidebar,
+body.modal-open .sidebar-overlay {
+    transition: none !important;
+}

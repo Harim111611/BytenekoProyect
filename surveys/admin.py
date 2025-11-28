@@ -17,7 +17,7 @@ class AnswerOptionInline(admin.TabularInline):
 class QuestionInline(admin.StackedInline):
     model = Question
     extra = 0
-    fields = ('text', 'type', 'is_required', 'order')
+    fields = ('text', 'type', 'is_required', 'order', 'is_demographic', 'demographic_type')
     ordering = ['order']
     show_change_link = True
 
@@ -122,8 +122,8 @@ class SurveyAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('text_preview', 'survey_link', 'type_badge', 'order', 'is_required', 'option_count')
-    list_filter = ('type', 'is_required', 'survey__status')
+    list_display = ('text_preview', 'survey_link', 'type_badge', 'order', 'is_required', 'is_demographic', 'demographic_type', 'option_count')
+    list_filter = ('type', 'is_required', 'is_demographic', 'demographic_type', 'survey__status')
     search_fields = ('text', 'survey__title')
     inlines = [AnswerOptionInline]
     readonly_fields = ('option_count',)
@@ -131,7 +131,7 @@ class QuestionAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Question Details', {
-            'fields': ('survey', 'text', 'type', 'is_required', 'order')
+            'fields': ('survey', 'text', 'type', 'is_required', 'order', 'is_demographic', 'demographic_type')
         }),
         ('Statistics', {
             'fields': ('option_count',),
@@ -182,7 +182,7 @@ class AnswerOptionAdmin(admin.ModelAdmin):
     question_preview.short_description = 'Question'
     
     def response_count(self, obj):
-        count = obj.questionresponse_set.count()
+        count = obj.question_responses.count()
         return format_html('<strong>{}</strong> times selected', count)
     response_count.short_description = 'Usage'
 
