@@ -24,7 +24,10 @@ def enable_signals():
 
 def are_signals_enabled():
     """Verifica si las señales están habilitadas."""
-    return not getattr(_thread_locals, 'signals_disabled', False)
+    # Verificar thread-local primero (más rápido)
+    if getattr(_thread_locals, 'signals_disabled', False):
+        return False
+    return True
 
 
 class DisableSignals:
@@ -118,10 +121,15 @@ def invalidate_question_cache(sender, instance, **kwargs):
     if os.environ.get('DJANGO_ENV') == 'test':
         return
     
+    # CRÍTICO: Verificar señales PRIMERO, antes de cualquier acceso a atributos
     if not are_signals_enabled():
-        return
+        return  # Salir inmediatamente sin logging para evitar overhead
     
-    survey = instance.survey
+    try:
+        survey = instance.survey
+    except (AttributeError, Exception):
+        # Si el objeto ya fue eliminado o no tiene survey, ignorar silenciosamente
+        return
     
     # Invalidar análisis y resultados de la encuesta
     analysis_pattern = f"survey_analysis_{survey.id}_*"
@@ -135,7 +143,8 @@ def invalidate_question_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    logger.info(
+    # Cambiar a debug para reducir ruido en logs
+    logger.debug(
         f"Cache invalidated for question changes in survey {survey.id}"
     )
 
@@ -180,10 +189,15 @@ def invalidate_response_cache(sender, instance, **kwargs):
     if os.environ.get('DJANGO_ENV') == 'test':
         return
     
+    # CRÍTICO: Verificar señales PRIMERO, antes de cualquier acceso a atributos
     if not are_signals_enabled():
-        return
+        return  # Salir inmediatamente sin logging para evitar overhead
     
-    survey = instance.survey
+    try:
+        survey = instance.survey
+    except (AttributeError, Exception):
+        # Si el objeto ya fue eliminado o no tiene survey, ignorar silenciosamente
+        return
     
     # 1. Análisis y resultados
     analysis_pattern = f"survey_analysis_{survey.id}_*"
@@ -206,7 +220,8 @@ def invalidate_response_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    logger.info(
+    # Cambiar a debug para reducir ruido en logs
+    logger.debug(
         f"Cache invalidated for response changes in survey {survey.id}"
     )
 
@@ -223,8 +238,9 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
     if os.environ.get('DJANGO_ENV') == 'test':
         return
     
+    # CRÍTICO: Verificar señales PRIMERO, antes de cualquier acceso a atributos
     if not are_signals_enabled():
-        return
+        return  # Salir inmediatamente sin logging para evitar overhead
     
     try:
         survey = instance.survey_response.survey
@@ -239,9 +255,10 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
         stats_key = f"survey_stats_{survey.id}"
         cache.delete(stats_key)
         
+        # Cambiar a debug para reducir ruido en logs
         logger.debug(
             f"Cache invalidated for question response changes in survey {survey.id}"
         )
-    except (AttributeError, SurveyResponse.DoesNotExist):
-        # La respuesta padre ya fue eliminada, ignorar
+    except (AttributeError, SurveyResponse.DoesNotExist, Exception):
+        # La respuesta padre ya fue eliminada, ignorar silenciosamente
         pass

@@ -1,0 +1,71 @@
+# surveys/views/__init__.py
+"""
+Survey views package.
+Exports all views from submodules for convenient imports.
+"""
+
+# Import all views from submodules
+from . import crud_views
+from . import import_views
+from . import report_views
+from . import respond_views
+
+# Re-export class-based views from crud_views
+from .crud_views import (
+    EncuestaListView,
+    EncuestaDetailView,
+    EncuestaCreateView,
+    EncuestaUpdateView,
+    EncuestaDeleteView,
+    bulk_delete_surveys_view,
+)
+
+# Re-export function-based views from import_views
+from .import_views import (
+    import_survey_view,
+    import_multiple_surveys_view,
+    import_csv_preview_view,
+    import_responses_view,
+)
+
+# Re-export function-based views from report_views
+from .report_views import (
+    survey_results_view,
+    export_survey_csv_view,
+    survey_thanks_view,
+    cambiar_estado_encuesta,
+    debug_analysis_view,
+    survey_analysis_ajax,
+)
+
+# Re-export function-based views from respond_views
+from .respond_views import respond_survey_view
+
+__all__ = [
+    # Modules
+    'crud_views',
+    'import_views',
+    'report_views',
+    'respond_views',
+    # CRUD views
+    'EncuestaListView',
+    'EncuestaDetailView',
+    'EncuestaCreateView',
+    'EncuestaUpdateView',
+    'EncuestaDeleteView',
+    'bulk_delete_surveys_view',
+    # Import views
+    'import_survey_view',
+    'import_multiple_surveys_view',
+    'import_csv_preview_view',
+    'import_responses_view',
+    # Report views
+    'survey_results_view',
+    'export_survey_csv_view',
+    'survey_thanks_view',
+    'cambiar_estado_encuesta',
+    'debug_analysis_view',
+    # Respond views
+    'respond_survey_view',
+]
+

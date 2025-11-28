@@ -1,0 +1,36 @@
+========================================
+SOLUCIÓN ALTERNATIVA - Si no puedes avanzar
+========================================
+
+Si el navegador NO te deja hacer clic en "Avanzado" o "Continuar",
+prueba estas soluciones:
+
+OPCIÓN 1: Escribir manualmente en la barra de direcciones
+----------------------------------------
+1. En la página de error, haz clic en la barra de direcciones
+2. Escribe manualmente: thisisunsafe
+3. NO presiones Enter, solo escribe las letras
+4. El navegador debería permitirte continuar automáticamente
+
+OPCIÓN 2: Usar un puerto diferente
+----------------------------------------
+1. Edita https_server.py y cambia el puerto de 8000 a 8443
+2. Ejecuta: python https_server.py
+3. Accede a: https://127.0.0.1:8443
+
+OPCIÓN 3: Limpiar completamente HSTS y usar HTTP
+----------------------------------------
+1. Abre: chrome://net-internals/#hsts
+2. En "Delete domain security policies" escribe: 127.0.0.1
+3. Haz clic en "Delete"
+4. Escribe: localhost y haz clic en "Delete"
+5. Cierra TODAS las ventanas de Chrome
+6. Ejecuta: python manage.py runserver localhost:8000
+7. Accede a: http://localhost:8000
+
+OPCIÓN 4: Usar otro navegador
+----------------------------------------
+Prueba con Firefox o Edge que pueden tener políticas diferentes
+
+========================================
+

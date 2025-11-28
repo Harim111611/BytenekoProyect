@@ -31,10 +31,74 @@
 </div>
 
 <script>
-document.getElementById('deleteForm').addEventListener('submit', function(e) {
+document.getElementById('deleteForm').addEventListener('submit', async function(e) {
+    e.preventDefault(); // Prevenir envío síncrono del formulario
+    
     const btn = document.getElementById('deleteBtn');
+    const form = document.getElementById('deleteForm');
+    const originalBtnText = btn.innerHTML;
+    
+    // Deshabilitar botón y mostrar spinner
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+    
+    // Obtener CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    try {
+        // Enviar petición asíncrona (no bloquea la UI)
+        // Aumentar timeout a 5 minutos para encuestas grandes
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutos
+        
+        const formData = new FormData(form);
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            signal: controller.signal,
+            // No timeout en fetch, dejar que el servidor responda
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Redirigir según la respuesta
+        // Django redirect() devuelve 302, fetch() lo sigue automáticamente
+        if (response.ok || response.redirected) {
+            // Redirigir a la lista (los mensajes de Django se mostrarán allí)
+            window.location.href = "{% url 'surveys:list' %}";
+        } else {
+            throw new Error('Error al eliminar la encuesta');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        btn.disabled = false;
+        btn.innerHTML = originalBtnText;
+        
+        // Mensaje más específico según el tipo de error
+        if (error.name === 'AbortError' || error.message.includes('timeout')) {
+            alert('La eliminación está tardando más de lo esperado. Por favor, espera unos momentos y verifica si la encuesta fue eliminada. Si no, intenta de nuevo.');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_RESET')) {
+            alert('La conexión se perdió durante la eliminación. Esto puede ocurrir con encuestas muy grandes. Por favor, espera unos momentos y verifica si la encuesta fue eliminada. Si no, intenta de nuevo.');
+        } else {
+            alert('Error al eliminar la encuesta: ' + error.message + '. Por favor, intenta de nuevo.');
+        }
+    }
 });
 </script>
 

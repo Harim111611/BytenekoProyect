@@ -29,8 +29,16 @@ CACHES = {
 
 # ============================================================
 # STATIC FILES STORAGE
+# Use simple storage in tests to avoid requiring a collectstatic manifest.
 # ============================================================
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 # ============================================================
 # BASE DE DATOS (SQLite en memoria)

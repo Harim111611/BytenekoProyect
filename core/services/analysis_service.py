@@ -164,9 +164,10 @@ class DataFrameBuilder:
         if df_raw.empty:
             return pd.DataFrame()
         
-        df_raw['valor'] = df_raw['numeric_value'].fillna(
+        # Combine numeric, option, and text values without downcasting
+        df_raw['valor'] = df_raw['numeric_value'].combine_first(
             df_raw['selected_option__text']
-        ).fillna(df_raw['text_value'])
+        ).combine_first(df_raw['text_value'])
         
         try:
             df = df_raw.pivot_table(

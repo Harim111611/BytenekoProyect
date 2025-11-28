@@ -1,0 +1,24 @@
+========================================
+INICIAR SERVIDOR CON manage.py runserver
+========================================
+
+PASOS:
+
+1. Ejecuta en la terminal:
+   python manage.py runserver 127.0.0.1:8000
+
+2. Accede usando HTTP (NO HTTPS):
+   http://127.0.0.1:8000
+
+3. Si el navegador fuerza HTTPS:
+   - Abre: chrome://net-internals/#hsts
+   - En "Delete domain security policies" escribe: 127.0.0.1
+   - Haz clic en "Delete"
+   - Escribe: localhost y haz clic en "Delete"
+   - Cierra TODAS las ventanas de Chrome
+   - Abre una ventana nueva
+
+4. Los logs de DELETE aparecerán en la consola donde ejecutaste runserver
+
+========================================
+

@@ -9,10 +9,21 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
-# 1. AUTORIZAR HTTPS LOCAL (Soluciona el problema del Login)
+# 1. CONFIGURACIÓN PARA HTTP EN DESARROLLO (usando manage.py runserver)
+# Deshabilitar HTTPS en desarrollo - runserver solo soporta HTTP
+SESSION_COOKIE_SECURE = False  # Permitir cookies en HTTP
+CSRF_COOKIE_SECURE = False  # Permitir CSRF en HTTP
+SECURE_SSL_REDIRECT = False  # No forzar redirección a HTTPS
+
+# AUTORIZAR HTTP LOCAL (para runserver)
+# Incluimos múltiples puertos por si hay problemas con HSTS
 CSRF_TRUSTED_ORIGINS = [
-    'https://127.0.0.1:8000',
-    'https://localhost:8000',
+    'http://127.0.0.1:8000',  # HTTP puerto 8000
+    'http://localhost:8000',
+    'http://127.0.0.1:8001',  # HTTP puerto 8001 (alternativo)
+    'http://localhost:8001',
+    'http://127.0.0.1:8080',  # HTTP puerto 8080 (alternativo)
+    'http://localhost:8080',
 ]
 
 # 2. OPTIMIZACIÓN DE ARCHIVOS ESTÁTICOS
@@ -83,6 +94,12 @@ LOGGING = {
         'django.db.backends': {
             'handlers': ['console'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        # Logger para surveys (incluye logs de DELETE)
+        'surveys': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
     }

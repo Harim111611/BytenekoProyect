@@ -146,6 +146,35 @@
         </form>
     </div>
 
+    {% if ignored_questions %}
+    <div class="alert alert-warning border-0 shadow-sm py-3 px-4 mb-4">
+        <div class="d-flex">
+            <div class="me-3">
+                <div class="kpi-icon-box text-warning bg-warning-subtle">
+                    <i class="bi bi-shield-check fs-5"></i>
+                </div>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-2 text-warning-emphasis">
+                    Campos omitidos automáticamente
+                </h6>
+                <p class="mb-2 small text-muted">
+                    Detectamos preguntas que piden nombres, IDs, correos o fechas personales, así que no las graficamos para evitar análisis irrelevante y proteger la privacidad.
+                </p>
+                <ul class="list-unstyled mb-0 small">
+                    {% for ignored in ignored_questions %}
+                        <li class="mb-1">
+                            <i class="bi bi-dash text-warning"></i>
+                            <strong>{{ ignored.text }}</strong>
+                            <span class="text-muted">({{ ignored.reason }})</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if total_respuestas == 0 %}
         <div class="card border-0 shadow-sm py-5 bg-body-tertiary">
             <div class="card-body text-center">
@@ -427,9 +456,15 @@
                                             </p>
                                         {% endif %}
                                     {% else %}
-                                        {% if item.chart_labels and item.chart_data %}
+                                        {% if item.type != 'text' %}
+                                            {# Always create canvas for non-text questions - JavaScript will handle rendering #}
                                             <div style="height: 250px;">
                                                 <canvas id="chart_q_{{ item.id }}"></canvas>
+                                            </div>
+                                            {# Fallback message if no data - will be replaced by JS #}
+                                            <div id="chart_placeholder_{{ item.id }}" class="text-muted text-center py-4 d-none">
+                                                <i class="bi bi-bar-chart fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin datos suficientes para graficar
                                             </div>
                                         {% elif item.chart_image %}
                                             <div class="text-center">
@@ -455,6 +490,25 @@
                                             </span>
                                         </div>
                                     {% endif %}
+                                    
+                                    <div class="bg-body-tertiary border rounded p-3 mb-3">
+                                        <h6 class="text-uppercase small fw-bold mb-2">
+                                            <i class="bi bi-info-circle me-1 text-primary"></i>Cómo leerlo
+                                        </h6>
+                                        <p class="text-muted small mb-0">
+                                            {% if item.type == 'scale' or item.type == 'number' %}
+                                                Cada barra muestra cuántas personas eligieron cada valor. Mira dónde se concentra la mayor parte para saber si la experiencia es positiva (barras altas a la derecha) o si hay alertas (barras altas a la izquierda).
+                                            {% elif item.type == 'single' %}
+                                                Es una dona con las opciones más votadas. El tamaño de cada color indica qué porcentaje eligió esa respuesta, así puedes detectar la preferencia dominante de un vistazo.
+                                            {% elif item.type == 'multi' %}
+                                                Refleja las combinaciones que la gente selecciona con mayor frecuencia. Úsalo para descubrir qué elementos se mencionan juntos y qué tan repartidas están las elecciones.
+                                            {% elif item.type == 'text' %}
+                                                Lee las frases y palabras destacadas para identificar ideas repetidas. Son testimonios directos; fíjate en el tono (positivo, neutro o negativo).
+                                            {% else %}
+                                                Usa la gráfica para comparar la frecuencia de cada respuesta. Los valores altos indican los temas más comentados o seleccionados.
+                                            {% endif %}
+                                        </p>
+                                    </div>
                                     <script>
                                         // Inicializar popovers de Bootstrap
                                         document.addEventListener('DOMContentLoaded', function() {
@@ -513,195 +567,222 @@
 
 {% block scripts %}
 {{ block.super }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<!-- Data labels plugin to render values cleanly above bars -->
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-    // Inicializar tooltips de Bootstrap
-    document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    });
-    // Manejo del modal global para imágenes: inyecta la imagen desde el trigger
-    document.addEventListener('DOMContentLoaded', function() {
-        var globalEl = document.getElementById('globalImageModal');
-        if (!globalEl) return;
-
-        globalEl.addEventListener('show.bs.modal', function (event) {
+// Inicializar tooltips y modales de Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    // Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function(el) { new bootstrap.Tooltip(el); });
+    
+    // Modal global para imágenes
+    var globalEl = document.getElementById('globalImageModal');
+    if (globalEl) {
+        globalEl.addEventListener('show.bs.modal', function(event) {
             var trigger = event.relatedTarget;
-            if (!trigger) return;
-            var imgSrc = trigger.getAttribute('data-image-src');
-            var imgEl = document.getElementById('globalModalImage');
-            if (imgEl) imgEl.src = imgSrc || '';
+            if (trigger) {
+                var imgSrc = trigger.getAttribute('data-image-src');
+                var imgEl = document.getElementById('globalModalImage');
+                if (imgEl) imgEl.src = imgSrc || '';
+            }
         });
-
-        globalEl.addEventListener('hidden.bs.modal', function () {
-            var imgEl = document.getElementById('globalModalImage');
-            if (imgEl) imgEl.src = '';
-        });
-    });
+    }
+});
 </script>
+
 {% if total_respuestas > 0 %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const analysisData = {{ analysis_data_json|default:"null"|safe }};
-        const trendData = {{ trend_data|default:"null"|safe }};
-
-        const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-        const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6';
-        const textColor = isDark ? '#adb5bd' : '#666';
-
-        if (document.getElementById('trendLineChart') && trendData) {
-            new Chart(document.getElementById('trendLineChart'), {
-                type: 'line',
-                data: {
-                    labels: trendData.labels,
-                    datasets: [{
-                        label: 'Respuestas',
-                        data: trendData.data,
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: textColor } },
-                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
+(function() {
+    'use strict';
+    
+    // Datos del servidor
+    var analysisData = {{ analysis_data_json|default:"[]"|safe }};
+    var trendData = {{ trend_data|default:"null"|safe }};
+    
+    // Colores para gráficas
+    var COLORS = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69', '#224abe', '#169b6b'];
+    
+    // Detectar tema
+    var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    var gridColor = isDark ? 'rgba(255,255,255,0.1)' : '#e9ecef';
+    var textColor = isDark ? '#adb5bd' : '#495057';
+    
+    // Almacenar instancias de gráficas
+    var charts = {};
+    
+    // Función simple para crear gráfica
+    function createChart(canvasId, config) {
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            console.warn('Canvas no encontrado:', canvasId);
+            return null;
+        }
+        
+        // Verificar si ya existe
+        if (charts[canvasId]) {
+            return charts[canvasId];
+        }
+        
+        try {
+            var chart = new Chart(canvas, config);
+            charts[canvasId] = chart;
+            console.log('Gráfica creada:', canvasId);
+            return chart;
+        } catch (e) {
+            console.error('Error creando gráfica:', canvasId, e);
+            return null;
+        }
+    }
+    
+    // Crear gráfica de tendencia
+    function initTrendChart() {
+        if (!trendData || !trendData.labels || trendData.labels.length === 0) {
+            console.log('Sin datos de tendencia');
+            var container = document.getElementById('trendLineChart');
+            if (container && container.parentElement) {
+                container.parentElement.innerHTML = '<p class="text-muted text-center py-5">Sin datos de tendencia disponibles</p>';
+            }
+            return;
+        }
+        
+        createChart('trendLineChart', {
+            type: 'line',
+            data: {
+                labels: trendData.labels,
+                datasets: [{
+                    label: 'Respuestas',
+                    data: trendData.data,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: textColor } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor, precision: 0 }, beginAtZero: true }
+                }
+            }
+        });
+    }
+    
+    // Crear gráfica para una pregunta
+    function createQuestionChart(item) {
+        if (!item || item.type === 'text') return;
+        
+        var canvasId = 'chart_q_' + item.id;
+        var canvas = document.getElementById(canvasId);
+        
+        if (!canvas) {
+            console.warn('Canvas no encontrado para pregunta:', item.id);
+            return;
+        }
+        
+        // Ya existe?
+        if (charts[canvasId]) return;
+        
+        // Sin datos?
+        if (!item.chart_labels || !item.chart_data || item.chart_labels.length === 0) {
+            console.log('Sin datos para pregunta:', item.id);
+            canvas.parentElement.innerHTML = '<p class="text-muted text-center py-4"><i class="bi bi-bar-chart-line fs-3 d-block mb-2"></i>Sin datos para graficar</p>';
+            return;
+        }
+        
+        var chartType = (item.type === 'single' || item.type === 'multi') ? 'doughnut' : 'bar';
+        
+        // Generar colores
+        var bgColors = chartType === 'doughnut' 
+            ? item.chart_labels.map(function(_, i) { return COLORS[i % COLORS.length]; })
+            : COLORS[0];
+        
+        var config = {
+            type: chartType,
+            data: {
+                labels: item.chart_labels,
+                datasets: [{
+                    label: 'Respuestas',
+                    data: item.chart_data,
+                    backgroundColor: bgColors,
+                    borderColor: isDark ? '#212529' : '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: chartType === 'doughnut',
+                        position: 'right',
+                        labels: { color: textColor, padding: 10, font: { size: 11 } }
                     }
+                }
+            }
+        };
+        
+        if (chartType === 'bar') {
+            config.options.scales = {
+                x: { grid: { display: false }, ticks: { color: textColor } },
+                y: { grid: { color: gridColor }, ticks: { color: textColor, precision: 0 }, beginAtZero: true }
+            };
+        } else {
+            config.options.cutout = '60%';
+        }
+        
+        createChart(canvasId, config);
+    }
+    
+    // Inicializar cuando DOM esté listo
+    function init() {
+        console.log('Inicializando gráficas...');
+        console.log('Datos de análisis:', analysisData);
+        console.log('Datos de tendencia:', trendData);
+        
+        // 1. Crear gráfica de tendencia
+        initTrendChart();
+        
+        // 2. Crear TODAS las gráficas por adelantado para que aparezcan al instante
+        if (analysisData && analysisData.length > 0) {
+            analysisData.forEach(function(item, index) {
+                setTimeout(function() { createQuestionChart(item); }, index * 30);
+            });
+        }
+        
+        // 3. Escuchar cuando se abren los accordions para ajustar tamaño (por si se renderizaron ocultas)
+        var accordion = document.getElementById('questionsAccordion');
+        if (accordion) {
+            accordion.addEventListener('shown.bs.collapse', function(event) {
+                var questionId = event.target.id.replace('collapse', '');
+                var canvasId = 'chart_q_' + questionId;
+                if (charts[canvasId]) {
+                    setTimeout(function() {
+                        charts[canvasId].resize();
+                    }, 60);
                 }
             });
         }
-
-        if (analysisData) {
-            console.log('Analysis data received:', analysisData);
-            
-            analysisData.forEach(item => {
-                if (item.type === 'text') return;
-                
-                const canvas = document.getElementById('chart_q_' + item.id);
-                if (!canvas) {
-                    console.warn('Canvas not found for question', item.id);
-                    return;
-                }
-
-                // Validar que hay datos para graficar
-                if (!item.chart_labels || !item.chart_data || item.chart_labels.length === 0) {
-                    console.warn('No chart data for question', item.id, item);
-                    canvas.parentElement.innerHTML = '<p class="text-muted text-center">Sin datos suficientes para graficar</p>';
-                    return;
-                }
-
-                console.log('Creating chart for question', item.id, 'with', item.chart_labels.length, 'points');
-
-                let type = (item.type === 'single' || item.type === 'multi') ? 'doughnut' : 'bar';
-                // Register datalabels plugin and configure default per-chart options
-                if (typeof ChartDataLabels !== 'undefined') {
-                    try { Chart.register(ChartDataLabels); } catch (e) { /* already registered */ }
-                }
-
-                let options = {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { 
-                            labels: { color: textColor },
-                            display: type === 'doughnut'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.label || '';
-                                    const value = context.parsed.y || context.parsed;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return type === 'doughnut' 
-                                        ? `${label}: ${value} (${percentage}%)`
-                                        : `${label}: ${value}`;
-                                }
-                            }
-                        }
-                    }
-                };
-
-                if (type === 'bar') {
-                    // Configure bar-specific display options to improve readability
-                    options.scales = {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: textColor, maxRotation: 45, minRotation: 0 },
-                            stacked: false
-                        },
-                        y: { 
-                            grid: { color: gridColor }, 
-                            ticks: { color: textColor, precision: 0 },
-                            beginAtZero: true
-                        }
-                    };
-
-                    // Data labels for bars: render values above each bar with small font,
-                    // allow overlap prevention by adjusting offset and anchor
-                    options.plugins.datalabels = {
-                        color: '#fff',
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.6)',
-                        borderRadius: 4,
-                        padding: 4,
-                        anchor: 'end',
-                        align: 'end',
-                        offset: -6,
-                        formatter: function(value) { return value; },
-                        font: { weight: '600', size: 10 },
-                        clamp: true,
-                        clip: true
-                    };
-                    // Hide datalabels when there are too many bars to avoid clutter
-                    if (item.chart_labels.length > 40) {
-                        options.plugins.datalabels.display = false;
-                    }
-                    // Reduce bar thickness when many labels exist
-                    // These are Chart.js dataset options applied below when creating the chart
-                } else {
-                    options.cutout = '65%';
-                    options.plugins.legend.position = 'right';
-                }
-
-                // adjust bar thickness based on number of bars to avoid visual overcrowding
-                let maxBarThickness = 30;
-                if (item.chart_labels.length > 40) maxBarThickness = 10;
-                else if (item.chart_labels.length > 25) maxBarThickness = 16;
-                else if (item.chart_labels.length > 12) maxBarThickness = 22;
-
-                new Chart(canvas, {
-                    type: type,
-                    data: {
-                        labels: item.chart_labels,
-                        datasets: [{
-                            label: type === 'bar' ? 'Respuestas' : 'Votos',
-                            data: item.chart_data,
-                            backgroundColor: [
-                                '#4e73df', '#1cc88a', '#36b9cc',
-                                '#f6c23e', '#e74a3b', '#858796',
-                                '#5a5c69', '#224abe', '#169b6b'
-                            ],
-                            maxBarThickness: maxBarThickness,
-                            barPercentage: 0.85,
-                            categoryPercentage: 0.9,
-                            borderColor: isDark ? '#1e1e1e' : '#fff',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: options
-                });
-            });
+    }
+    
+    // Esperar a que Chart.js esté cargado
+    if (typeof Chart !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
         }
-    });
+    } else {
+        console.error('Chart.js no está cargado!');
+    }
+})();
+</script>
 
+<script>
     // Actualizar placeholder del campo de segmentación según el tipo de pregunta
     document.addEventListener('DOMContentLoaded', function() {
         const segmentSelect = document.getElementById('segmentSelect');
@@ -713,50 +794,83 @@
 
         if (!segmentSelect || !segmentValInput) return;
 
-        segmentSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
+        // Función mejorada para actualizar UI según tipo de pregunta
+        function updateSegmentUI(selectedOption) {
+            if (!selectedOption || !selectedOption.value) {
+                if (demographicContext) demographicContext.classList.add('d-none');
+                if (segmentValInput) {
+                    segmentValInput.classList.remove('d-none');
+                    segmentValInput.disabled = true;
+                    segmentValInput.placeholder = 'Selecciona una pregunta primero';
+                    segmentValInput.value = '';
+                }
+                return;
+            }
+
             const tipo = selectedOption.dataset.type;
-            const isDemographic = selectedOption.dataset.isDemographic === '1' || selectedOption.dataset.isDemographic === 'true';
+            const isDemographic = selectedOption.dataset.isDemographic === '1' || 
+                                  selectedOption.dataset.isDemographic === 'true';
             const demoType = selectedOption.dataset.demoType || '';
 
-            // Si la pregunta está marcada como demográfica por el modelo
+            // Si es pregunta demográfica
             if (isDemographic) {
-                if (demographicContext) demographicContext.classList.remove('d-none');
-                if (segmentValInput) { segmentValInput.classList.add('d-none'); segmentValInput.disabled = true; }
-                // reset demo inputs
+                if (demographicContext) {
+                    demographicContext.classList.remove('d-none');
+                    // Filtrar opciones según demoType si es necesario
+                    if (demoType && demographicSelect) {
+                        const prefix = demoType.split('_')[0];
+                        const options = demographicSelect.querySelectorAll('option');
+                        options.forEach(opt => {
+                            if (opt.value === '' || opt.value.startsWith(prefix)) {
+                                opt.style.display = '';
+                            } else {
+                                opt.style.display = 'none';
+                            }
+                        });
+                    }
+                }
+                if (segmentValInput) {
+                    segmentValInput.classList.add('d-none');
+                    segmentValInput.disabled = true;
+                    segmentValInput.value = '';
+                }
                 if (demographicSelect) demographicSelect.value = '';
                 if (segmentDemoInput) segmentDemoInput.value = '';
-                if (segmentDemoCustom) { segmentDemoCustom.value = ''; segmentDemoCustom.classList.add('d-none'); }
-                // Optionally, you could tailor demographicSelect options based on demoType here
+                if (segmentDemoCustom) {
+                    segmentDemoCustom.value = '';
+                    segmentDemoCustom.classList.add('d-none');
+                }
                 return;
             }
 
             // No es demográfica: mostrar input libre
             if (demographicContext) demographicContext.classList.add('d-none');
-            if (segmentValInput) { segmentValInput.classList.remove('d-none'); segmentValInput.disabled = false; }
-
-            if (!tipo) {
-                segmentValInput.placeholder = 'Selecciona una pregunta primero';
-                segmentValInput.disabled = true;
-                return;
+            if (segmentValInput) {
+                segmentValInput.classList.remove('d-none');
+                segmentValInput.disabled = false;
             }
 
-            segmentValInput.disabled = false;
-
+            // Actualizar placeholder y tipo según tipo de pregunta
             if (tipo === 'text') {
-                segmentValInput.placeholder = 'Texto a buscar (Ej. "excelente")';
+                segmentValInput.placeholder = 'Texto a buscar (Ej. "excelente", "mejor")';
                 segmentValInput.type = 'text';
-            } else if (tipo === 'single') {
-                segmentValInput.placeholder = 'Opción exacta (Ej. "Marketing")';
+            } else if (tipo === 'single' || tipo === 'multi') {
+                segmentValInput.placeholder = 'Opción exacta (Ej. "Marketing", "Ventas")';
                 segmentValInput.type = 'text';
             } else if (tipo === 'scale' || tipo === 'number') {
-                segmentValInput.placeholder = 'Valor numérico (Ej. 5)';
+                segmentValInput.placeholder = 'Valor numérico (Ej. 5, 7.5)';
                 segmentValInput.type = 'number';
-                segmentValInput.step = 'any';
+                segmentValInput.step = tipo === 'scale' ? '1' : 'any';
+                segmentValInput.min = tipo === 'scale' ? '0' : '';
             } else {
                 segmentValInput.placeholder = 'Valor a filtrar';
                 segmentValInput.type = 'text';
             }
+        }
+
+        segmentSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            updateSegmentUI(selectedOption);
         });
 
         // Trigger inicial si ya hay una pregunta seleccionada
@@ -767,25 +881,81 @@
             segmentValInput.placeholder = 'Selecciona una pregunta primero';
         }
 
-        // Manejo del selector demográfico: copiar valor a input oculto y mostrar campo custom si corresponde
+        // Manejo mejorado del selector demográfico
         if (demographicSelect) {
             demographicSelect.addEventListener('change', function() {
                 const val = this.value;
                 if (segmentDemoInput) segmentDemoInput.value = val || '';
 
                 if (val === 'custom') {
-                    if (segmentDemoCustom) segmentDemoCustom.classList.remove('d-none');
+                    if (segmentDemoCustom) {
+                        segmentDemoCustom.classList.remove('d-none');
+                        segmentDemoCustom.required = true;
+                        segmentDemoCustom.focus();
+                    }
                 } else {
-                    if (segmentDemoCustom) { segmentDemoCustom.classList.add('d-none'); segmentDemoCustom.value = ''; }
+                    if (segmentDemoCustom) {
+                        segmentDemoCustom.classList.add('d-none');
+                        segmentDemoCustom.value = '';
+                        segmentDemoCustom.required = false;
+                    }
                 }
             });
         }
 
-        // Si el usuario escribe en el campo custom, sincronizar con el input oculto
+        // Sincronizar campo custom con input oculto
         if (segmentDemoCustom) {
             segmentDemoCustom.addEventListener('input', function() {
                 if (segmentDemoInput) segmentDemoInput.value = this.value;
             });
+        }
+
+        // Validación del formulario antes de enviar
+        const filterForm = document.querySelector('.filter-bar form');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(e) {
+                const selectedOption = segmentSelect.options[segmentSelect.selectedIndex];
+                const isDemographic = selectedOption && (
+                    selectedOption.dataset.isDemographic === '1' || 
+                    selectedOption.dataset.isDemographic === 'true'
+                );
+
+                if (segmentSelect.value && !isDemographic) {
+                    if (!segmentValInput.value.trim()) {
+                        e.preventDefault();
+                        segmentValInput.focus();
+                        alert('Por favor ingresa un valor para filtrar.');
+                        return false;
+                    }
+                } else if (isDemographic) {
+                    if (!segmentDemoInput.value) {
+                        e.preventDefault();
+                        if (demographicSelect) demographicSelect.focus();
+                        alert('Por favor selecciona un filtro demográfico.');
+                        return false;
+                    }
+                }
+            });
+        }
+
+        // Inicializar UI con valores existentes
+        if (segmentSelect.value) {
+            const selectedOption = segmentSelect.options[segmentSelect.selectedIndex];
+            updateSegmentUI(selectedOption);
+            
+            // Restaurar valor demográfico si existe
+            {% if filter_demo %}
+            if (demographicSelect) {
+                demographicSelect.value = '{{ filter_demo }}';
+                if (segmentDemoInput) segmentDemoInput.value = '{{ filter_demo }}';
+                if (demographicSelect.value === 'custom' && segmentDemoCustom) {
+                    segmentDemoCustom.classList.remove('d-none');
+                    segmentDemoCustom.value = '{{ filter_demo }}';
+                }
+            }
+            {% endif %}
+        } else {
+            updateSegmentUI(null);
         }
     });
 </script>

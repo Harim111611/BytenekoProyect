@@ -814,7 +814,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSelectionUI();
         });
 
-        deleteSelectedBtn.addEventListener('click', function() {
+        deleteSelectedBtn.addEventListener('click', async function() {
             if (selectedSurveys.size === 0) {
                 alert('No hay surveys seleccionadas');
                 return;
@@ -825,42 +825,82 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? '¿Estás seguro de que deseas eliminar esta survey?'
                 : `¿Estás seguro de que deseas eliminar ${count} surveys?`;
             
-            if (confirm(message + '\n\nEsta acción no se puede deshacer.')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = "{% url 'surveys:bulk_delete' %}";
-                
-                function getCookie(name) {
-                    let cookieValue = null;
-                    if (document.cookie && document.cookie !== '') {
-                        const cookies = document.cookie.split(';');
-                        for (let i = 0; i < cookies.length; i++) {
-                            const cookie = cookies[i].trim();
-                            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                                break;
-                            }
+            if (!confirm(message + '\n\nEsta acción no se puede deshacer.')) {
+                return;
+            }
+            
+            // Deshabilitar botón y mostrar indicador de progreso
+            const originalBtnText = deleteSelectedBtn.innerHTML;
+            deleteSelectedBtn.disabled = true;
+            deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+            
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
                         }
                     }
-                    return cookieValue;
                 }
-                
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = 'csrfmiddlewaretoken';
-                csrfInput.value = getCookie('csrftoken') || '{{ csrf_token }}';
-                form.appendChild(csrfInput);
-                
+                return cookieValue;
+            }
+            
+            try {
+                // Crear FormData para enviar datos
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
                 selectedSurveys.forEach(id => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'survey_ids';
-                    input.value = id;
-                    form.appendChild(input);
+                    formData.append('survey_ids', id);
                 });
                 
-                document.body.appendChild(form);
-                form.submit();
+                // Enviar petición asíncrona (no bloquea la UI)
+                // Aumentar timeout a 10 minutos para encuestas muy grandes
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutos
+                
+                try {
+                    const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
+                        },
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    // Redirigir según la respuesta
+                    // Django redirect() devuelve 302, fetch() lo sigue automáticamente
+                    if (response.ok || response.redirected || response.status === 302) {
+                        // Recargar la página para mostrar mensajes de Django y actualizar la lista
+                        window.location.reload();
+                    } else {
+                        const errorText = await response.text();
+                        console.error('Error response:', errorText);
+                        throw new Error('Error al eliminar las encuestas: ' + (errorText || 'Error desconocido'));
+                    }
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    throw fetchError;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                deleteSelectedBtn.disabled = false;
+                deleteSelectedBtn.innerHTML = originalBtnText;
+                
+                // Mensaje más específico según el tipo de error
+                if (error.name === 'AbortError' || error.message.includes('timeout')) {
+                    alert('La eliminación está tardando más de lo esperado. Por favor, espera unos momentos y verifica si las encuestas fueron eliminadas. Si no, intenta de nuevo.');
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_RESET')) {
+                    alert('La conexión se perdió durante la eliminación. Esto puede ocurrir con encuestas muy grandes. Por favor, espera unos momentos y verifica si las encuestas fueron eliminadas. Si no, intenta de nuevo.');
+                } else {
+                    alert('Error al eliminar las encuestas: ' + error.message + '. Por favor, intenta de nuevo.');
+                }
             }
         });
     }
