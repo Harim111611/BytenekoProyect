@@ -35,6 +35,12 @@ db.sqlite3-journal
 /logs/
 *.log
 
+# Redis dump
+dump.rdb
+
+# Redis executables
+redis/
+
 # Environment variables
 .env
 .env.local
