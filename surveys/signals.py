@@ -71,6 +71,10 @@ def invalidate_survey_cache(sender, instance, **kwargs):
     Invalida caché relacionada cuando una encuesta cambia.
     Cascade: Dashboard → Survey Analysis → Reports
     """
+    import os
+    if os.environ.get('DJANGO_ENV') == 'test':
+        return
+    
     if not are_signals_enabled():
         return
     
@@ -110,6 +114,10 @@ def invalidate_question_cache(sender, instance, **kwargs):
     Cascade: Survey → Analysis → Reports
     OPTIMIZACIÓN: Solo se ejecuta si las señales están habilitadas.
     """
+    import os
+    if os.environ.get('DJANGO_ENV') == 'test':
+        return
+    
     if not are_signals_enabled():
         return
     
@@ -140,6 +148,10 @@ def invalidate_option_cache(sender, instance, **kwargs):
     Cascade: Question → Survey → Analysis
     OPTIMIZACIÓN: Solo se ejecuta si las señales están habilitadas.
     """
+    import os
+    if os.environ.get('DJANGO_ENV') == 'test':
+        return
+    
     if not are_signals_enabled():
         return
     
@@ -164,6 +176,10 @@ def invalidate_response_cache(sender, instance, **kwargs):
     Cascade: Survey → Analysis → Stats → Reports
     OPTIMIZACIÓN: Solo se ejecuta si las señales están habilitadas.
     """
+    import os
+    if os.environ.get('DJANGO_ENV') == 'test':
+        return
+    
     if not are_signals_enabled():
         return
     
@@ -203,6 +219,10 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
     Cascade: SurveyResponse → Survey → Analysis
     OPTIMIZACIÓN: Solo se ejecuta si las señales están habilitadas.
     """
+    import os
+    if os.environ.get('DJANGO_ENV') == 'test':
+        return
+    
     if not are_signals_enabled():
         return
     

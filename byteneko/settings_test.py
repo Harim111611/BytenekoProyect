@@ -36,6 +36,17 @@ DATABASES = {
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Override broker and result backend to avoid Redis dependency
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+
+# ============================================================
+# SESSION CONFIGURATION - Use signed cookies for testing
+# ============================================================
+
+# Use signed cookies instead of cache to avoid Redis dependency
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+
 # ============================================================
 # LOGGING - Simplified for testing
 # ============================================================
