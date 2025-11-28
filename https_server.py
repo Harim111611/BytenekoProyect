@@ -4,6 +4,7 @@ Development HTTPS server using Werkzeug
 """
 import os
 import sys
+from django.contrib.staticfiles.handlers import StaticFilesHandler
 from pathlib import Path
 
 # Add the project directory to the Python path
@@ -31,6 +32,7 @@ if not cert_file.exists() or not key_file.exists():
 
 # Get Django WSGI application
 application = get_wsgi_application()
+application = StaticFilesHandler(application)
 
 print("Starting HTTPS development server on https://localhost:8000/")
 print("SSL Certificate: {}".format(cert_file))

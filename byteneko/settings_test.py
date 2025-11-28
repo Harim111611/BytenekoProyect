@@ -1,14 +1,25 @@
 """
 Test settings for ByteNeko project.
-Extends production settings but uses LocMemCache for testing.
 """
-
-from .settings_production import *
+# 🚨 CAMBIO CLAVE: Heredamos de 'base', NO de 'production'.
+# Esto evita cargar Sentry, SSL forzado y configuraciones complejas de servidor.
+from .settings.base import *
 
 # ============================================================
-# CACHE CONFIGURATION - LocMemCache for testing
+# CONFIGURACIÓN BÁSICA PARA TESTS
 # ============================================================
+DEBUG = False  # Simulamos entorno real pero sin HTTPS forzado
+SECRET_KEY = 'test-secret-key-insecure-but-fast'
 
+# Desactivamos explícitamente SSL por si acaso
+SECURE_SSL_REDIRECT = False
+SECURE_HSTS_SECONDS = 0
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
+# ============================================================
+# CACHE (Memoria RAM para velocidad extrema)
+# ============================================================
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -17,52 +28,49 @@ CACHES = {
 }
 
 # ============================================================
-# DATABASE CONFIGURATION - Use local settings for testing
+# BASE DE DATOS (SQLite en memoria)
 # ============================================================
-
-# Override database to use SQLite for testing (faster and more reliable)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',  # Use in-memory database for tests
+        'NAME': ':memory:',
     }
 }
 
 # ============================================================
-# CELERY CONFIGURATION - Disabled for testing
+# VELOCIDAD EXTRA (Hashing de contraseñas simple)
 # ============================================================
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.MD5PasswordHasher',
+]
 
-# Disable Celery for testing
+# ============================================================
+# CELERY (Modo síncrono para tests)
+# ============================================================
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
-
-# Override broker and result backend to avoid Redis dependency
 CELERY_BROKER_URL = 'memory://'
 CELERY_RESULT_BACKEND = 'cache+memory://'
 
 # ============================================================
-# SESSION CONFIGURATION - Use signed cookies for testing
+# LOGGING (Silencioso para no ensuciar la consola)
 # ============================================================
-
-# Use signed cookies instead of cache to avoid Redis dependency
-SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
-
-# ============================================================
-# LOGGING - Simplified for testing
-# ============================================================
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': True,
     'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+        'null': {
+            'class': 'logging.NullHandler',
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
-            'level': 'WARNING',
+            'handlers': ['null'],
+            'level': 'CRITICAL',
+        },
+        'core': {
+            'handlers': ['null'],
+            'level': 'CRITICAL',
         },
     },
 }
