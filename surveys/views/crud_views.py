@@ -88,6 +88,7 @@ from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction, connection
+from django.db.models import Count
 from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey
 from core.utils.logging_utils import StructuredLogger, log_user_action
@@ -99,6 +100,19 @@ class EncuestaListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     model = Survey
     template_name = 'surveys/list.html'
     context_object_name = 'surveys'
+
+    def get_queryset(self):
+        """Optimiza el queryset anotando conteos para evitar N+1 queries en templates.
+
+        Añade `total_respuestas` y `total_preguntas` al queryset para usar
+        directamente en la plantilla sin llamar a `related.count()` por cada
+        elemento.
+        """
+        qs = super().get_queryset()
+        return qs.annotate(
+            total_respuestas=Count('responses', distinct=True),
+            total_preguntas=Count('questions', distinct=True),
+        )
 
 class EncuestaDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     """Vista detalle de encuesta (solo creador)."""
