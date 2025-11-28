@@ -20,6 +20,9 @@ DATABASES = {
         'OPTIONS': {
             'client_encoding': 'UTF8',
         },
+        # Mantener la conexión abierta en desarrollo para evitar reconexiones
+        # frecuentes que en Windows generan delay por el handshake TCP/IP.
+        'CONN_MAX_AGE': 600,  # segundos (10 minutos)
     }
 }
 
@@ -27,3 +30,31 @@ DATABASES = {
 # INSTALLED_APPS += ['debug_toolbar']
 # MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
 # INTERNAL_IPS = ['127.0.0.1']
+
+# Sobrescribimos el LOGGING complejo de production/base para acelerar I/O en local
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Ajusta el nivel para tus apps (ej. surveys) para debug local
+        'surveys': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    }
+}

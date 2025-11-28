@@ -34,7 +34,7 @@ if not cert_file.exists() or not key_file.exists():
 application = get_wsgi_application()
 application = StaticFilesHandler(application)
 
-print("Starting HTTPS development server on https://localhost:8000/")
+print("Starting HTTPS development server on https://127.0.0.1:8000/")
 print("SSL Certificate: {}".format(cert_file))
 print("SSL Key: {}".format(key_file))
 print(f"🔧 CONFIGURACIÓN ACTIVA: {os.environ['DJANGO_SETTINGS_MODULE']}")
@@ -43,7 +43,7 @@ print("Press Ctrl+C to stop the server")
 
 # Run the server
 run_simple(
-    'localhost',
+    '127.0.0.1',
     8000,
     application,
     ssl_context=(str(cert_file), str(key_file)),
