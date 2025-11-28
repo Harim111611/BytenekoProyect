@@ -12,8 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 # Set Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
-
+# Línea 15 (CORRECTO)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.local')
 import django
 django.setup()
 

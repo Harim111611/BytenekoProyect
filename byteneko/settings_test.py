@@ -28,6 +28,11 @@ CACHES = {
 }
 
 # ============================================================
+# STATIC FILES STORAGE
+# ============================================================
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+
+# ============================================================
 # BASE DE DATOS (SQLite en memoria)
 # ============================================================
 DATABASES = {

@@ -5,6 +5,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
+# Use standard static files storage for development (no hashing)
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
 # Database configuration for local development - PostgreSQL only
 DATABASES = {
     'default': {
