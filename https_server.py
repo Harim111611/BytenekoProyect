@@ -49,4 +49,5 @@ run_simple(
     ssl_context=(str(cert_file), str(key_file)),
     use_reloader=True,
     use_debugger=True,
+    threaded=True,
 )

@@ -67,7 +67,7 @@
 
                         <!-- Título -->
                         <div class="mb-4">
-                            <label for="id_titulo" class="form-label fw-semibold text-body">
+                            <label for="id_title" class="form-label fw-semibold text-body">
                                 Título de la survey
                                 <span class="text-danger">*</span>
                                 <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo nombrar la survey?" data-bs-content="Incluye objetivo y periodo (ej. 'Satisfacción Q1 2025') para identificar fácilmente el análisis.">
@@ -76,9 +76,9 @@
                             </label>
                             <input type="text" 
                                    class="form-control form-control-lg bg-body-tertiary border-0" 
-                                   id="id_titulo" 
-                                   name="titulo" 
-                                   value="{{ form.title.value }}" 
+                                   id="id_title" 
+                                   name="title" 
+                                   value="{{ form.title.value|default:object.title }}" 
                                    placeholder="ej. Satisfacción del Cliente Q1 2025"
                                    required>
                             {% if form.title.errors %}
@@ -88,17 +88,17 @@
 
                         <!-- Descripción -->
                         <div class="mb-4">
-                            <label for="id_descripcion" class="form-label fw-semibold text-body">
+                            <label for="id_description" class="form-label fw-semibold text-body">
                                 Descripción
                             </label>
                             <textarea class="form-control bg-body-tertiary border-0" 
-                                      id="id_descripcion" 
-                                      name="descripcion" 
+                                      id="id_description" 
+                                      name="description" 
                                       rows="4" 
-                                      placeholder="Describe brevemente el objetivo de esta survey...">{{ form.descripcion.value|default:"" }}</textarea>
+                                      placeholder="Describe brevemente el objetivo de esta survey...">{{ form.description.value|default:object.description|default:"" }}</textarea>
                             <div class="form-text small text-muted">Ayuda a los participantes a entender el propósito de la survey</div>
-                            {% if form.descripcion.errors %}
-                                <div class="text-danger small mt-1">{{ form.descripcion.errors.0 }}</div>
+                            {% if form.description.errors %}
+                                <div class="text-danger small mt-1">{{ form.description.errors.0 }}</div>
                             {% endif %}
                         </div>
 

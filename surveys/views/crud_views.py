@@ -89,6 +89,8 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction, connection
 from django.db.models import Count
+from django.db.models import Prefetch
+from surveys.models import Question, AnswerOption
 from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey
 from core.utils.logging_utils import StructuredLogger, log_user_action
@@ -119,6 +121,17 @@ class EncuestaDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     model = Survey
     template_name = 'surveys/detail.html'
     context_object_name = 'survey'
+
+    def get_queryset(self):
+        # 🚀 OPTIMIZACIÓN: Pre-carga preguntas y opciones para evitar N+1 en el template
+        return super().get_queryset().prefetch_related(
+            Prefetch(
+                'questions',
+                queryset=Question.objects.order_by('order').prefetch_related(
+                    Prefetch('options', queryset=AnswerOption.objects.order_by('order'))
+                )
+            )
+        )
 
 class EncuestaCreateView(LoginRequiredMixin, CreateView):
     """Vista para crear nueva encuesta."""

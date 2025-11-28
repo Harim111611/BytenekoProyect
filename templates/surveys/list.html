@@ -129,8 +129,8 @@
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                    {{ survey.fecha_creacion|date:"d M Y" }}
+                                    <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
+                                    {{ survey.created_at|date:"d M Y" }}
                                 </span>
                                 <div class="d-flex align-items-center small">
                                     {% if survey.status == 'active' %}
@@ -149,8 +149,8 @@
                                 </a>
                             </h5>
 
-                            <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
-                                {{ survey.descripcion|default:"Sin descripción adicional."|truncatechars:85 }}
+                                <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
+                                {{ survey.description|default:"Sin descripción adicional."|truncatechars:85 }}
                             </p>
 
                             <div class="d-flex align-items-center text-secondary small mb-4 bg-body-tertiary rounded-3 p-2 border border-dashed">
