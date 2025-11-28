@@ -6,14 +6,14 @@ import os
 import sys
 from django.contrib.staticfiles.handlers import StaticFilesHandler
 from pathlib import Path
-
+from django.conf import settings
 # Add the project directory to the Python path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 # Set Django settings
 # Línea 15 (CORRECTO)
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.local')
+os.environ['DJANGO_SETTINGS_MODULE'] = 'byteneko.settings.local'
 import django
 django.setup()
 
@@ -37,6 +37,8 @@ application = StaticFilesHandler(application)
 print("Starting HTTPS development server on https://localhost:8000/")
 print("SSL Certificate: {}".format(cert_file))
 print("SSL Key: {}".format(key_file))
+print(f"🔧 CONFIGURACIÓN ACTIVA: {os.environ['DJANGO_SETTINGS_MODULE']}")
+print(f"🐞 MODO DEBUG: {settings.DEBUG}")
 print("Press Ctrl+C to stop the server")
 
 # Run the server
