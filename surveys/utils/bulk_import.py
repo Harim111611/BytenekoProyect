@@ -1,6 +1,7 @@
 """
 Utilidades de importación masiva usando PostgreSQL COPY FROM.
 Alto rendimiento para insertar grandes volúmenes de datos.
+Soporta psycopg2 (copy_expert) y psycopg 3 (copy).
 """
 import io
 import pandas as pd
@@ -16,28 +17,43 @@ def bulk_import_responses_postgres(survey, dataframe, questions_map, date_column
     rows = dataframe.to_dict('records')
     total_rows = len(rows)
 
+    print(f"DEBUG: Iniciando importación de {total_rows} filas para encuesta {survey.id}")
+
     with transaction.atomic():
         with connection.cursor() as django_cursor:
             # ---------------------------------------------------------
-            # 🛠️ CORRECCIÓN: Obtener el cursor 'crudo' de psycopg2
+            # 1. Obtener el cursor real (Driver específico)
             # ---------------------------------------------------------
-            # Django devuelve un 'CursorWrapper'. Necesitamos el objeto real 
-            # de la librería psycopg2 para acceder a .copy_expert()
             pg_cursor = django_cursor.cursor
             
-            # Si hay capas extra (como Django Debug Toolbar), seguimos bajando
+            # Desempaquetar capas (como Django Debug Toolbar)
             while hasattr(pg_cursor, 'cursor'):
                 pg_cursor = pg_cursor.cursor
             
-            # Verificación de seguridad
-            if not hasattr(pg_cursor, 'copy_expert'):
+            print(f"DEBUG: Tipo de cursor detectado: {type(pg_cursor)}")
+            
+            # Detectar capacidades del driver
+            use_psycopg2 = hasattr(pg_cursor, 'copy_expert')
+            use_psycopg3 = hasattr(pg_cursor, 'copy')
+
+            if not (use_psycopg2 or use_psycopg3):
+                # Fallback: Intentar acceder a .connection.cursor() si es un wrapper extraño
+                try:
+                    pg_cursor = django_cursor.connection.cursor()
+                    use_psycopg2 = hasattr(pg_cursor, 'copy_expert')
+                    use_psycopg3 = hasattr(pg_cursor, 'copy')
+                    print(f"DEBUG: Re-intento con cursor de conexión: {type(pg_cursor)}")
+                except:
+                    pass
+
+            if not (use_psycopg2 or use_psycopg3):
                 raise Exception(
-                    "Error de Driver: No se encontró el método 'copy_expert'. "
-                    "Asegúrate de estar usando PostgreSQL en settings.local."
+                    f"Error de Driver: El cursor {type(pg_cursor)} no soporta COPY. "
+                    "Asegúrate de usar PostgreSQL en settings.local."
                 )
 
             # ---------------------------------------------------------
-            # Paso 1: COPY para SurveyResponse
+            # 2. Preparar Buffer para SurveyResponse
             # ---------------------------------------------------------
             survey_buffer = io.StringIO()
             
@@ -53,36 +69,30 @@ def bulk_import_responses_postgres(survey, dataframe, questions_map, date_column
                     except (ValueError, TypeError):
                         pass 
 
-                # Escribimos: survey_id, user_id (NULL), created_at, is_anonymous (True)
+                # Formato: survey_id, user_id, created_at, is_anonymous
+                # Postgres COPY usa \N para NULL y \t como delimitador por defecto
                 survey_buffer.write(f"{survey.id}\t\\N\t{created_at.isoformat()}\tt\n")
             
             survey_buffer.seek(0)
             
-            # Usamos pg_cursor (el crudo) para la carga rápida
-            if hasattr(pg_cursor, 'copy_expert'):
-                # psycopg2 API
-                pg_cursor.copy_expert(
-                    sql="""
-                        COPY surveys_surveyresponse (survey_id, user_id, created_at, is_anonymous)
-                        FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
-                    """,
-                    file=survey_buffer
-                )
-            elif hasattr(pg_cursor, 'copy'):
-                # psycopg3 API: usar el context manager .copy(...) y escribir el contenido
-                sql = """
-                    COPY surveys_surveyresponse (survey_id, user_id, created_at, is_anonymous)
-                    FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
-                """
-                with pg_cursor.copy(sql) as copy_obj:
-                    copy_obj.write(survey_buffer.getvalue())
-            else:
-                raise Exception(
-                    "Error de Driver: No se encontró el método 'copy_expert' ni 'copy'. "
-                    "Asegúrate de estar usando un driver PostgreSQL compatible."
-                )
+            # ---------------------------------------------------------
+            # 3. Ejecutar COPY (SurveyResponse)
+            # ---------------------------------------------------------
+            sql_survey = """
+                COPY surveys_surveyresponse (survey_id, user_id, created_at, is_anonymous)
+                FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
+            """
 
-            # Recuperar los IDs generados (Usamos el cursor de Django normal para consultas SELECT)
+            if use_psycopg2:
+                pg_cursor.copy_expert(sql=sql_survey, file=survey_buffer)
+            else: # psycopg3
+                with pg_cursor.copy(sql_survey) as copy:
+                    copy.write(survey_buffer.getvalue())
+
+            # ---------------------------------------------------------
+            # 4. Recuperar IDs generados
+            # ---------------------------------------------------------
+            # Importante: Usamos el cursor de Django estándar para consultas normales
             django_cursor.execute("""
                 SELECT id FROM surveys_surveyresponse 
                 WHERE survey_id = %s 
@@ -90,11 +100,12 @@ def bulk_import_responses_postgres(survey, dataframe, questions_map, date_column
                 LIMIT %s
             """, [survey.id, total_rows])
             
+            # Los IDs vienen en orden descendente (últimos insertados), invertimos para alinear con filas
             survey_response_ids = [r[0] for r in django_cursor.fetchall()]
             survey_response_ids.reverse()
 
             # ---------------------------------------------------------
-            # Paso 2: COPY para QuestionResponse
+            # 5. Preparar Buffer para QuestionResponse
             # ---------------------------------------------------------
             answer_buffer = io.StringIO()
             answers_count = 0
@@ -106,7 +117,10 @@ def bulk_import_responses_postgres(survey, dataframe, questions_map, date_column
                 survey_response_id = survey_response_ids[idx]
                 
                 for column_name, value in row.items():
-                    if column_name not in questions_map or pd.isna(value) or (isinstance(value, str) and not value.strip()):
+                    # Ignorar columnas no mapeadas o valores vacíos
+                    if column_name not in questions_map or pd.isna(value):
+                        continue
+                    if isinstance(value, str) and not value.strip():
                         continue
                     
                     question_data = questions_map[column_name]
@@ -117,63 +131,54 @@ def bulk_import_responses_postgres(survey, dataframe, questions_map, date_column
                     
                     if dtype == 'single':
                         options = question_data.get('options', {})
-                        option_obj_or_id = options.get(str(value).strip())
+                        val_str = str(value).strip()
+                        option_obj = options.get(val_str)
                         
-                        if option_obj_or_id:
-                            option_id = getattr(option_obj_or_id, 'id', option_obj_or_id)
-                            answer_buffer.write(f"{survey_response_id}\t{question.id}\t{option_id}\t\\N\t\\N\n")
+                        if option_obj:
+                            opt_id = getattr(option_obj, 'id', option_obj)
+                            answer_buffer.write(f"{survey_response_id}\t{question.id}\t{opt_id}\t\\N\t\\N\n")
                             answers_count += 1
 
                     elif dtype == 'multi':
                         options = question_data.get('options', {})
-                        for opt in str(value).split(','):
-                            opt_clean = opt.strip()
-                            if not opt_clean: 
-                                continue
-                                
-                            option_obj_or_id = options.get(opt_clean)
-                            if option_obj_or_id:
-                                option_id = getattr(option_obj_or_id, 'id', option_obj_or_id)
-                                answer_buffer.write(f"{survey_response_id}\t{question.id}\t{option_id}\t\\N\t\\N\n")
+                        for part in str(value).split(','):
+                            part_clean = part.strip()
+                            if not part_clean: continue
+                            
+                            option_obj = options.get(part_clean)
+                            if option_obj:
+                                opt_id = getattr(option_obj, 'id', option_obj)
+                                answer_buffer.write(f"{survey_response_id}\t{question.id}\t{opt_id}\t\\N\t\\N\n")
                                 answers_count += 1
 
                     elif dtype in ['number', 'scale']:
                         try:
-                            numeric_val = int(float(value))
-                            answer_buffer.write(f"{survey_response_id}\t{question.id}\t\\N\t{numeric_val}\t\\N\n")
+                            num_val = int(float(value))
+                            answer_buffer.write(f"{survey_response_id}\t{question.id}\t\\N\t{num_val}\t\\N\n")
                             answers_count += 1
-                        except (ValueError, TypeError):
-                            continue
+                        except:
+                            pass
 
-                    else:  # text
+                    else: # text
                         text_val = str(value)[:500].replace('\t', ' ').replace('\n', ' ').replace('\\', '\\\\')
                         answer_buffer.write(f"{survey_response_id}\t{question.id}\t\\N\t\\N\t{text_val}\n")
                         answers_count += 1
 
-            # Ejecutar COPY final de respuestas
-            answer_buffer.seek(0)
+            # ---------------------------------------------------------
+            # 6. Ejecutar COPY (QuestionResponse)
+            # ---------------------------------------------------------
             if answers_count > 0:
-                if hasattr(pg_cursor, 'copy_expert'):
-                    pg_cursor.copy_expert(
-                        sql="""
-                            COPY surveys_questionresponse 
-                            (survey_response_id, question_id, selected_option_id, numeric_value, text_value)
-                            FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
-                        """,
-                        file=answer_buffer
-                    )
-                elif hasattr(pg_cursor, 'copy'):
-                    sql2 = """
-                        COPY surveys_questionresponse 
-                        (survey_response_id, question_id, selected_option_id, numeric_value, text_value)
-                        FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
-                    """
-                    with pg_cursor.copy(sql2) as copy_obj:
-                        copy_obj.write(answer_buffer.getvalue())
+                answer_buffer.seek(0)
+                sql_answers = """
+                    COPY surveys_questionresponse 
+                    (survey_response_id, question_id, selected_option_id, numeric_value, text_value)
+                    FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', NULL '\\N')
+                """
+                
+                if use_psycopg2:
+                    pg_cursor.copy_expert(sql=sql_answers, file=answer_buffer)
                 else:
-                    raise Exception(
-                        "Error de Driver: No se encontró el método 'copy_expert' ni 'copy'. "
-                        "Asegúrate de estar usando un driver PostgreSQL compatible."
-                    )
+                    with pg_cursor.copy(sql_answers) as copy:
+                        copy.write(answer_buffer.getvalue())
 
     return total_rows, answers_count
