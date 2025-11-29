@@ -10,9 +10,10 @@ class Migration(migrations.Migration):
 
     operations = [
         # Índice para optimizar DELETE de QuestionResponse por survey_response_id
+        # NOTA: Para test/CI, quitar CONCURRENTLY (no permitido en transacciones)
         migrations.RunSQL(
             sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS 
+                CREATE INDEX IF NOT EXISTS 
                 qresponse_survey_response_idx 
                 ON surveys_questionresponse (survey_response_id);
             """,
@@ -23,7 +24,7 @@ class Migration(migrations.Migration):
         # Índice para optimizar DELETE de QuestionResponse por question_id
         migrations.RunSQL(
             sql="""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS 
+                CREATE INDEX IF NOT EXISTS 
                 qresponse_question_only_idx 
                 ON surveys_questionresponse (question_id);
             """,

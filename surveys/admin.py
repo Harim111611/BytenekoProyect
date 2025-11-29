@@ -119,6 +119,59 @@ class SurveyAdmin(admin.ModelAdmin):
         )
     response_stats.short_description = 'Response Statistics'
 
+    def delete_model(self, request, obj):
+        """Eliminación ultra-rápida usando SQL crudo, igual que en las vistas."""
+        from django.db import transaction, connection
+        from surveys.views.crud_views import _fast_delete_surveys
+        from surveys.signals import DisableSignals
+        from django.core.cache import cache
+        survey_id = obj.id
+        author_id = obj.author.id if obj.author else None
+        with DisableSignals():
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        _fast_delete_surveys(cursor, [survey_id])
+            except Exception as e:
+                import logging
+                logger = logging.getLogger('surveys')
+                logger.error(f"[ADMIN] Error eliminando encuesta {survey_id}: {e}", exc_info=True)
+                raise
+        # Limpiar caché igual que en la vista
+        if author_id:
+            cache.delete(f"dashboard_data_user_{author_id}")
+            try:
+                cache.delete(f"survey_stats_{survey_id}")
+            except Exception:
+                pass
+
+    def delete_queryset(self, request, queryset):
+        """Eliminación ultra-rápida masiva desde el admin usando SQL crudo."""
+        from django.db import transaction, connection
+        from surveys.views.crud_views import _fast_delete_surveys
+        from surveys.signals import DisableSignals
+        from django.core.cache import cache
+        survey_ids = list(queryset.values_list('id', flat=True))
+        author_ids = list(queryset.values_list('author_id', flat=True))
+        with DisableSignals():
+            try:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        _fast_delete_surveys(cursor, survey_ids)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger('surveys')
+                logger.error(f"[ADMIN] Error eliminando encuestas {survey_ids}: {e}", exc_info=True)
+                raise
+        # Limpiar caché para todos los autores afectados
+        for author_id, survey_id in zip(author_ids, survey_ids):
+            if author_id:
+                cache.delete(f"dashboard_data_user_{author_id}")
+                try:
+                    cache.delete(f"survey_stats_{survey_id}")
+                except Exception:
+                    pass
+
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):

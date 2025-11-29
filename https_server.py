@@ -5,6 +5,7 @@ Development HTTPS server using Werkzeug
 import os
 import sys
 import logging
+from pathlib import Path
 from django.contrib.staticfiles.handlers import StaticFilesHandler
 from pathlib import Path
 from django.conf import settings
@@ -18,14 +19,47 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'byteneko.settings.local'
 import django
 django.setup()
 
-# Asegurar que los logs se muestren en la consola
+# Asegurar que los logs se muestren en la consola y se guarden en archivo
+logs_dir = BASE_DIR / 'logs'
+logs_dir.mkdir(exist_ok=True)
+log_file = logs_dir / 'server.log'
+
+# Limpiar handlers existentes para evitar duplicación
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(levelname)s] %(asctime)s %(name)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    stream=sys.stdout,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(str(log_file), encoding='utf-8', mode='a')
+    ],
     force=True  # Forzar reconfiguración si ya estaba configurado
 )
+
+# Asegurar que el logger 'surveys' herede la configuración correcta
+surveys_logger = logging.getLogger('surveys')
+surveys_logger.setLevel(logging.INFO)
+surveys_logger.propagate = False  # Evitar duplicación de logs
+
+# Agregar handler de consola al logger surveys si no lo tiene
+if not surveys_logger.handlers:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(asctime)s %(name)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
+    surveys_logger.addHandler(console_handler)
+
+    file_handler = logging.FileHandler(str(log_file), encoding='utf-8', mode='a')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('[%(levelname)s] %(asctime)s %(name)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
+    surveys_logger.addHandler(file_handler)
+
+print(f"📁 Directorio de logs: {logs_dir}")
+print(f"📄 Archivo de log: {log_file}")
+print("🔍 Logger 'surveys' configurado para mostrar logs de eliminación")
+print("-" * 60)
 
 from werkzeug.serving import make_ssl_devcert
 from werkzeug.serving import run_simple

@@ -824,15 +824,63 @@ document.addEventListener('DOMContentLoaded', function() {
             const message = count === 1 
                 ? '¿Estás seguro de que deseas eliminar esta survey?'
                 : `¿Estás seguro de que deseas eliminar ${count} surveys?`;
-            
-            if (!confirm(message + '\n\nEsta acción no se puede deshacer.')) {
+            if (!confirm(message + ' Esta acción no se puede deshacer.')) {
                 return;
             }
             
+
             // Deshabilitar botón y mostrar indicador de progreso
             const originalBtnText = deleteSelectedBtn.innerHTML;
             deleteSelectedBtn.disabled = true;
             deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+
+
+            // OCULTAR encuestas seleccionadas del DOM INMEDIATAMENTE
+            const removedCards = [];
+            selectedSurveys.forEach(id => {
+                const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
+                if (card) {
+                    removedCards.push({id, node: card.parentElement});
+                    card.parentElement.remove(); // Elimina el col-xx contenedor
+                }
+            });
+            // Limpiar selección y UI
+            selectedSurveys.clear();
+            updateSelectionUI();
+            toggleSelectionMode();
+            // Restablecer botón y mostrar mensaje de éxito INMEDIATAMENTE
+            deleteSelectedBtn.disabled = false;
+            deleteSelectedBtn.innerHTML = originalBtnText;
+            alert('Las encuestas se eliminarán en segundo plano. Puedes continuar usando la plataforma.');
+
+            // Lanzar petición fetch en background (sin await)
+            (async () => {
+                try {
+                    const formData = new FormData();
+                    formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
+                    removedCards.forEach(obj => {
+                        formData.append('survey_ids', obj.id);
+                    });
+                    const controller = new AbortController();
+                    setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutos
+                    await fetch("{% url 'surveys:bulk_delete' %}", {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
+                        },
+                        signal: controller.signal
+                    });
+                } catch (error) {
+                    // Si ocurre error de red, restaurar encuestas y mostrar error
+                    removedCards.forEach(obj => {
+                        if (obj.node && obj.node.parentElement) {
+                            obj.node.parentElement.appendChild(obj.node);
+                        }
+                    });
+                    alert('Error de red al eliminar las encuestas. Por favor, intenta de nuevo.');
+                }
+            })();
             
             function getCookie(name) {
                 let cookieValue = null;
@@ -853,46 +901,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Crear FormData para enviar datos
                 const formData = new FormData();
                 formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
-                selectedSurveys.forEach(id => {
-                    formData.append('survey_ids', id);
+                removedCards.forEach(obj => {
+                    formData.append('survey_ids', obj.id);
                 });
-                
+
                 // Enviar petición asíncrona (no bloquea la UI)
-                // Aumentar timeout a 10 minutos para encuestas muy grandes
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutos
-                
-                try {
-                    const response = await fetch("{% url 'surveys:bulk_delete' %}", {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
-                        },
-                        signal: controller.signal
+
+                const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
+                    },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok || response.redirected || response.status === 302) {
+                    // Restablecer botón
+                    deleteSelectedBtn.disabled = false;
+                    deleteSelectedBtn.innerHTML = originalBtnText;
+                    // Mensaje de éxito (puedes personalizar con Toast, alert, etc.)
+                    alert('Las encuestas se eliminarán en segundo plano. Puedes continuar usando la plataforma.');
+                } else {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    // Restaurar encuestas al DOM si hubo error
+                    removedCards.forEach(obj => {
+                        if (obj.node && obj.node.parentElement) {
+                            obj.node.parentElement.appendChild(obj.node);
+                        }
                     });
-                    
-                    clearTimeout(timeoutId);
-                    
-                    // Redirigir según la respuesta
-                    // Django redirect() devuelve 302, fetch() lo sigue automáticamente
-                    if (response.ok || response.redirected || response.status === 302) {
-                        // Recargar la página para mostrar mensajes de Django y actualizar la lista
-                        window.location.reload();
-                    } else {
-                        const errorText = await response.text();
-                        console.error('Error response:', errorText);
-                        throw new Error('Error al eliminar las encuestas: ' + (errorText || 'Error desconocido'));
-                    }
-                } catch (fetchError) {
-                    clearTimeout(timeoutId);
-                    throw fetchError;
+                    throw new Error('Error al eliminar las encuestas: ' + (errorText || 'Error desconocido'));
                 }
             } catch (error) {
                 console.error('Error:', error);
                 deleteSelectedBtn.disabled = false;
                 deleteSelectedBtn.innerHTML = originalBtnText;
-                
+                // Restaurar encuestas al DOM si hubo error
+                removedCards.forEach(obj => {
+                    if (obj.node && obj.node.parentElement) {
+                        obj.node.parentElement.appendChild(obj.node);
+                    }
+                });
                 // Mensaje más específico según el tipo de error
                 if (error.name === 'AbortError' || error.message.includes('timeout')) {
                     alert('La eliminación está tardando más de lo esperado. Por favor, espera unos momentos y verifica si las encuestas fueron eliminadas. Si no, intenta de nuevo.');

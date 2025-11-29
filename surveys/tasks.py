@@ -1,7 +1,11 @@
-"""
-Celery tasks for heavy operations in surveys app.
-"""
+# ============================================================
+# BULK DELETE SURVEYS TASK (HEAVY/ASYNC)
+# ============================================================
 
+from django.db import connection, transaction
+from surveys.models import Survey
+
+# Ensure Celery helpers and logger are available before defining tasks
 from celery import shared_task
 from django.core.cache import cache
 from django.utils import timezone
@@ -12,6 +16,64 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def perform_delete_surveys(survey_ids, user_id):
+    """
+    Helper that performs the actual deletion synchronously.
+    This can be called from the Celery task or from a background thread
+    when Celery is configured to run in eager/synchronous mode.
+    Returns dict similar to the Celery task.
+    """
+    try:
+        owned_ids = list(Survey.objects.filter(id__in=survey_ids, author_id=user_id).values_list('id', flat=True))
+        if not owned_ids:
+            logger.warning(f"[DELETE][HELPER] No owned surveys to delete for user_id={user_id}")
+            return {'success': False, 'deleted': 0, 'error': 'No owned surveys'}
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                logger.info(f"[DELETE][HELPER] Eliminando encuestas {owned_ids} para user_id={user_id}")
+                # reuse existing fast delete helper from views
+                from surveys.views.crud_views import _fast_delete_surveys
+                _fast_delete_surveys(cursor, owned_ids)
+        for sid in owned_ids:
+            cache.delete(f"survey_stats_{sid}")
+        cache.delete(f"survey_count_user_{user_id}")
+        cache.delete(f"dashboard_data_user_{user_id}")
+        logger.info(f"[DELETE][HELPER] Eliminación completada para {len(owned_ids)} encuestas")
+        return {'success': True, 'deleted': len(owned_ids)}
+    except Exception as exc:
+        logger.error(f"[DELETE][HELPER] Error: {exc}", exc_info=True)
+        return {'success': False, 'deleted': 0, 'error': str(exc)}
+
+
+@shared_task(
+    bind=True,
+    name='surveys.tasks.delete_surveys_task',
+    queue='default',
+    max_retries=2,
+    default_retry_delay=60,
+)
+def delete_surveys_task(self, survey_ids, user_id):
+    """
+    Elimina encuestas y sus datos relacionados de forma optimizada y asíncrona.
+    Valida que las encuestas pertenezcan al usuario antes de borrar.
+    Args:
+        survey_ids (list): IDs de encuestas a eliminar
+        user_id (int): ID del usuario solicitante
+    Returns:
+        dict: {'success': bool, 'deleted': int, 'error': str}
+    """
+    from surveys.views.crud_views import _fast_delete_surveys
+    try:
+        # Delegate to helper that performs the actual deletion logic
+        result = perform_delete_surveys(survey_ids, user_id)
+        if not result.get('success'):
+            # If helper returned error, raise to trigger retry
+            raise Exception(result.get('error') or 'Unknown error in delete helper')
+        logger.info(f"[CELERY][DELETE] Eliminación asíncrona completada para {result.get('deleted', 0)} encuestas")
+        return result
+    except Exception as exc:
+        logger.error(f"[CELERY][DELETE] Error: {exc}", exc_info=True)
+        raise self.retry(exc=exc)
 # ============================================================
 # REPORT GENERATION TASKS
 # ============================================================

@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction, connection
+from django.core.cache import cache
 from django.db.models import Count
 from django.db.models import Prefetch
 from surveys.models import Question, AnswerOption
@@ -33,8 +34,9 @@ def _fast_delete_surveys(cursor, survey_ids):
     params = survey_ids
     
     start_time = time.time()
-    logger.info(f"[DELETE] Iniciando eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")
-    print(f"[DELETE] Iniciando eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")
+    logger.info(f"[DELETE] 🚀 INICIANDO eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")
+    print(f"[DELETE] 🚀 INICIANDO eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")  # Backup para consola
+    logger.info("[DELETE][TEST] Logger de surveys funcionando correctamente en archivo de log.")
     
     # Inicializar variables de tiempo para evitar errores si hay excepciones
     qr_time = sr_time = ao_time = q_time = s_time = 0.0
@@ -59,8 +61,8 @@ def _fast_delete_surveys(cursor, survey_ids):
         """, params)
         qr_count = cursor.rowcount
         qr_time = time.time() - step_start
-        logger.info(f"[DELETE] Step 1 - QuestionResponse: {qr_count} filas en {qr_time:.2f}s")
-        print(f"[DELETE] Step 1 - QuestionResponse: {qr_count} filas en {qr_time:.2f}s")
+        logger.info(f"[DELETE] 📊 Step 1 - QuestionResponse: {qr_count} filas en {qr_time:.2f}s")
+        print(f"[DELETE] 📊 Step 1 - QuestionResponse: {qr_count} filas en {qr_time:.2f}s")  # Backup para consola
     
         # 2. Eliminar SurveyResponses
         step_start = time.time()
@@ -71,7 +73,6 @@ def _fast_delete_surveys(cursor, survey_ids):
         sr_count = cursor.rowcount
         sr_time = time.time() - step_start
         logger.info(f"[DELETE] Step 2 - SurveyResponse: {sr_count} filas en {sr_time:.2f}s")
-        print(f"[DELETE] Step 2 - SurveyResponse: {sr_count} filas en {sr_time:.2f}s")
     
         # 3. Eliminar AnswerOptions (Opciones de respuesta) - Subconsulta a través de Question
         step_start = time.time()
@@ -85,7 +86,6 @@ def _fast_delete_surveys(cursor, survey_ids):
         ao_count = cursor.rowcount
         ao_time = time.time() - step_start
         logger.info(f"[DELETE] Step 3 - AnswerOption: {ao_count} filas en {ao_time:.2f}s")
-        print(f"[DELETE] Step 3 - AnswerOption: {ao_count} filas en {ao_time:.2f}s")
     
         # 4. Eliminar Preguntas
         step_start = time.time()
@@ -96,7 +96,6 @@ def _fast_delete_surveys(cursor, survey_ids):
         q_count = cursor.rowcount
         q_time = time.time() - step_start
         logger.info(f"[DELETE] Step 4 - Question: {q_count} filas en {q_time:.2f}s")
-        print(f"[DELETE] Step 4 - Question: {q_count} filas en {q_time:.2f}s")
     
         # 5. Eliminar la Encuesta
         step_start = time.time()
@@ -107,7 +106,6 @@ def _fast_delete_surveys(cursor, survey_ids):
         s_count = cursor.rowcount
         s_time = time.time() - step_start
         logger.info(f"[DELETE] Step 5 - Survey: {s_count} filas en {s_time:.2f}s")
-        print(f"[DELETE] Step 5 - Survey: {s_count} filas en {s_time:.2f}s")
     
     except Exception as e:
         # Log del error y re-lanzar para que el código superior lo maneje
@@ -127,8 +125,6 @@ def _fast_delete_surveys(cursor, survey_ids):
     total_duration = time.time() - start_time
     logger.info(f"[DELETE] ✅ Eliminación completa: {len(survey_ids)} encuesta(s) en {total_duration:.2f}s")
     logger.info(f"[DELETE] Desglose: QR={qr_time:.2f}s ({qr_count} filas), SR={sr_time:.2f}s ({sr_count} filas), AO={ao_time:.2f}s ({ao_count} filas), Q={q_time:.2f}s ({q_count} filas), S={s_time:.2f}s ({s_count} filas)")
-    print(f"[DELETE] ✅ Eliminación completa: {len(survey_ids)} encuesta(s) en {total_duration:.2f}s")
-    print(f"[DELETE] Desglose: QR={qr_time:.2f}s ({qr_count} filas), SR={sr_time:.2f}s ({sr_count} filas), AO={ao_time:.2f}s ({ao_count} filas), Q={q_time:.2f}s ({q_count} filas), S={s_time:.2f}s ({s_count} filas)")
 
 # --- Bulk delete surveys ---
 @login_required
@@ -137,64 +133,112 @@ def bulk_delete_surveys_view(request):
     """Eliminación bulk ultra-rápida usando SQL crudo con señales deshabilitadas."""
     from django.core.cache import cache
     from surveys.signals import DisableSignals
+    logger.info('[BULK_DELETE] Request recibido')
     survey_ids = request.POST.getlist('survey_ids')
+    logger.info(f'[BULK_DELETE] survey_ids recibidos: {survey_ids}')
     if not survey_ids:
+        logger.info('[BULK_DELETE] No se seleccionaron encuestas para eliminar')
         messages.error(request, 'No se seleccionaron encuestas para eliminar.')
         return redirect('surveys:list')
     # Validar propiedad y sanitizar IDs
     try:
         clean_ids = [int(sid) for sid in survey_ids]
+        logger.info(f'[BULK_DELETE] clean_ids: {clean_ids}')
     except ValueError:
+        logger.info('[BULK_DELETE] IDs inválidos')
         messages.error(request, 'IDs inválidos.')
         return redirect('surveys:list')
-    
-    # Verificar que pertenecen al usuario (ANTES de deshabilitar señales)
+
+    # Verificar que pertenecen al usuario (ANTES de lanzar la tarea)
     owned_ids = list(Survey.objects.filter(
         id__in=clean_ids,
         author=request.user
     ).values_list('id', flat=True))
+    logger.info(f'[BULK_DELETE] owned_ids: {owned_ids}')
     if not owned_ids:
+        logger.info('[BULK_DELETE] No tienes permisos para eliminar las encuestas seleccionadas')
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': 'No tienes permisos para eliminar las encuestas seleccionadas.'}, status=403)
         messages.error(request, 'No tienes permisos para eliminar las encuestas seleccionadas.')
         return redirect('surveys:list')
-    
+
     count = len(owned_ids)
     user_id = request.user.id
-    
-    # CRÍTICO: Deshabilitar señales para evitar N×6 invalidaciones de caché
-    # Con SQL crudo no se disparan señales, pero esto es una capa extra de seguridad
-    with DisableSignals():
-        try:
-            with transaction.atomic():
-                with connection.cursor() as cursor:
-                    _fast_delete_surveys(cursor, owned_ids)
-        except Exception as e:
-            logger.error(f"Error en bulk delete: {e}", exc_info=True)
-            print(f"[DELETE] ERROR en bulk delete: {e}")  # Backup para consola
-            import traceback
-            traceback.print_exc()  # Imprimir traceback completo en consola
-            messages.error(request, f"Error eliminando encuestas: {str(e)}")
-            return redirect('surveys:list')
-    
-    # Invalidar caché UNA SOLA VEZ después de la eliminación (no N veces)
-    # CRÍTICO: delete_pattern es MUY lento con muchos keys, así que lo hacemos de forma asíncrona/opcional
-    cache.delete(f"dashboard_data_user_{user_id}")
-    # Invalidar claves específicas (rápido) en lugar de patrones (lento)
+
+    # Lanzar tarea Celery asíncrona (o background thread si Celery está en modo eager)
     try:
-        for survey_id in owned_ids:
-            # Solo invalidar claves específicas conocidas (rápido)
-            cache.delete(f"survey_stats_{survey_id}")
-            # delete_pattern es MUY lento, así que lo omitimos o lo hacemos en background
-            # cache.delete_pattern(f"survey_analysis_{survey_id}_*")  # MUY LENTO - omitido
-            # cache.delete_pattern(f"survey_results_{survey_id}_*")  # MUY LENTO - omitido
-    except Exception:
-        pass
-    
-    # Mensaje de éxito
+        from surveys.tasks import delete_surveys_task, perform_delete_surveys
+        from django.conf import settings
+        import time
+        enqueue_start = time.time()
+        if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+            # Celery está configurado para ejecutar tareas de forma síncrona (tests/dev).
+            # Ejecutamos la eliminación en un hilo de fondo para no bloquear la petición HTTP.
+            import threading
+            def _bg():
+                try:
+                    perform_delete_surveys(owned_ids, user_id)
+                except Exception:
+                    logger.exception('[BULK_DELETE] Error en background thread durante eliminación')
+            threading.Thread(target=_bg, daemon=True).start()
+            result = None
+            enqueue_ms = int((time.time() - enqueue_start) * 1000)
+            logger.info(f'[BULK_DELETE] Background-thread launch time: {enqueue_ms}ms for user_id={user_id}, encuestas={owned_ids}')
+        else:
+            # Enviar la tarea al broker en un hilo separado para evitar bloquear
+            import threading
+
+            def _send_task():
+                try:
+                    res = delete_surveys_task.delay(owned_ids, user_id)
+                    enqueue_ms_inner = int((time.time() - enqueue_start) * 1000)
+                    logger.info(f'[BULK_DELETE][THREAD] Tarea Celery enviada: {getattr(res, "id", "-unknown-")} for user_id={user_id}, encuestas={owned_ids} (enqueue {enqueue_ms_inner}ms)')
+                except Exception:
+                    logger.exception('[BULK_DELETE][THREAD] Error enviando tarea Celery, cayendo a perform_delete_surveys')
+                    try:
+                        perform_delete_surveys(owned_ids, user_id)
+                    except Exception:
+                        logger.exception('[BULK_DELETE][THREAD] Error en perform_delete_surveys fallback')
+
+            threading.Thread(target=_send_task, daemon=True).start()
+            enqueue_ms = int((time.time() - enqueue_start) * 1000)
+            logger.info(f'[BULK_DELETE] Tarea Celery encolada en hilo (no bloqueante) for user_id={user_id}, encuestas={owned_ids} (spawn {enqueue_ms}ms)')
+        # Invalidate dashboard cache and adjust per-user survey count optimistically
+        try:
+            cache.delete(f"dashboard_data_user_{user_id}")
+            # If there is a numeric cached count, decrement it optimistically so header counters don't jump
+            count_key = f"survey_count_user_{user_id}"
+            try:
+                cur = cache.get(count_key)
+                if isinstance(cur, int) and cur > 0:
+                    cache.set(count_key, max(0, cur - count), timeout=300)
+                else:
+                    cache.delete(count_key)
+            except Exception:
+                # Fallback: remove the key so next render recalculates
+                try:
+                    cache.delete(count_key)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"[BULK_DELETE] Error lanzando tarea Celery: {e}", exc_info=True)
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': f'Error lanzando tarea de eliminación: {str(e)}'}, status=500)
+        messages.error(request, f"Error lanzando tarea de eliminación: {str(e)}")
+        return redirect('surveys:list')
+
+    # Responder según tipo de petición
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'message': f'Se eliminarán {count} encuestas en segundo plano.'})
     if count == 1:
-        messages.success(request, 'Se eliminó 1 encuesta correctamente.')
+        messages.success(request, 'La encuesta se eliminará en segundo plano. Puedes continuar usando la plataforma.')
     else:
-        messages.success(request, f'Se eliminaron {count} encuestas correctamente.')
+        messages.success(request, f'Se eliminarán {count} encuestas en segundo plano. Puedes continuar usando la plataforma.')
     return redirect('surveys:list')
+
+    logger.info(f'[BULK_DELETE] Tarea programada para borrado de {count} encuestas (en background)')
 
 class EncuestaListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     """Vista lista de encuestas del usuario actual."""
@@ -248,6 +292,13 @@ class EncuestaCreateView(LoginRequiredMixin, CreateView):
             survey_title=form.instance.title,
             category=form.instance.category
         )
+
+        # Invalidate user dashboard cache so counters update immediately
+        try:
+            cache.delete(f"dashboard_data_user_{self.request.user.id}")
+            cache.delete(f"survey_count_user_{self.request.user.id}")
+        except Exception:
+            pass
         return super().form_valid(form)
 
 class EncuestaUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
@@ -277,17 +328,65 @@ class EncuestaDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
             survey = self.get_object()
             survey_id = survey.id
             author_id = survey.author.id if survey.author else None
-            
+
+            # Encolar siempre la eliminación en Celery para evitar bloqueos en el front
             try:
-                with transaction.atomic():
-                    with connection.cursor() as cursor:
-                        _fast_delete_surveys(cursor, [survey_id])
+                from surveys.tasks import delete_surveys_task, perform_delete_surveys
+                from django.conf import settings
+                import time
+                enqueue_start = time.time()
+                if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                    import threading
+                    def _bg_single():
+                        try:
+                            perform_delete_surveys([survey_id], author_id)
+                        except Exception:
+                            logger.exception(f"[DELETE] Error en background thread borrando encuesta {survey_id}")
+                    threading.Thread(target=_bg_single, daemon=True).start()
+                    result = None
+                    enqueue_ms = int((time.time() - enqueue_start) * 1000)
+                    logger.info(f"[DELETE] Encuesta {survey_id} background-thread launch time: {enqueue_ms}ms (dev eager mode)")
+                else:
+                    import threading
+
+                    def _send_single():
+                        try:
+                            res = delete_surveys_task.delay([survey_id], author_id)
+                            enqueue_ms_inner = int((time.time() - enqueue_start) * 1000)
+                            logger.info(f"[DELETE][THREAD] Encuesta {survey_id} tarea enviada: {getattr(res, 'id', '-')} (enqueue {enqueue_ms_inner}ms)")
+                        except Exception:
+                            logger.exception(f"[DELETE][THREAD] Error enviando tarea Celery para encuesta {survey_id}, cayendo a perform_delete_surveys")
+                            try:
+                                perform_delete_surveys([survey_id], author_id)
+                            except Exception:
+                                logger.exception(f"[DELETE][THREAD] Error en perform_delete_surveys fallback para encuesta {survey_id}")
+
+                    threading.Thread(target=_send_single, daemon=True).start()
+                    enqueue_ms = int((time.time() - enqueue_start) * 1000)
+                    logger.info(f"[DELETE] Encuesta {survey_id} encolada en hilo (no bloqueante) (spawn {enqueue_ms}ms)")
+                # Invalidate dashboard cache and adjust per-user survey count optimistically
+                try:
+                    cache.delete(f"dashboard_data_user_{author_id}")
+                    count_key = f"survey_count_user_{author_id}"
+                    try:
+                        cur = cache.get(count_key)
+                        if isinstance(cur, int) and cur > 0:
+                            cache.set(count_key, max(0, cur - 1), timeout=300)
+                        else:
+                            cache.delete(count_key)
+                    except Exception:
+                        try:
+                            cache.delete(count_key)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                messages.success(request, 'La encuesta se eliminará en segundo plano. Puedes continuar usando la plataforma.')
+                return redirect(self.success_url)
             except Exception as e:
-                logger.error(f"Error eliminando encuesta {survey_id}: {e}", exc_info=True)
-                print(f"[DELETE] ERROR eliminando encuesta {survey_id}: {e}")  # Backup para consola
-                import traceback
-                traceback.print_exc()  # Imprimir traceback completo en consola
-                messages.error(request, f"Error al eliminar la encuesta: {str(e)}")
+                logger.error(f"[DELETE] Error lanzando tarea Celery para encuesta {survey_id}: {e}", exc_info=True)
+                messages.error(request, f"Error lanzando tarea de eliminación: {str(e)}")
                 return redirect(self.success_url)
         
         # Invalidar caché UNA SOLA VEZ después de la eliminación (no N veces)

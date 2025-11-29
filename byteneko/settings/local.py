@@ -79,6 +79,12 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
         },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / "logs" / "server.log"),
+            'mode': 'a',
+            'encoding': 'utf-8',
+        },
     },
     'root': {
         'handlers': ['console'],
@@ -98,9 +104,17 @@ LOGGING = {
         },
         # Logger para surveys (incluye logs de DELETE)
         'surveys': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },
     }
 }
+
+        # ============================================================
+        # CELERY - modo síncrono / rápido para desarrollo
+        # ============================================================
+        CELERY_TASK_ALWAYS_EAGER = True
+        CELERY_TASK_EAGER_PROPAGATES = True
+        CELERY_BROKER_URL = 'memory://'
+        CELERY_RESULT_BACKEND = 'cache+memory://'
