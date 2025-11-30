@@ -75,15 +75,22 @@ TEMPLATES = [
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
         },
         'file': {
             'class': 'logging.FileHandler',
             'filename': str(BASE_DIR / "logs" / "server.log"),
             'mode': 'a',
             'encoding': 'utf-8',
+            'formatter': 'verbose',
         },
     },
     'root': {
@@ -96,13 +103,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        # Desactivar logs de SQL en consola para velocidad
         'django.db.backends': {
             'handlers': ['console'],
             'level': 'ERROR',
             'propagate': False,
         },
-        # Logger para surveys (incluye logs de DELETE)
         'surveys': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
@@ -110,11 +115,13 @@ LOGGING = {
         },
     }
 }
+# ... aquí van tus otras configuraciones de local.py ...
+# por ejemplo: DATABASES, LOGGING, etc.
 
-        # ============================================================
-        # CELERY - modo síncrono / rápido para desarrollo
-        # ============================================================
-        CELERY_TASK_ALWAYS_EAGER = True
-        CELERY_TASK_EAGER_PROPAGATES = True
-        CELERY_BROKER_URL = 'memory://'
-        CELERY_RESULT_BACKEND = 'cache+memory://'
+# ============================================================
+# CELERY (Modo síncrono para desarrollo)
+# ============================================================
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'

@@ -105,7 +105,7 @@ def invalidate_survey_cache(sender, instance, **kwargs):
         invalidate_pattern(pptx_pattern)
         
         logger.info(
-            f"Cache invalidated for survey {instance.id} (user: {instance.author.username})"
+            logger.debug(f"Cache invalidated for survey {instance.id} (user: {instance.author.username})")
         )
 
 
@@ -145,7 +145,7 @@ def invalidate_question_cache(sender, instance, **kwargs):
     
     # Cambiar a debug para reducir ruido en logs
     logger.debug(
-        f"Cache invalidated for question changes in survey {survey.id}"
+        logger.debug(f"Cache invalidated for question changes in survey {survey.id}")
     )
 
 
@@ -173,7 +173,7 @@ def invalidate_option_cache(sender, instance, **kwargs):
     invalidate_pattern(results_pattern)
     
     logger.info(
-        f"Cache invalidated for answer option changes in survey {survey.id}"
+        logger.debug(f"Cache invalidated for answer option changes in survey {survey.id}")
     )
 
 
@@ -222,7 +222,7 @@ def invalidate_response_cache(sender, instance, **kwargs):
     
     # Cambiar a debug para reducir ruido en logs
     logger.debug(
-        f"Cache invalidated for response changes in survey {survey.id}"
+        logger.debug(f"Cache invalidated for response changes in survey {survey.id}")
     )
 
 
@@ -257,7 +257,7 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
         
         # Cambiar a debug para reducir ruido en logs
         logger.debug(
-            f"Cache invalidated for question response changes in survey {survey.id}"
+            logger.debug(f"Cache invalidated for question response changes in survey {survey.id}")
         )
     except (AttributeError, SurveyResponse.DoesNotExist, Exception):
         # La respuesta padre ya fue eliminada, ignorar silenciosamente

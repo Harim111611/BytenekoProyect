@@ -1,212 +1,8 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
-{% block page_styles %}
-<style>
-    /* Tarjeta de Encuesta Adaptativa */
-    .survey-card {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        border: 1px solid var(--card-border-color);
-        background-color: var(--card-bg); /* Fondo dinámico */
-    }
-    .survey-card:hover {
-        transform: translateY(-4px);
-        /* Sombra adaptada al tema (definida en byteneko.css o bootstrap) */
-        box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.15) !important;
-        border-color: var(--bk-primary); /* Borde azul al hover */
-    }
-
-    /* En modo oscuro, quitar sombra excesiva al hover para limpieza */
-    [data-bs-theme="dark"] .survey-card:hover {
-        box-shadow: none !important;
-        border-color: var(--bk-primary);
-    }
-
-    /* Puntos de estado */
-    .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-    .bg-active { background-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
-    .bg-draft { background-color: #9ca3af; }
-    .bg-closed { background-color: #ef4444; }
-
-    /* Botones de acción */
-    .action-btn-group .btn { border-radius: 8px; }
-    
-    /* Botones de selección múltiple */
-    .survey-select-btn {
-        transition: all 0.2s ease;
-        background-color: white;
-        cursor: pointer;
-    }
-    
-    .survey-select-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-    
-    .survey-select-btn.btn-primary {
-        background-color: var(--bk-primary) !important;
-        border-color: var(--bk-primary) !important;
-    }
-    
-    [data-bs-theme="dark"] .survey-select-btn {
-        background-color: var(--bs-body-bg);
-    }
-    
-    /* Animación para mostrar/ocultar checkboxes */
-    .selection-checkbox {
-        animation: fadeIn 0.2s ease-in;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: scale(0.8); }
-        to { opacity: 1; transform: scale(1); }
-    }
-</style>
-{% endblock %}
-
 {% block app_content %}
-
-<div class="container-xl p-4 p-md-5">
-
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-5 gap-3">
-        <div>
-            <h1 class="h2 fw-bold mb-1 text-body-emphasis">Mis Proyectos</h1>
-            <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
-        </div>
-
-            <div class="d-flex gap-2">
-            <button type="button" class="btn btn-outline-secondary border-dashed fw-medium" data-bs-toggle="modal" data-bs-target="#importModalPreview" data-bs-content="Sube uno o más archivos CSV. Si subes varios archivos, se crearán varias surveys automáticamente." data-bs-trigger="focus" title="Importar CSV">
-                <i class="bi bi-cloud-upload me-2"></i>Importar CSV
-            </button>
-
-            <button type="button" class="btn btn-outline-secondary fw-medium shadow-sm px-4 me-2" id="toggle-selection-mode">
-                <i class="bi bi-check2-square me-2"></i>Eliminación múltiple
-            </button>
-            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-medium shadow-sm px-4">
-                <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
-            </a>
-        </div>
-    </div>
-
-    {% if surveys %}
-        <!-- Barra de acciones múltiples -->
-        <div id="bulk-actions-bar" class="card border-0 shadow-sm mb-4" style="display: none;">
-            <div class="card-body py-3 px-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="fw-bold text-body-emphasis">
-                            <span id="selected-count">0</span> seleccionada(s)
-                        </span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="select-all-btn">
-                            <i class="bi bi-check-square me-1"></i>Seleccionar todas
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="deselect-all-btn" style="display: none;">
-                            <i class="bi bi-square me-1"></i>Deseleccionar todas
-                        </button>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-danger" id="delete-selected-btn">
-                            <i class="bi bi-trash-fill me-1"></i>Eliminar seleccionadas
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="cancel-selection-btn">
-                            <i class="bi bi-x-lg me-1"></i>Cancelar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            {% for survey in surveys %}
-                <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 survey-card shadow-sm" data-survey-id="{{ survey.pk }}">
-                        <div class="card-body p-4 d-flex flex-column">
-                            <!-- Botón de selección (oculto por defecto) -->
-                            <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox" style="z-index: 10; display: none;">
-                                <button type="button" class="btn btn-sm survey-select-btn" data-survey-id="{{ survey.pk }}" style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid #dee2e6;">
-                                    <i class="bi bi-circle" style="font-size: 1rem;"></i>
-                                </button>
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                    {{ survey.created_at|date:"d M Y" }}
-                                </span>
-                                <div class="d-flex align-items-center small">
-                                    {% if survey.status == 'active' %}
-                                        <span class="status-dot bg-active"></span> <span class="text-success fw-bold" style="font-size: 0.8rem;">Activa</span>
-                                    {% elif survey.status == 'draft' %}
-                                        <span class="status-dot bg-draft"></span> <span class="text-muted" style="font-size: 0.8rem;">Borrador</span>
-                                    {% else %}
-                                        <span class="status-dot bg-closed"></span> <span class="text-danger" style="font-size: 0.8rem;">Cerrada</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate" title="{{ survey.title }}">
-                                <a href="{% url 'surveys:detail' survey.pk %}" class="text-decoration-none text-body-emphasis stretched-link">
-                                    {{ survey.title }}
-                                </a>
-                            </h5>
-
-                                <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
-                                {{ survey.description|default:"Sin descripción adicional."|truncatechars:85 }}
-                            </p>
-
-                            <div class="d-flex align-items-center text-secondary small mb-4 bg-body-tertiary rounded-3 p-2 border border-dashed">
-                                    <div class="d-flex align-items-center me-3">
-                                    <i class="bi bi-people-fill me-2 text-primary"></i>
-                                    <strong class="text-body">{{ survey.total_respuestas }}</strong>&nbsp;respuestas
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <i class="bi bi-layers-fill me-2 text-primary"></i>
-                                    <strong class="text-body">{{ survey.total_preguntas }}</strong>&nbsp;preguntas
-                                </div>
-                            </div>
-
-                            <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
-                                <a href="{% url 'surveys:resultados' survey.pk %}" class="btn btn-sm btn-outline-primary flex-grow-1">
-                                    <i class="bi bi-bar-chart-fill me-1"></i> Resultados
-                                </a>
-                                <a href="{% url 'surveys:editar' survey.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
-                                    <i class="bi bi-pencil-fill"></i>
-                                </a>
-                                <a href="{% url 'surveys:borrar' survey.pk %}" class="btn btn-sm btn-outline-danger" title="Eliminar">
-                                    <i class="bi bi-trash-fill"></i>
-                                </a>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-
-    {% else %}
-        <div class="text-center py-5 my-5">
-            <div class="mb-4">
-                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
-                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
-                </div>
-            </div>
-            <h3 class="fw-bold text-body-emphasis mb-2">Tu espacio de trabajo está vacío</h3>
-            <p class="text-muted mb-4 col-md-6 mx-auto">
-                Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar a analizar datos hoy mismo.
-            </p>
-            <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'surveys:crear' %}" class="btn btn-primary btn-lg px-4">
-                    <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
-                </a>
-                <button class="btn btn-outline-secondary btn-lg px-4" data-bs-toggle="modal" data-bs-target="#importModalPreview">
-                    Importar CSV
-                </button>
-            </div>
-        </div>
-    {% endif %}
-
-</div>
-
-<!-- Modal Importar CSV con Preview -->
+<!-- Modal Importar CSV con Vista Previa -->
 <div class="modal fade" id="importModalPreview" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -216,7 +12,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            
+
             <!-- PASO 1: Subir archivo -->
             <div id="step1-upload" class="modal-body pt-4">
                 <div class="text-center mb-4">
@@ -224,16 +20,20 @@
                         <i class="bi bi-file-earmark-spreadsheet-fill fs-3"></i>
                     </div>
                     <h6 class="fw-bold text-body-emphasis mb-2">Paso 1: Selecciona tu archivo</h6>
-                    <p class="small text-muted">Sube un archivo <code>.csv</code> y te mostraremos una vista previa antes de importar.</p>
+                    <p class="small text-muted">
+                        Sube un archivo <code>.csv</code> y te mostraremos una vista previa antes de importar.
+                    </p>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label fw-bold small">
                         <i class="bi bi-file-earmark-arrow-up me-1"></i>Archivo(s) CSV
                     </label>
-                    <input class="form-control bg-body-tertiary form-control-lg" type="file" id="csvFileInput" accept=".csv" multiple required>
+                    <input class="form-control bg-body-tertiary form-control-lg" type="file"
+                           id="csvFileInput" accept=".csv" multiple required>
                     <div class="form-text small">
-                        <i class="bi bi-info-circle me-1"></i>Puedes seleccionar múltiples archivos CSV. Primera fila debe contener los encabezados
+                        <i class="bi bi-info-circle me-1"></i>
+                        Puedes seleccionar múltiples archivos CSV. La primera fila debe contener los encabezados.
                     </div>
                     <div id="fileList" class="mt-2"></div>
                 </div>
@@ -242,34 +42,39 @@
                     <label class="form-label fw-bold small">
                         <i class="bi bi-tag me-1"></i>Nombre del Proyecto (Opcional)
                     </label>
-                    <input type="text" class="form-control bg-body-tertiary" id="surveyTitleInput" placeholder="Ej. Satisfacción Q4 2025" maxlength="255">
+                    <input type="text" class="form-control bg-body-tertiary"
+                           id="surveyTitleInput"
+                           placeholder="Ej. Satisfacción Q4 2025"
+                           maxlength="255">
                     <div class="form-text small">
-                        <i class="bi bi-info-circle me-1"></i>Solo aplica si seleccionaste un solo archivo. Para múltiples archivos, se usa el nombre del archivo.
+                        <i class="bi bi-info-circle me-1"></i>
+                        Solo aplica si seleccionaste un solo archivo. Para múltiples archivos, se usa el nombre de cada archivo.
                     </div>
                 </div>
-                
+
                 <div class="alert alert-primary d-flex align-items-center" role="alert">
                     <i class="bi bi-lightbulb fs-4 me-3"></i>
                     <div class="small">
-                        <strong>¡Nuevo!</strong> Puedes importar múltiples surveys a la vez. Si seleccionas varios archivos, se crearán automáticamente.
+                        <strong>¡Nuevo!</strong> Puedes importar múltiples surveys a la vez.  
+                        Si seleccionas varios archivos, se crearán automáticamente.
                     </div>
                 </div>
             </div>
-            
+
             <!-- PASO 2: Preview -->
             <div id="step2-preview" class="modal-body pt-4" style="display:none;">
                 <div class="alert alert-success d-flex align-items-start mb-4">
                     <i class="bi bi-check-circle fs-4 me-3"></i>
                     <div>
-                        <h6 class="alert-heading mb-1">✅ Archivo Validado Correctamente</h6>
+                        <h6 class="alert-heading mb-1">✅ Archivo validado correctamente</h6>
                         <p class="mb-0 small">
-                            Los datos se interpretarán como se muestra abajo. 
-                            Al confirmar, se creará la survey y serás redirigido al <strong>Dashboard de Resultados</strong> 
-                            para explorar el análisis completo.
+                            Los datos se interpretarán como se muestra abajo.
+                            Al confirmar, se creará la survey y serás redirigido al
+                            <strong>Dashboard de Resultados</strong> para explorar el análisis completo.
                         </p>
                     </div>
                 </div>
-                
+
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
                         <div class="card bg-body-tertiary border-0">
@@ -296,8 +101,8 @@
                         </div>
                     </div>
                 </div>
-                
-                <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i>Preguntas Detectadas</h6>
+
+                <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i>Preguntas detectadas</h6>
                 <div class="table-responsive mb-4" style="max-height:300px; overflow-y:auto;">
                     <table class="table table-sm table-hover">
                         <thead class="table-light sticky-top">
@@ -312,8 +117,8 @@
                         <tbody id="preview-columns-table"></tbody>
                     </table>
                 </div>
-                
-                <h6 class="fw-bold mb-3"><i class="bi bi-table me-2"></i>Datos (Primeras 5 filas)</h6>
+
+                <h6 class="fw-bold mb-3"><i class="bi bi-table me-2"></i>Datos (primeras 5 filas)</h6>
                 <div class="table-responsive" style="max-height:250px; overflow:auto;">
                     <table class="table table-sm table-bordered">
                         <thead class="table-light sticky-top" id="preview-sample-header"></thead>
@@ -321,24 +126,29 @@
                     </table>
                 </div>
             </div>
-            
+
+            <!-- Loading -->
             <div id="step-loading" class="modal-body text-center py-5" style="display:none;">
                 <div class="mb-4" id="loading-animation">
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Cargando...</span>
+                        <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
-                <h5 class="mb-3" id="loading-title">Procesando datos</h5>
+                <h5 class="mb-3" id="loading-title">Processing Data</h5>
                 <p class="text-muted" id="loading-text">Analizando...</p>
                 <div class="progress mx-auto" style="max-width: 300px; height: 8px;">
                     <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                 </div>
             </div>
-            
+
+            <!-- Error -->
             <div id="step-error" class="modal-body" style="display:none;">
-                <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i><span id="error-message"></span></div>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <span id="error-message"></span>
+                </div>
             </div>
-            
+
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="btn-cancel">Cancelar</button>
                 <button type="button" class="btn btn-outline-primary" id="btn-back-to-upload" style="display:none;">
@@ -354,610 +164,980 @@
         </div>
     </div>
 </div>
+<!-- Fin modal importación CSV -->
+
+<div class="container-xl p-4 p-md-5">
+
+    <!-- Cabecera -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+            <h1 class="h2 fw-bold mb-1 text-body-emphasis">Mis Proyectos</h1>
+            <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+            <button type="button"
+                    class="btn btn-outline-secondary border-dashed fw-medium"
+                    data-bs-toggle="modal"
+                    data-bs-target="#importModalPreview"
+                    title="Importar CSV">
+                <i class="bi bi-cloud-upload me-2"></i>Importar CSV
+            </button>
+            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-medium shadow-sm px-4">
+                <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+            </a>
+            <!-- BOTÓN PARA ENTRAR/SALIR DE MODO SELECCIÓN -->
+            <button type="button"
+                    class="btn btn-outline-danger fw-medium"
+                    id="toggleSelectionBtn"
+                    title="Seleccionar múltiples encuestas">
+                <i class="bi bi-check2-square me-1"></i>Seleccionar
+            </button>
+        </div>
+    </div>
+
+    <!-- ALERTA GLOBAL (éxito / error) -->
+    <div id="pageAlert" class="alert alert-success d-none mb-4" role="alert">
+        <strong id="pageAlertTitle"></strong>
+        <span id="pageAlertBody" class="ms-2"></span>
+    </div>
+
+    <!-- BARRA DE ACCIONES MASIVAS -->
+        <div id="bulkActionsBar"
+            class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4"
+            style="display:none !important;">
+        <div class="d-flex align-items-center mb-2 mb-md-0 gap-2">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span class="small">
+                <strong><span id="selectedCountSpan">0</span> encuestas seleccionadas.</strong>
+                Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse por completo.
+            </span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAllBtn">
+                Seleccionar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn" style="display:none;">
+                Quitar selección
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn">
+                <i class="bi bi-trash-fill me-1"></i>Eliminar seleccionadas
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" id="deleteAllBtn">
+                <i class="bi bi-trash3-fill me-1"></i>Eliminar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-dark" id="cancelSelectionBtn">
+                Salir de selección
+            </button>
+        </div>
+    </div>
+
+    {% if surveys %}
+        <div class="row g-4">
+            {% for survey in surveys %}
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 survey-card shadow-sm" data-survey-id="{{ survey.pk }}">
+                    <div class="card-body p-4 d-flex flex-column">
+
+                        <!-- Botón de selección múltiple (checkbox) -->
+                        <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox"
+                             style="z-index: 10; display: none;">
+                            <button type="button"
+                                    class="btn btn-sm survey-select-btn js-select-survey-btn"
+                                    data-survey-id="{{ survey.pk }}"
+                                    style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid #dee2e6;">
+                                <i class="bi bi-circle" style="font-size: 1rem;"></i>
+                            </button>
+                        </div>
+
+                        <!-- Fecha + estado -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
+                                {{ survey.created_at|date:"d M Y" }}
+                            </span>
+                            <div class="d-flex align-items-center small">
+                                {% if survey.status == 'active' %}
+                                    <span class="status-dot bg-active"></span>
+                                    <span class="text-success fw-bold" style="font-size: 0.8rem;">Activa</span>
+                                {% elif survey.status == 'draft' %}
+                                    <span class="status-dot bg-draft"></span>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Borrador</span>
+                                {% else %}
+                                    <span class="status-dot bg-closed"></span>
+                                    <span class="text-danger" style="font-size: 0.8rem;">Cerrada</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Título -->
+                        <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate"
+                            title="{{ survey.title }}">
+                            <a href="{% url 'surveys:detail' survey.pk %}"
+                               class="text-decoration-none text-body-emphasis stretched-link">
+                                {{ survey.title }}
+                            </a>
+                        </h5>
+
+                        <!-- Descripción -->
+                        <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
+                            {{ survey.description|default:"Sin descripción adicional."|truncatechars:85 }}
+                        </p>
+
+                        <!-- Respuestas / Preguntas -->
+                        <div class="d-flex align-items-center text-secondary small mb-4
+                                    bg-body-tertiary rounded-3 p-2 border border-dashed">
+                            <div class="d-flex align-items-center me-3">
+                                <i class="bi bi-people-fill me-2 text-primary"></i>
+                                <strong class="text-body">{{ survey.total_respuestas }}</strong>&nbsp;respuestas
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-layers-fill me-2 text-primary"></i>
+                                <strong class="text-body">{{ survey.total_preguntas }}</strong>&nbsp;preguntas
+                            </div>
+                        </div>
+
+                        <!-- Botones de acción -->
+                        <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
+                            <a href="{% url 'surveys:detail' survey.pk %}"
+                               class="btn btn-sm btn-outline-primary flex-grow-1">
+                                <i class="bi bi-bar-chart-fill me-1"></i> Resultados
+                            </a>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger js-delete-survey-btn"
+                                    data-action="delete-survey"
+                                    data-survey-id="{{ survey.pk }}"
+                                    title="Eliminar">
+                                <i class="bi bi-trash-fill"></i>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5 my-5">
+            <div class="mb-4">
+                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
+                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                </div>
+            </div>
+            <h3 class="fw-bold text-body-emphasis mb-2">Tu espacio de trabajo está vacío</h3>
+            <p class="text-muted mb-4 col-md-6 mx-auto">
+                Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar a analizar datos hoy mismo.
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="{% url 'surveys:crear' %}" class="btn btn-primary btn-lg px-4">
+                    <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+                </a>
+                <button class="btn btn-outline-secondary btn-lg px-4"
+                        data-bs-toggle="modal"
+                        data-bs-target="#importModalPreview">
+                    Importar CSV
+                </button>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // ========================================================================
-    // PARTE 1: LÓGICA DE IMPORTACIÓN (CORREGIDA)
-    // ========================================================================
-    
-    // 1. CORRECCIÓN: Definimos la URL aquí para evitar el error 500
-    const loadingImgUrl = "{% static 'img/cat-8915_256.gif' %}"; 
+/**
+ * ALERTA GLOBAL (superior)
+ * type: 'success' | 'danger' | 'warning' | 'info'
+ * durationMs: tiempo en ms antes de ocultarse automáticamente (por defecto 5000).
+ *             Si es 0, NO se oculta solo.
+ */
+let pageAlertTimeoutId = null;
 
-    const fileInput = document.getElementById('csvFileInput');
-    const titleInput = document.getElementById('surveyTitleInput');
-    const btnAnalyze = document.getElementById('btn-analyze');
-    const btnConfirm = document.getElementById('btn-confirm-import');
-    const btnBack = document.getElementById('btn-back-to-upload');
-    const btnCancel = document.getElementById('btn-cancel');
-    const btnClose = document.querySelector('#importModalPreview .btn-close');
-    const modalElement = document.getElementById('importModalPreview');
-    
-    // Solo ejecutamos si existen los elementos (para evitar errores en consola)
-    if (fileInput && modalElement) {
-        const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
-        
-        let previewData = null;
-        let isProcessing = false;
-        let isImporting = false;
-        let abortController = null;
-        
-        // Función para importar múltiples archivos
-        async function importMultipleFiles(files) {
-            isImporting = true;
-            updateModalBehavior(true);
-            btnCancel.style.display = 'none';
-            
-            showStep('loading');
-            const loadingAnimation = document.getElementById('loading-animation');
-            // 2. USO CORRECTO DE LA VARIABLE
-            loadingAnimation.innerHTML = '<img src="' + loadingImgUrl + '" alt="Cargando..." style="width: 128px; height: 128px;">';
-            document.getElementById('loading-title').textContent = 'Importando datos';
-            document.getElementById('loading-text').textContent = `Importando ${files.length} encuesta${files.length > 1 ? 's' : ''}... Por favor espera.`;
-            
-            const startTime = Date.now();
-            
-            try {
-                const formData = new FormData();
-                for (let i = 0; i < files.length; i++) {
-                    formData.append('csv_files', files[i]);
-                }
-                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-                
-                const response = await fetch('{% url "surveys:importar_multiple" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'}
-                });
-                
-                // Espera mínima para que se vea la animación
-                const elapsedTime = Date.now() - startTime;
-                const remainingTime = Math.max(0, 1500 - elapsedTime);
-                await new Promise(resolve => setTimeout(resolve, remainingTime));
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.location.href = '{% url "surveys:list" %}';
-                } else {
-                    let errorMsg = data.error || 'Error al importar';
-                    if (data.all_errors && data.all_errors.length > 0) {
-                        errorMsg += '\n\nDetalles:\n' + data.all_errors.join('\n');
-                    }
-                    showError(errorMsg);
-                    resetState();
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Error de conexión: ' + error.message);
-                resetState();
-            }
-        }
-        
-        function updateModalBehavior(processing) {
-            isProcessing = processing;
-            if (processing) {
-                modalElement.setAttribute('data-bs-backdrop', 'static');
-                modalElement.setAttribute('data-bs-keyboard', 'false');
-            } else {
-                modalElement.setAttribute('data-bs-backdrop', 'true');
-                modalElement.setAttribute('data-bs-keyboard', 'true');
-            }
-        }
-        
-        function resetState() {
-            isImporting = false;
-            updateModalBehavior(false);
-            btnCancel.style.display = 'inline-block';
-        }
-        
-        function cancelProcess() {
-            if (isImporting) return;
-            if (abortController) {
-                abortController.abort();
-                abortController = null;
-            }
-            updateModalBehavior(false);
-            showStep('upload');
-        }
-        
-        modalElement.addEventListener('hide.bs.modal', function(event) {
-            if (isProcessing) {
-                event.preventDefault();
-                return false;
-            }
-        });
-        
-        btnCancel.addEventListener('click', cancelProcess);
-        if (btnClose) btnClose.addEventListener('click', cancelProcess);
-        
-        modalElement.addEventListener('hidden.bs.modal', function() {
-            if (!isProcessing && !isImporting) {
-                showStep('upload');
-                fileInput.value = '';
-                if(titleInput) titleInput.value = '';
-                document.getElementById('fileList').innerHTML = '';
-                previewData = null;
-                updateModalBehavior(false);
-                btnCancel.style.display = 'inline-block';
-            }
-        });
-        
-        fileInput.addEventListener('change', function() {
-            const fileListDiv = document.getElementById('fileList');
-            fileListDiv.innerHTML = '';
-            
-            if (this.files.length > 0) {
-                const list = document.createElement('div');
-                list.className = 'small';
-                for (let i = 0; i < this.files.length; i++) {
-                    const badge = document.createElement('span');
-                    badge.className = 'badge bg-primary me-2 mb-2';
-                    badge.innerHTML = `<i class="bi bi-file-earmark-text me-1"></i>${this.files[i].name}`;
-                    list.appendChild(badge);
-                }
-                fileListDiv.appendChild(list);
-                
-                if (this.files.length > 1) {
-                    if(titleInput) {
-                        titleInput.disabled = true;
-                        titleInput.placeholder = 'Se usarán los nombres de los archivos';
-                    }
-                    btnAnalyze.innerHTML = `<i class="bi bi-cloud-upload me-2"></i>Importar ${this.files.length} Encuestas`;
-                } else {
-                    if(titleInput) {
-                        titleInput.disabled = false;
-                        titleInput.placeholder = 'Ej. Satisfacción Q4 2025';
-                    }
-                    btnAnalyze.innerHTML = '<i class="bi bi-search me-2"></i>Ver Vista Previa';
-                }
-            }
-        });
-        
-        btnAnalyze.addEventListener('click', async function() {
-            const files = fileInput.files;
-            if (!files || files.length === 0) { 
-                alert('Selecciona al menos un archivo CSV'); 
-                return; 
-            }
-            
-            if (files.length > 1) {
-                await importMultipleFiles(files);
-                return;
-            }
-            
-            updateModalBehavior(true);
-            abortController = new AbortController();
-            
-            const formData = new FormData();
-            formData.append('csv_file', files[0]);
-            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-            
-            showStep('loading');
-            const loadingAnimation = document.getElementById('loading-animation');
-            loadingAnimation.innerHTML = '<div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Cargando...</span></div>';
-            document.getElementById('loading-title').textContent = 'Analizando archivo';
-            document.getElementById('loading-text').textContent = 'Analizando estructura del archivo...';
-            
-            const startTime = Date.now();
-            
-            try {
-                const response = await fetch('{% url "surveys:importar_preview" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'},
-                    signal: abortController.signal
-                });
-                
-                const data = await response.json();
-                const elapsedTime = Date.now() - startTime;
-                const remainingTime = Math.max(0, 800 - elapsedTime);
-                await new Promise(resolve => setTimeout(resolve, remainingTime));
-                
-                if (data.success) {
-                    previewData = data;
-                    renderPreview(data);
-                    showStep('preview');
-                    updateModalBehavior(false);
-                } else {
-                    showError(data.error || 'Error al analizar');
-                    updateModalBehavior(false);
-                }
-            } catch (error) {
-                if (error.name !== 'AbortError') {
-                    console.error('Error:', error);
-                    showError('Error de conexión: ' + error.message);
-                }
-                updateModalBehavior(false);
-            } finally {
-                abortController = null;
-            }
-        });
+function showPageAlert(type, title, body, durationMs) {
+    const box   = document.getElementById('pageAlert');
+    const tEl   = document.getElementById('pageAlertTitle');
+    const bEl   = document.getElementById('pageAlertBody');
+    if (!box || !tEl || !bEl) return;
 
-        btnConfirm.addEventListener('click', async function() {
-            if (!fileInput.files[0]) return;
-            
-            isImporting = true;
-            updateModalBehavior(true);
-            btnCancel.style.display = 'none';
-            
-            showStep('loading');
-            const loadingAnimation = document.getElementById('loading-animation');
-            // 3. USO CORRECTO DE LA VARIABLE TAMBIÉN AQUÍ
-            loadingAnimation.innerHTML = '<img src="' + loadingImgUrl + '" alt="Loading..." style="width: 128px; height: 128px;">';
-            document.getElementById('loading-title').textContent = 'Importing Data';
-            document.getElementById('loading-text').textContent = 'Importando datos y generando análisis... Por favor espera.';
-            
-            const startTime = Date.now();
-            
-            try {
-                const formData = new FormData();
-                formData.append('csv_file', fileInput.files[0]);
-                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-                if (titleInput && titleInput.value) {
-                    formData.append('survey_title', titleInput.value);
-                }
-                
-                const response = await fetch('{% url "surveys:importar_nueva" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'}
-                });
-                
-                const elapsedTime = Date.now() - startTime;
-                const remainingTime = Math.max(0, 1200 - elapsedTime);
-                await new Promise(resolve => setTimeout(resolve, remainingTime));
-                
-                if (response.redirected || response.status === 302) {
-                    window.location.href = response.url;
-                } else if (response.ok) {
-                    window.location.reload();
-                } else {
-                    const text = await response.text();
-                    showError('Error al importar: ' + (text || 'Error desconocido'));
-                    resetState();
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Error de conexión: ' + error.message);
-                resetState();
-            }
-        });
-        
-        btnBack.addEventListener('click', function() { 
-            updateModalBehavior(false);
-            showStep('upload'); 
-        });
-        
-        function showStep(step) {
-            ['step1-upload','step2-preview','step-loading','step-error'].forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.style.display = 'none';
-            });
-            [btnAnalyze, btnConfirm, btnBack].forEach(btn => {
-                if(btn) btn.style.display = 'none';
-            });
-            
-            if (step === 'upload') {
-                document.getElementById('step1-upload').style.display = 'block';
-                btnAnalyze.style.display = 'inline-block';
-            } else if (step === 'preview') {
-                document.getElementById('step2-preview').style.display = 'block';
-                btnBack.style.display = 'inline-block';
-                btnConfirm.style.display = 'inline-block';
-            } else if (step === 'loading') {
-                document.getElementById('step-loading').style.display = 'block';
-            } else if (step === 'error') {
-                document.getElementById('step-error').style.display = 'block';
-                btnBack.style.display = 'inline-block';
-            }
+    // Limpiar clases previas
+    box.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
+    box.classList.add('alert-' + (type || 'info'));
+    tEl.textContent = title || '';
+    bEl.textContent = body || '';
+
+    // Limpiar timeout anterior si existe
+    if (pageAlertTimeoutId) {
+        clearTimeout(pageAlertTimeoutId);
+        pageAlertTimeoutId = null;
+    }
+
+    // Auto-ocultar salvo que durationMs sea 0
+    const timeout = (typeof durationMs === 'number') ? durationMs : 5000;
+    if (timeout > 0) {
+        pageAlertTimeoutId = setTimeout(function () {
+            box.classList.add('d-none');
+        }, timeout);
+    }
+}
+</script>
+
+<script>
+// -----------------------------------------
+// Selección múltiple y borrado en bloque
+// -----------------------------------------
+(function () {
+    const toggleSelectionBtn = document.getElementById('toggleSelectionBtn');
+    const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+    const bulkActionsBar     = document.getElementById('bulkActionsBar');
+    const selectedCountSpan  = document.getElementById('selectedCountSpan');
+    const selectAllBtn       = document.getElementById('selectAllBtn');
+    const deselectAllBtn     = document.getElementById('deselectAllBtn');
+    const deleteSelectedBtn  = document.getElementById('deleteSelectedBtn');
+    const deleteAllBtn       = document.getElementById('deleteAllBtn');
+
+    const selectBtns = document.querySelectorAll('.js-select-survey-btn');
+    const cards      = document.querySelectorAll('.survey-card');
+
+    if (!toggleSelectionBtn || !cancelSelectionBtn || !bulkActionsBar || !selectedCountSpan || !deleteSelectedBtn) {
+        return;
+    }
+
+    // Si NO hay encuestas, ocultamos la barra y deshabilitamos el botón "Seleccionar"
+    if (!cards.length) {
+        bulkActionsBar.style.display = 'none';
+        bulkActionsBar.classList.add('d-none');
+        toggleSelectionBtn.disabled = true;
+        toggleSelectionBtn.classList.add('disabled', 'opacity-50');
+        return;
+    }
+
+    const selectedSurveys = new Set();
+    let selectionMode = false;
+    let skipConfirmBulk = false;
+
+    function updateSelectionUI() {
+        const count = selectedSurveys.size;
+        selectedCountSpan.textContent = count;
+
+        // Mostrar la barra cuando estamos en modo selección (aunque no haya ninguna seleccionada)
+        if (selectionMode) {
+            bulkActionsBar.style.display = 'flex';
+            bulkActionsBar.classList.remove('d-none');
+        } else {
+            bulkActionsBar.style.display = 'none';
+            bulkActionsBar.classList.add('d-none');
         }
-        
-        function showError(message) {
-            const errorEl = document.getElementById('error-message');
-            if(errorEl) errorEl.textContent = message;
-            showStep('error');
-        }
-        
-        function renderPreview(data) {
-            const questionColumns = data.columns.filter(c => !c.is_metadata);
-            
-            document.getElementById('preview-total-rows').textContent = data.total_rows;
-            document.getElementById('preview-total-questions').textContent = questionColumns.length;
-            document.getElementById('preview-filename').textContent = data.filename;
-            
-            const typeIcons = {
-                'scale': '<i class="bi bi-star-fill text-warning"></i> Escala 1-10',
-                'number': '<i class="bi bi-123 text-info"></i> Número',
-                'single': '<i class="bi bi-ui-radios text-primary"></i> Opción única',
-                'multi': '<i class="bi bi-ui-checks text-success"></i> Múltiple',
-                'text': '<i class="bi bi-chat-left-text text-secondary"></i> Texto',
-                'timestamp': '<i class="bi bi-clock text-muted"></i> Fecha/Hora',
-                'metadata': '<i class="bi bi-tag text-muted"></i> Metadata'
-            };
-            
-            const columnsTable = document.getElementById('preview-columns-table');
-            columnsTable.innerHTML = '';
-            
-            data.columns.forEach((col, idx) => {
-                const isMetadata = col.is_metadata || false;
-                const rowClass = isMetadata ? 'table-secondary opacity-75' : '';
-                const skipBadge = isMetadata ? '<span class="badge bg-secondary ms-2">Omitida</span>' : '';
-                
-                columnsTable.innerHTML += `
-                    <tr class="${rowClass}">
-                        <td class="text-center">${idx + 1}</td>
-                        <td><code class="small">${col.name}</code> ${skipBadge}</td>
-                        <td>${typeIcons[col.type] || col.type}</td>
-                        <td class="text-center">${col.unique_values || '-'}</td>
-                        <td class="small text-muted">${col.sample_values.join(', ') || '-'}</td>
-                    </tr>
-                `;
-            });
-            
-            document.getElementById('preview-sample-header').innerHTML = '<tr>' + 
-                data.columns.map(c => `<th class="small">${c.display_name}</th>`).join('') + '</tr>';
-            const sampleBody = document.getElementById('preview-sample-body');
-            sampleBody.innerHTML = '';
-            data.sample_rows.forEach(row => {
-                sampleBody.innerHTML += '<tr>' + row.map(val => 
-                    `<td class="small">${val || '<span class="text-muted">-</span>'}</td>`
-                ).join('') + '</tr>';
-            });
+
+        const allSelected = (selectBtns.length > 0) && (count === selectBtns.length);
+        if (selectAllBtn && deselectAllBtn) {
+            selectAllBtn.style.display   = allSelected ? 'none' : 'inline-block';
+            deselectAllBtn.style.display = allSelected ? 'inline-block' : 'none';
         }
     }
 
-    // ========================================================================
-    // PARTE 2: LÓGICA DE SELECCIÓN MÚLTIPLE Y BORRADO (LO QUE TÚ PUSISTE)
-    // ========================================================================
-    const toggleSelectionBtn = document.getElementById('toggle-selection-mode');
-    const cancelSelectionBtn = document.getElementById('cancel-selection-btn');
-    const bulkActionsBar = document.getElementById('bulk-actions-bar');
-    const selectedCountSpan = document.getElementById('selected-count');
-    const selectAllBtn = document.getElementById('select-all-btn');
-    const deselectAllBtn = document.getElementById('deselect-all-btn');
-    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
-    const selectionCheckboxes = document.querySelectorAll('.selection-checkbox');
-    const selectBtns = document.querySelectorAll('.survey-select-btn');
-    
-    // Si no hay encuestas (y por tanto no hay botones), salimos
-    if (toggleSelectionBtn && deselectAllBtn && selectAllBtn && deleteSelectedBtn && cancelSelectionBtn) {
-        let selectionMode = false;
-        const selectedSurveys = new Set();
+    function toggleSelectionMode() {
+        selectionMode = !selectionMode;
+        document.body.classList.toggle('survey-selection-mode', selectionMode);
 
-        function toggleSelectionMode() {
-            selectionMode = !selectionMode;
-            
-            if (selectionMode) {
-                toggleSelectionBtn.classList.remove('btn-outline-secondary');
-                toggleSelectionBtn.classList.add('btn-secondary');
-                toggleSelectionBtn.innerHTML = '<i class="bi bi-x-square me-2"></i>Cancelar eliminación';
-                selectionCheckboxes.forEach(el => el.style.display = 'block');
-            } else {
-                toggleSelectionBtn.classList.remove('btn-secondary');
-                toggleSelectionBtn.classList.add('btn-outline-secondary');
-                toggleSelectionBtn.innerHTML = '<i class="bi bi-check2-square me-2"></i>Eliminación múltiple';
-                selectionCheckboxes.forEach(el => el.style.display = 'none');
-                
-                selectedSurveys.clear();
-                selectBtns.forEach(btn => {
-                    btn.classList.remove('btn-primary', 'text-white');
-                    btn.style.border = '2px solid #dee2e6';
-                    btn.querySelector('i').className = 'bi bi-circle';
-                });
-                
-                bulkActionsBar.style.display = 'none';
-            }
-        }
-
-        function updateSelectionUI() {
-            const count = selectedSurveys.size;
-            selectedCountSpan.textContent = count;
-            
-            if (count > 0) {
-                bulkActionsBar.style.display = 'block';
-            } else {
-                bulkActionsBar.style.display = 'none';
-            }
-            
-            const allSelected = count === selectBtns.length;
-            selectAllBtn.style.display = allSelected ? 'none' : 'inline-block';
-            deselectAllBtn.style.display = allSelected ? 'inline-block' : 'none';
-        }
-
-        function toggleSurveySelection(surveyId, btn) {
-            if (selectedSurveys.has(surveyId)) {
-                selectedSurveys.delete(surveyId);
-                btn.classList.remove('btn-primary', 'text-white');
-                btn.style.border = '2px solid #dee2e6';
-                btn.querySelector('i').className = 'bi bi-circle';
-            } else {
-                selectedSurveys.add(surveyId);
-                btn.classList.add('btn-primary', 'text-white');
-                btn.style.border = '2px solid var(--bk-primary)';
-                btn.querySelector('i').className = 'bi bi-check-circle-fill';
-            }
-            updateSelectionUI();
-        }
-
-        toggleSelectionBtn.addEventListener('click', toggleSelectionMode);
-        cancelSelectionBtn.addEventListener('click', toggleSelectionMode);
-
-        selectBtns.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                const surveyId = this.dataset.surveyId;
-                toggleSurveySelection(surveyId, this);
-            });
+        document.querySelectorAll('.selection-checkbox').forEach(el => {
+            el.style.display = selectionMode ? 'block' : 'none';
         });
 
-        selectAllBtn.addEventListener('click', function() {
+        if (!selectionMode) {
+            // Salimos de selección: limpiar selección
+            selectedSurveys.clear();
+            selectBtns.forEach(btn => {
+                btn.classList.remove('btn-primary', 'text-white');
+                btn.style.border = '2px solid #dee2e6';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'bi bi-circle';
+            });
+        }
+
+        updateSelectionUI();
+    }
+
+    function toggleSurveySelection(surveyId, btn) {
+        if (selectedSurveys.has(surveyId)) {
+            selectedSurveys.delete(surveyId);
+            btn.classList.remove('btn-primary', 'text-white');
+            btn.style.border = '2px solid #dee2e6';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'bi bi-circle';
+        } else {
+            selectedSurveys.add(surveyId);
+            btn.classList.add('btn-primary', 'text-white');
+            btn.style.border = '2px solid var(--bk-primary)';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'bi bi-check-circle-fill';
+        }
+        updateSelectionUI();
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Eventos
+    toggleSelectionBtn.addEventListener('click', toggleSelectionMode);
+    cancelSelectionBtn.addEventListener('click', toggleSelectionMode);
+
+    selectBtns.forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const surveyId = this.dataset.surveyId;
+            if (!surveyId) return;
+            toggleSurveySelection(surveyId, this);
+        });
+    });
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function () {
             selectBtns.forEach(btn => {
                 const surveyId = btn.dataset.surveyId;
+                if (!surveyId) return;
                 if (!selectedSurveys.has(surveyId)) {
                     selectedSurveys.add(surveyId);
                     btn.classList.add('btn-primary', 'text-white');
                     btn.style.border = '2px solid var(--bk-primary)';
-                    btn.querySelector('i').className = 'bi bi-check-circle-fill';
+                    const icon = btn.querySelector('i');
+                    if (icon) icon.className = 'bi bi-check-circle-fill';
                 }
             });
             updateSelectionUI();
         });
+    }
 
-        deselectAllBtn.addEventListener('click', function() {
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function () {
             selectedSurveys.clear();
             selectBtns.forEach(btn => {
                 btn.classList.remove('btn-primary', 'text-white');
                 btn.style.border = '2px solid #dee2e6';
-                btn.querySelector('i').className = 'bi bi-circle';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'bi bi-circle';
             });
             updateSelectionUI();
         });
+    }
 
-        deleteSelectedBtn.addEventListener('click', async function() {
-            if (selectedSurveys.size === 0) {
-                alert('No hay surveys seleccionadas');
-                return;
-            }
-            
-            const count = selectedSurveys.size;
-            const message = count === 1 
-                ? '¿Estás seguro de que deseas eliminar esta survey?'
-                : `¿Estás seguro de que deseas eliminar ${count} surveys?`;
+    // --- BOTÓN ELIMINAR SELECCIONADAS ---
+    deleteSelectedBtn.addEventListener('click', async function () {
+        if (selectedSurveys.size === 0) {
+            showPageAlert('warning', 'Nada para eliminar', 'No hay encuestas seleccionadas.', 4000);
+            return;
+        }
+
+        const count = selectedSurveys.size;
+
+        if (!skipConfirmBulk) {
+            const message = count === 1
+                ? '¿Estás seguro de que deseas eliminar esta encuesta?'
+                : `¿Estás seguro de que deseas eliminar ${count} encuestas?`;
             if (!confirm(message + ' Esta acción no se puede deshacer.')) {
                 return;
             }
-            
+        }
+        skipConfirmBulk = false;
 
-            // Deshabilitar botón y mostrar indicador de progreso
-            const originalBtnText = deleteSelectedBtn.innerHTML;
-            deleteSelectedBtn.disabled = true;
-            deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+        const originalBtnHtml = deleteSelectedBtn.innerHTML;
+        deleteSelectedBtn.disabled = true;
+        deleteSelectedBtn.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
 
+        const ids = Array.from(selectedSurveys);
+        const cardsToDelete = [];
 
-            // OCULTAR encuestas seleccionadas del DOM INMEDIATAMENTE
-            const removedCards = [];
-            selectedSurveys.forEach(id => {
-                const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
-                if (card) {
-                    removedCards.push({id, node: card.parentElement});
-                    card.parentElement.remove(); // Elimina el col-xx contenedor
+        ids.forEach(id => {
+            const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
+            if (card) {
+                card.classList.add('survey-card--deleting');
+                cardsToDelete.push(card);
+            }
+        });
+
+        try {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
+            ids.forEach(id => formData.append('survey_ids', id));
+
+            const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
                 }
             });
-            // Limpiar selección y UI
+
+            if (!response.ok) {
+                const txt = await response.text();
+                throw new Error(txt || ('Error HTTP ' + response.status));
+            }
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (e) {
+                data = { success: true };
+            }
+
+            if (data.success === false) {
+                throw new Error(data.error || 'No se pudieron eliminar las encuestas.');
+            }
+
+            cardsToDelete.forEach(card => card.remove());
             selectedSurveys.clear();
             updateSelectionUI();
-            toggleSelectionMode();
-            // Restablecer botón y mostrar mensaje de éxito INMEDIATAMENTE
-            deleteSelectedBtn.disabled = false;
-            deleteSelectedBtn.innerHTML = originalBtnText;
-            alert('Las encuestas se eliminarán en segundo plano. Puedes continuar usando la plataforma.');
 
-            // Lanzar petición fetch en background (sin await)
-            (async () => {
-                try {
-                    const formData = new FormData();
-                    formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
-                    removedCards.forEach(obj => {
-                        formData.append('survey_ids', obj.id);
-                    });
-                    const controller = new AbortController();
-                    setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutos
-                    await fetch("{% url 'surveys:bulk_delete' %}", {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
-                        },
-                        signal: controller.signal
-                    });
-                } catch (error) {
-                    // Si ocurre error de red, restaurar encuestas y mostrar error
-                    removedCards.forEach(obj => {
-                        if (obj.node && obj.node.parentElement) {
-                            obj.node.parentElement.appendChild(obj.node);
-                        }
-                    });
-                    alert('Error de red al eliminar las encuestas. Por favor, intenta de nuevo.');
-                }
-            })();
-            
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
-                }
-                return cookieValue;
+            if (selectionMode) {
+                toggleSelectionMode();
             }
-            
+
+            const summary = data.message || 'Las encuestas seleccionadas se eliminaron correctamente.';
+            const detail  = data.detail || (
+                data.deleted
+                    ? `Se eliminaron ${data.deleted} encuestas.`
+                    : ''
+            );
+
+            showPageAlert('success', summary, detail, 5000);
+
+        } catch (error) {
+            console.error('Error eliminando encuestas:', error);
+            cardsToDelete.forEach(card => card.classList.remove('survey-card--deleting'));
+            showPageAlert(
+                'danger',
+                'Error al eliminar encuestas',
+                error.message || 'Ocurrió un error al eliminar las encuestas. Intenta de nuevo.',
+                6000
+            );
+        } finally {
+            deleteSelectedBtn.disabled = false;
+            deleteSelectedBtn.innerHTML = originalBtnHtml;
+        }
+    });
+
+    // --- BOTÓN ELIMINAR TODAS ---
+    if (deleteAllBtn) {
+        deleteAllBtn.addEventListener('click', function () {
+            const total = cards.length;
+            if (!total) {
+                showPageAlert('info', 'No hay encuestas', 'No hay encuestas en la lista para eliminar.', 4000);
+                return;
+            }
+
+            const heavyNotice = total >= 5
+                ? ' Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse.'
+                : '';
+            const msg = `¿Quieres eliminar las ${total} encuestas de esta lista? ` +
+                        'Esta acción no se puede deshacer.' + heavyNotice;
+
+            if (!confirm(msg)) return;
+
+            selectedSurveys.clear();
+            selectBtns.forEach(btn => {
+                const surveyId = btn.dataset.surveyId;
+                if (!surveyId) return;
+                selectedSurveys.add(surveyId);
+                btn.classList.add('btn-primary', 'text-white');
+                btn.style.border = '2px solid var(--bk-primary)';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'bi bi-check-circle-fill';
+            });
+            updateSelectionUI();
+
+            skipConfirmBulk = true;
+            deleteSelectedBtn.click();
+        });
+    }
+
+    // Estado inicial: barra oculta
+    bulkActionsBar.style.display = 'none';
+    updateSelectionUI();
+})();
+</script>
+
+<script>
+// -----------------------------------------
+// Borrado individual con estado "eliminando" persistente
+// -----------------------------------------
+document.addEventListener('DOMContentLoaded', function() {
+    const DELETING_KEY = 'surveys_deleting_ids';
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function getDeletingIds() {
+        try { return JSON.parse(localStorage.getItem(DELETING_KEY) || '[]'); } catch { return []; }
+    }
+    function setDeletingIds(ids) {
+        localStorage.setItem(DELETING_KEY, JSON.stringify(ids));
+    }
+    function addDeletingId(id) {
+        const ids = getDeletingIds();
+        if (!ids.includes(id)) {
+            ids.push(id);
+            setDeletingIds(ids);
+        }
+    }
+    function removeDeletingId(id) {
+        setDeletingIds(getDeletingIds().filter(x => x !== id));
+    }
+
+    // Al cargar, aplicar clase a las cards en proceso
+    getDeletingIds().forEach(id => {
+        const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
+        if (card) card.classList.add('survey-card--deleting');
+    });
+
+    // Borrado individual
+    document.addEventListener('click', async function(event) {
+        const btn = event.target.closest('[data-action="delete-survey"]');
+        if (!btn) return;
+
+        event.preventDefault();
+
+        const surveyId = btn.getAttribute('data-survey-id');
+        if (!surveyId) return;
+
+        if (!confirm('¿Seguro que quieres eliminar esta encuesta? Esta acción no se puede deshacer.')) return;
+
+        const card = btn.closest('.survey-card');
+        if (!card) return;
+
+        card.classList.add('survey-card--deleting');
+        addDeletingId(surveyId);
+
+        try {
+            const formData = new URLSearchParams();
+            formData.append('survey_ids', surveyId);
+
+            const csrftoken = getCookie('csrftoken') || '{{ csrf_token }}';
+            const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: formData.toString(),
+            });
+
+            if (!response.ok) throw new Error('Error HTTP ' + response.status);
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'No se pudo eliminar la encuesta.');
+
+            card.remove();
+            removeDeletingId(surveyId);
+
+            const summary = data.message || 'La encuesta se eliminó correctamente.';
+            const detail  = data.detail || '';
+            showPageAlert('success', summary, detail, 5000);
+
+        } catch (err) {
+            console.error('Error eliminando encuesta:', err);
+            card.classList.remove('survey-card--deleting');
+            removeDeletingId(surveyId);
+            showPageAlert(
+                'danger',
+                'No se pudo eliminar la encuesta',
+                err.message || 'Intenta de nuevo.',
+                6000
+            );
+        }
+    });
+});
+</script>
+
+<script>
+// --- Lógica de importación con vista previa + importación múltiple ---
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('importModalPreview');
+    if (!modalElement) return;
+
+    const fileInput      = document.getElementById('csvFileInput');
+    const titleInput     = document.getElementById('surveyTitleInput');
+    const btnAnalyze     = document.getElementById('btn-analyze');
+    const btnConfirm     = document.getElementById('btn-confirm-import');
+    const btnBack        = document.getElementById('btn-back-to-upload');
+    const btnCancel      = document.getElementById('btn-cancel');
+
+    const stepUpload     = document.getElementById('step1-upload');
+    const stepPreview    = document.getElementById('step2-preview');
+    const stepLoading    = document.getElementById('step-loading');
+    const stepError      = document.getElementById('step-error');
+
+    const errorEl        = document.getElementById('error-message');
+    const loadingAnim    = document.getElementById('loading-animation');
+    const loadingTitle   = document.getElementById('loading-title');
+    const loadingText    = document.getElementById('loading-text');
+
+    const totalRowsEl        = document.getElementById('preview-total-rows');
+    const totalQuestionsEl   = document.getElementById('preview-total-questions');
+    const filenameEl         = document.getElementById('preview-filename');
+    const columnsTable       = document.getElementById('preview-columns-table');
+    const sampleHeaderEl     = document.getElementById('preview-sample-header');
+    const sampleBodyEl       = document.getElementById('preview-sample-body');
+
+    if (!fileInput || !btnAnalyze || !btnConfirm || !stepUpload || !stepPreview || !stepLoading || !stepError) {
+        return;
+    }
+
+    let previewData   = null;
+    let isProcessing  = false;
+    let isImporting   = false;
+    let abortController = null;
+
+    function getCsrfToken() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '{{ csrf_token }}';
+    }
+
+    function showStep(step) {
+        stepUpload.style.display  = (step === 'upload')  ? 'block' : 'none';
+        stepPreview.style.display = (step === 'preview') ? 'block' : 'none';
+        stepLoading.style.display = (step === 'loading') ? 'block' : 'none';
+        stepError.style.display   = (step === 'error')   ? 'block' : 'none';
+
+        btnAnalyze.style.display = (step === 'upload') ? 'inline-block' : 'none';
+        btnBack.style.display    = (step === 'preview' || step === 'error') ? 'inline-block' : 'none';
+        btnConfirm.style.display = (step === 'preview') ? 'inline-block' : 'none';
+    }
+
+    function showError(message) {
+        errorEl.textContent = message || 'Error desconocido.';
+        showStep('error');
+    }
+
+    function resetModal() {
+        fileInput.value = '';
+        if (titleInput) titleInput.value = '';
+        previewData = null;
+        showStep('upload');
+    }
+
+    // Reset al abrir el modal
+    modalElement.addEventListener('show.bs.modal', resetModal);
+
+    function renderPreview(data) {
+        const questionColumns = data.columns.filter(c => !c.is_metadata);
+
+        totalRowsEl.textContent      = data.total_rows ?? 0;
+        totalQuestionsEl.textContent = questionColumns.length;
+        filenameEl.textContent       = data.filename || '-';
+
+        const typeIcons = {
+            'scale':    '<i class="bi bi-star-fill text-warning"></i> Escala 1-10',
+            'number':   '<i class="bi bi-123 text-info"></i> Número',
+            'single':   '<i class="bi bi-ui-radios text-primary"></i> Opción única',
+            'multi':    '<i class="bi bi-ui-checks text-success"></i> Múltiple',
+            'text':     '<i class="bi bi-chat-left-text text-secondary"></i> Texto',
+            'timestamp':'<i class="bi bi-clock text-muted"></i> Fecha/Hora',
+            'metadata': '<i class="bi bi-tag text-muted"></i> Metadata'
+        };
+
+        columnsTable.innerHTML = '';
+        data.columns.forEach((col, idx) => {
+            const isMetadata = col.is_metadata || false;
+            const rowClass   = isMetadata ? 'table-secondary opacity-75' : '';
+            const skipBadge  = isMetadata ? '<span class="badge bg-secondary ms-2">Omitida</span>' : '';
+            const uniqueVals = (typeof col.unique_values !== 'undefined') ? col.unique_values : '-';
+            const samples    = Array.isArray(col.sample_values) ? col.sample_values.join(', ') : '-';
+
+            columnsTable.innerHTML += `
+                <tr class="${rowClass}">
+                    <td class="text-center">${idx + 1}</td>
+                    <td><code class="small">${col.name}</code> ${skipBadge}</td>
+                    <td>${typeIcons[col.type] || col.type}</td>
+                    <td class="text-center">${uniqueVals}</td>
+                    <td class="small text-muted">${samples}</td>
+                </tr>
+            `;
+        });
+
+        sampleHeaderEl.innerHTML =
+            '<tr>' + data.columns.map(c => `<th class="small">${c.display_name}</th>`).join('') + '</tr>';
+
+        sampleBodyEl.innerHTML = '';
+        (data.sample_rows || []).forEach(row => {
+            const tds = row.map(val => {
+                if (val === null || val === undefined || val === '') {
+                    return '<td class="small"><span class="text-muted">-</span></td>';
+                }
+                return `<td class="small">${val}</td>`;
+            }).join('');
+            sampleBodyEl.innerHTML += `<tr>${tds}</tr>`;
+        });
+    }
+
+    async function importMultiple(files) {
+        if (!files || !files.length) return;
+
+        isImporting = true;
+        showStep('loading');
+
+        if (loadingAnim) {
+            loadingAnim.innerHTML =
+                '<img src="{% static "img/loading.gif" %}" ' +
+                'alt="Cargando..." style="width: 128px; height: 128px;">';
+        }
+        loadingTitle.textContent = 'Importando datos';
+        loadingText.textContent  =
+            'Importando ' + files.length + ' encuesta' + (files.length > 1 ? 's' : '') + '... Por favor espera.';
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('csv_files', files[i]);
+        }
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        try {
+            const response = await fetch("{% url 'surveys:importar_multiple' %}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                window.location.href = '{% url "surveys:list" %}';
+            } else {
+                let errorMsg = data.error || 'Error al importar';
+                if (data.all_errors && data.all_errors.length > 0) {
+                    errorMsg += '\n\nDetalles:\n' + data.all_errors.join('\n');
+                }
+                showError(errorMsg);
+            }
+        } catch (err) {
+            console.error('Error importando encuestas múltiples:', err);
+            showError('Error de conexión: ' + err.message);
+        } finally {
+            isImporting = false;
+        }
+    }
+
+    if (btnAnalyze && fileInput) {
+        btnAnalyze.addEventListener('click', async function() {
+            const files = fileInput.files;
+            if (!files || files.length === 0) {
+                showError('Selecciona al menos un archivo CSV.');
+                return;
+            }
+
+            // Si hay varios archivos, saltamos preview y vamos directo a importMultiple
+            if (files.length > 1) {
+                await importMultiple(files);
+                return;
+            }
+
+            isProcessing = true;
+            showStep('loading');
+
+            if (loadingAnim) {
+                loadingAnim.innerHTML =
+                    '<div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">' +
+                    '<span class="visually-hidden">Loading...</span></div>';
+            }
+            loadingTitle.textContent = 'Analizando archivo';
+            loadingText.textContent  =
+                'Leyendo encabezados y detectando preguntas, por favor espera...';
+
+            abortController = new AbortController();
+            const formData = new FormData();
+            formData.append('csv_file', files[0]);
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
             try {
-                // Crear FormData para enviar datos
-                const formData = new FormData();
-                formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
-                removedCards.forEach(obj => {
-                    formData.append('survey_ids', obj.id);
-                });
-
-                // Enviar petición asíncrona (no bloquea la UI)
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutos
-
-                const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+                const response = await fetch("{% url 'surveys:importar_preview' %}", {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
-                    },
-                    signal: controller.signal
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                    signal: abortController.signal
                 });
-                clearTimeout(timeoutId);
 
-                if (response.ok || response.redirected || response.status === 302) {
-                    // Restablecer botón
-                    deleteSelectedBtn.disabled = false;
-                    deleteSelectedBtn.innerHTML = originalBtnText;
-                    // Mensaje de éxito (puedes personalizar con Toast, alert, etc.)
-                    alert('Las encuestas se eliminarán en segundo plano. Puedes continuar usando la plataforma.');
+                const data = await response.json();
+                if (data.success) {
+                    previewData = data;
+                    renderPreview(data);
+                    showStep('preview');
                 } else {
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText);
-                    // Restaurar encuestas al DOM si hubo error
-                    removedCards.forEach(obj => {
-                        if (obj.node && obj.node.parentElement) {
-                            obj.node.parentElement.appendChild(obj.node);
-                        }
-                    });
-                    throw new Error('Error al eliminar las encuestas: ' + (errorText || 'Error desconocido'));
+                    showError(data.error || 'Error al analizar el archivo');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                deleteSelectedBtn.disabled = false;
-                deleteSelectedBtn.innerHTML = originalBtnText;
-                // Restaurar encuestas al DOM si hubo error
-                removedCards.forEach(obj => {
-                    if (obj.node && obj.node.parentElement) {
-                        obj.node.parentElement.appendChild(obj.node);
-                    }
-                });
-                // Mensaje más específico según el tipo de error
-                if (error.name === 'AbortError' || error.message.includes('timeout')) {
-                    alert('La eliminación está tardando más de lo esperado. Por favor, espera unos momentos y verifica si las encuestas fueron eliminadas. Si no, intenta de nuevo.');
-                } else if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_RESET')) {
-                    alert('La conexión se perdió durante la eliminación. Esto puede ocurrir con encuestas muy grandes. Por favor, espera unos momentos y verifica si las encuestas fueron eliminadas. Si no, intenta de nuevo.');
-                } else {
-                    alert('Error al eliminar las encuestas: ' + error.message + '. Por favor, intenta de nuevo.');
+                if (error.name !== 'AbortError') {
+                    console.error('Error en preview:', error);
+                    showError('Error de conexión: ' + error.message);
                 }
+            } finally {
+                isProcessing = false;
+                abortController = null;
+            }
+        });
+    }
+
+    if (btnBack) {
+        btnBack.addEventListener('click', function() {
+            if (isProcessing && abortController) {
+                abortController.abort();
+            }
+            showStep('upload');
+        });
+    }
+
+    if (btnConfirm && fileInput) {
+        btnConfirm.addEventListener('click', async function() {
+            const files = fileInput.files;
+            if (!files || files.length === 0) {
+                showError('Selecciona un archivo CSV.');
+                return;
+            }
+
+            isImporting = true;
+            showStep('loading');
+
+            if (loadingAnim) {
+                loadingAnim.innerHTML =
+                    '<div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;">' +
+                    '<span class="visually-hidden">Loading...</span></div>';
+            }
+            loadingTitle.textContent = 'Importando datos';
+            loadingText.textContent  =
+                'Creando la encuesta y generando el análisis...';
+
+            const formData = new FormData();
+            formData.append('csv_file', files[0]);
+            if (titleInput && titleInput.value) {
+                formData.append('survey_title', titleInput.value);
+            }
+            formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+            try {
+                const response = await fetch("{% url 'surveys:importar_nueva' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-CSRFToken': getCsrfToken() }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    if (data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                    } else {
+                        window.location.href = '{% url "surveys:list" %}';
+                    }
+                } else {
+                    showError(data.error || 'Error al importar');
+                }
+            } catch (error) {
+                console.error('Error importando encuesta:', error);
+                showError('Error de conexión: ' + error.message);
+            } finally {
+                isImporting = false;
             }
         });
     }
 });
 </script>
 
+<style>
+.survey-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--card-border-color, #e5e7eb);
+    background-color: var(--card-bg, var(--bs-body-bg));
+}
+.survey-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.15) !important;
+    border-color: var(--bk-primary);
+}
+[data-bs-theme="dark"] .survey-card:hover {
+    box-shadow: none !important;
+    border-color: var(--bk-primary);
+}
+
+.status-dot {
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+.bg-active {
+    background-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+.bg-draft { background-color: #9ca3af; }
+.bg-closed { background-color: #ef4444; }
+
+.action-btn-group .btn {
+    border-radius: 8px;
+}
+
+.survey-select-btn {
+    transition: all 0.2s ease;
+    background-color: white;
+    cursor: pointer;
+}
+.survey-select-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.survey-select-btn.btn-primary {
+    background-color: var(--bk-primary) !important;
+    border-color: var(--bk-primary) !important;
+}
+[data-bs-theme="dark"] .survey-select-btn {
+    background-color: var(--bs-body-bg);
+}
+
+.selection-checkbox {
+    animation: fadeIn 0.2s ease-in;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.survey-card--deleting {
+    opacity: 0.5;
+    filter: grayscale(0.8);
+    pointer-events: none;
+    position: relative;
+}
+.survey-card--deleting::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.7) url('{% static "img/loading.gif" %}') center center no-repeat;
+    background-size: 48px 48px;
+    z-index: 10;
+    border-radius: inherit;
+}
+</style>
 {% endblock %}

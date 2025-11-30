@@ -3,46 +3,103 @@
 # ============================================================
 
 from django.db import connection, transaction
-from surveys.models import Survey
-
-# Ensure Celery helpers and logger are available before defining tasks
-from celery import shared_task
-from django.core.cache import cache
-from django.utils import timezone
-from django.db.models import Count, Avg, F
-from datetime import timedelta
+import time
 import logging
+from django.db import transaction
+from surveys.models import Survey
+from django.core.cache import cache
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('surveys')
 
-
-def perform_delete_surveys(survey_ids, user_id):
+def perform_delete_surveys(survey_ids, user_or_id):
     """
-    Helper that performs the actual deletion synchronously.
-    This can be called from the Celery task or from a background thread
-    when Celery is configured to run in eager/synchronous mode.
-    Returns dict similar to the Celery task.
+    BORRADO SÍNCRONO, SIMPLE Y CONFIABLE
+
+    - Acepta lista de IDs de encuestas.
+    - Acepta tanto un objeto User como un ID de usuario.
+    - Usa el ORM de Django (.delete()) para garantizar borrado real en BD.
+    - Devuelve dict: {'success': bool, 'deleted': int, 'error': str | None}
     """
+
+    # 1) Normalizar user_id
+    if hasattr(user_or_id, "pk"):
+        user_id = user_or_id.pk
+    else:
+        try:
+            user_id = int(user_or_id)
+        except (TypeError, ValueError):
+            logger.error("[DELETE][HELPER] user_or_id inválido: %r", user_or_id)
+            return {'success': False, 'deleted': 0, 'error': 'Invalid user id'}
+
+    start = time.monotonic()
+    logger.info("[DELETE][HELPER] START survey_ids=%s user_id=%s", survey_ids, user_id)
+
     try:
-        owned_ids = list(Survey.objects.filter(id__in=survey_ids, author_id=user_id).values_list('id', flat=True))
-        if not owned_ids:
-            logger.warning(f"[DELETE][HELPER] No owned surveys to delete for user_id={user_id}")
-            return {'success': False, 'deleted': 0, 'error': 'No owned surveys'}
+        # 2) Encapsular en transacción
         with transaction.atomic():
-            with connection.cursor() as cursor:
-                logger.info(f"[DELETE][HELPER] Eliminando encuestas {owned_ids} para user_id={user_id}")
-                # reuse existing fast delete helper from views
-                from surveys.views.crud_views import _fast_delete_surveys
-                _fast_delete_surveys(cursor, owned_ids)
-        for sid in owned_ids:
-            cache.delete(f"survey_stats_{sid}")
-        cache.delete(f"survey_count_user_{user_id}")
-        cache.delete(f"dashboard_data_user_{user_id}")
-        logger.info(f"[DELETE][HELPER] Eliminación completada para {len(owned_ids)} encuestas")
-        return {'success': True, 'deleted': len(owned_ids)}
+            # Filtrar solo encuestas del usuario
+            qs = Survey.objects.filter(id__in=survey_ids, author_id=user_id)
+            owned_ids = list(qs.values_list("id", flat=True))
+
+            if not owned_ids:
+                elapsed = int((time.monotonic() - start) * 1000)
+                logger.warning(
+                    "[DELETE][HELPER] No owned surveys to delete for user_id=%s "
+                    "(survey_ids=%s, elapsed_ms=%d)",
+                    user_id,
+                    survey_ids,
+                    elapsed,
+                )
+                return {'success': False, 'deleted': 0, 'error': 'No owned surveys'}
+
+            # 3) Borrado real en BD (con cascada)
+            deleted_count, _ = qs.delete()
+
+        # 4) Limpiar caches
+        try:
+            cache.delete(f"dashboard_data_user_{user_id}")
+            cache.delete(f"survey_count_user_{user_id}")
+            for sid in owned_ids:
+                cache.delete(f"survey_stats_{sid}")
+        except Exception:
+            logger.exception("[DELETE][HELPER] Error invalidando caché post-delete")
+
+        total_ms = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "[DELETE][HELPER] END surveys=%s user_id=%s deleted=%d total_ms=%d",
+            owned_ids,
+            user_id,
+            deleted_count,
+            total_ms,
+        )
+        return {'success': True, 'deleted': deleted_count, 'error': None}
+
     except Exception as exc:
-        logger.error(f"[DELETE][HELPER] Error: {exc}", exc_info=True)
+        total_ms = int((time.monotonic() - start) * 1000)
+        logger.error(
+            "[DELETE][HELPER] ERROR user_id=%s survey_ids=%s elapsed_ms=%d error=%s",
+            user_id,
+            survey_ids,
+            total_ms,
+            str(exc),
+            exc_info=True,
+        )
         return {'success': False, 'deleted': 0, 'error': str(exc)}
+    except Exception as exc:
+        total_elapsed = int((time.monotonic() - start) * 1000)
+        logger.error(
+            "[DELETE][HELPER] ERROR user_id=%s survey_ids=%s elapsed_ms=%d error=%s",
+            user_id_val,
+            survey_ids,
+            total_elapsed,
+            str(exc),
+            exc_info=True,
+        )
+        return {
+            'success': False,
+            'deleted': 0,
+            'error': str(exc),
+        }
 
 
 @shared_task(
@@ -81,50 +138,72 @@ def delete_surveys_task(self, survey_ids, user_id):
 @shared_task(
     bind=True,
     name='surveys.tasks.generate_pdf_report',
-    queue='reports',
-    max_retries=3,
     default_retry_delay=60,
-)
-def generate_pdf_report(self, survey_id, user_id=None):
-    """
-    Generate PDF report for a survey asynchronously.
-    
-    Args:
-        survey_id: Survey ID
-        user_id: User requesting the report (for notifications)
-    
-    Returns:
-        dict: {'success': bool, 'file_path': str, 'error': str}
-    """
-    try:
-        from surveys.models import Survey
-        from core.reports.pdf_generator import PDFReportGenerator
-        
-        logger.info(f"Starting PDF generation for survey {survey_id}")
-        
-        survey = Survey.objects.select_related('creador').get(id=survey_id)
-        generator = PDFReportGenerator(survey)
-        file_path = generator.generate()
-        
-        logger.info(f"PDF generated successfully: {file_path}")
-        
-        # Store result in cache for 1 hour
-        cache_key = f'pdf_report_{survey_id}_{user_id or "anon"}'
-        cache.set(cache_key, {'status': 'completed', 'file_path': file_path}, 3600)
-        
-        return {'success': True, 'file_path': str(file_path)}
-        
-    except Encuesta.DoesNotExist:
-        logger.error(f"Survey {survey_id} not found")
-        return {'success': False, 'error': 'Survey not found'}
-        
-    except Exception as exc:
-        logger.error(f"Error generating PDF for survey {survey_id}: {exc}")
-        # Retry task
-        raise self.retry(exc=exc)
-
+    import time
+    import logging
+    logger = logging.getLogger('surveys')
 
 @shared_task(
+        """
+        Helper que realiza la eliminación sincrónica.
+        Se usa tanto desde la tarea Celery como desde el hilo en modo eager.
+        Ahora incluye métricas de tiempo para entender el costo real del delete.
+        """
+        start = time.monotonic()
+        logger.info(f"[DELETE][HELPER] START survey_ids={survey_ids} user_id={user_id}")
+        try:
+            owned_ids = list(
+                Survey.objects
+                .filter(id__in=survey_ids, author_id=user_id)
+                .values_list('id', flat=True)
+            )
+            if not owned_ids:
+                elapsed = time.monotonic() - start
+                logger.warning(
+                    f"[DELETE][HELPER] No owned surveys to delete for user_id={user_id} "
+                    f"(elapsed={int(elapsed * 1000)}ms)"
+                )
+                return {'success': False, 'deleted': 0, 'error': 'No owned surveys'}
+
+            sql_start = time.monotonic()
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    # Aquí se llama al eliminador rápido
+                    from surveys.views.crud_views import _fast_delete_surveys
+                    _fast_delete_surveys(cursor, owned_ids)
+            sql_elapsed = time.monotonic() - sql_start
+
+            # Invalidar caches relacionados
+            cache_start = time.monotonic()
+            for sid in owned_ids:
+                cache.delete(f"survey_stats_{sid}")
+            cache.delete(f"survey_count_user_{user_id}")
+            cache.delete(f"dashboard_data_user_{user_id}")
+            cache_elapsed = time.monotonic() - cache_start
+
+            total_elapsed = time.monotonic() - start
+            logger.info(
+                "[DELETE][HELPER] END surveys=%s user_id=%s "
+                "total_ms=%d sql_ms=%d cache_ms=%d",
+                owned_ids,
+                user_id,
+                int(total_elapsed * 1000),
+                int(sql_elapsed * 1000),
+                int(cache_elapsed * 1000),
+            )
+            return {'success': True, 'deleted': len(owned_ids)}
+
+        except Exception as exc:
+            total_elapsed = time.monotonic() - start
+            logger.error(
+                "[DELETE][HELPER] ERROR user_id=%s survey_ids=%s elapsed_ms=%d error=%s",
+                user_id,
+                survey_ids,
+                int(total_elapsed * 1000),
+                str(exc),
+                exc_info=True,
+            )
+            return {'success': False, 'deleted': 0, 'error': str(exc)}
     bind=True,
     name='surveys.tasks.generate_pptx_report',
     queue='reports',

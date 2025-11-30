@@ -61,7 +61,9 @@ def _process_single_csv_import(csv_file, user, override_title=None):
     # 4. Determinar título
     title = override_title if override_title else csv_file.name.replace('.csv', '').replace('_', ' ').title()
 
-    # 5. Crear Estructura y Datos (Transacción Atómica)
+    # 5. Crear Estructura y Datos (Transacción Atómica, bulk_create)
+    import time
+    t0 = time.perf_counter()
     with transaction.atomic():
         # A. Crear Encuesta
         survey = Survey.objects.create(
@@ -71,14 +73,13 @@ def _process_single_csv_import(csv_file, user, override_title=None):
             author=user
         )
 
-        # B. Crear Preguntas y Opciones (Inferencia de tipos)
+        t1 = time.perf_counter()
+        # B. Preparar preguntas en memoria
+        questions = []
         questions_map = {}
-        
         for idx, col_name in enumerate(df.columns):
             sample = df[col_name].dropna()
-            question_type = 'text' # Default
-            
-            # Lógica de inferencia
+            question_type = 'text'
             if pd.api.types.is_numeric_dtype(sample):
                 if not sample.empty and sample.min() >= 0 and sample.max() <= 10:
                     question_type = 'scale'
@@ -89,46 +90,61 @@ def _process_single_csv_import(csv_file, user, override_title=None):
                     question_type = 'multi'
                 elif sample.nunique() < 20:
                     question_type = 'single'
-
-            # Crear Pregunta
-            question = Question.objects.create(
+            q = Question(
                 survey=survey,
                 text=col_name[:500],
                 type=question_type,
                 order=idx
             )
+            questions.append(q)
+            questions_map[col_name] = {'dtype': question_type, 'options': {}, 'order': idx}
 
-            # Preparar metadatos para importación masiva
-            col_data = {
-                'question': question,
-                'dtype': question_type,
-                'options': {}
-            }
+        Question.objects.bulk_create(questions, batch_size=1000)
+        t2 = time.perf_counter()
+        created_questions = list(Question.objects.filter(survey=survey).order_by('order'))
+        for q, col_name in zip(created_questions, df.columns):
+            questions_map[col_name]['question'] = q
 
-            # Crear Opciones si aplica
-            if question_type in ['single', 'multi']:
+        # C. Preparar opciones en memoria
+        options = []
+        for col_name in df.columns:
+            qtype = questions_map[col_name]['dtype']
+            if qtype in ['single', 'multi']:
+                sample = df[col_name].dropna()
                 unique_options = set()
-                if question_type == 'multi':
+                if qtype == 'multi':
                     for items in sample.astype(str):
                         for item in items.split(','):
                             unique_options.add(item.strip())
                 else:
                     unique_options = set(sample.astype(str).unique())
-
                 for i, opt_text in enumerate(sorted(unique_options)):
-                    if not opt_text.strip(): continue
-                    option = AnswerOption.objects.create(
-                        question=question,
+                    if not opt_text.strip():
+                        continue
+                    options.append(AnswerOption(
+                        question=questions_map[col_name]['question'],
                         text=opt_text[:255],
                         order=i
-                    )
-                    col_data['options'][opt_text] = option # Guardar referencia para map
+                    ))
+                    questions_map[col_name]['options'][opt_text] = None
 
-            questions_map[col_name] = col_data
+        if options:
+            AnswerOption.objects.bulk_create(options, batch_size=1000)
+            t3 = time.perf_counter()
+            for col_name in df.columns:
+                q = questions_map[col_name]['question']
+                opts = AnswerOption.objects.filter(question=q)
+                for opt in opts:
+                    questions_map[col_name]['options'][opt.text] = opt
+        else:
+            t3 = time.perf_counter()
 
-        # C. Importación Masiva de Respuestas
+        # D. Importación Masiva de Respuestas
+        t4 = time.perf_counter()
         total_rows, imported_answers = bulk_import_responses_postgres(survey, df, questions_map)
-        
+        t5 = time.perf_counter()
+
+        logger.info(f"Import {csv_file.name}: encuesta={t1-t0:.3f}s, preguntas={t2-t1:.3f}s, opciones={t3-t2:.3f}s, respuestas={t5-t4:.3f}s, total={t5-t0:.3f}s")
         return survey, total_rows, imported_answers
 
 
@@ -156,9 +172,10 @@ def import_survey_view(request):
         
         messages.success(request, f"¡Éxito! Encuesta '{survey.title}' creada con {rows} respuestas.")
         
+        from django.urls import reverse
         return JsonResponse({
             'success': True,
-            'redirect_url': f"/surveys/{survey.id}/results/"
+            'redirect_url': reverse('surveys:resultados', args=[survey.id])
         })
 
     except Exception as e:
