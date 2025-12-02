@@ -110,22 +110,22 @@ def delete_question_view(request, pk):
 
 @login_required
 @require_POST
-def add_question_view(request, survey_pk):
+def add_question_view(request, public_id):
     """Agregar una nueva pregunta a una encuesta (AJAX)."""
     try:
-        survey = get_object_or_404(Survey, pk=survey_pk)
+        survey = get_object_or_404(Survey, public_id=public_id)
     except Http404:
-        logger.warning(f"Intento de agregar pregunta a encuesta inexistente: ID {survey_pk} por usuario {request.user.username}")
+        logger.warning(f"Intento de agregar pregunta a encuesta inexistente: ID {public_id} por usuario {request.user.username}")
         return JsonResponse({'success': False, 'error': 'Encuesta no encontrada'}, status=404)
     
     # Verificar permisos
     if survey.author != request.user:
-        logger.warning(f"Usuario {request.user.username} intentó agregar pregunta a encuesta {survey_pk} sin permisos")
+        logger.warning(f"Usuario {request.user.username} intentó agregar pregunta a encuesta {public_id} sin permisos")
         return JsonResponse({'success': False, 'error': 'Sin permisos'}, status=403)
     
     # Validar que la encuesta esté en borrador
     if survey.status != 'draft':
-        logger.warning(f"Intento de agregar pregunta a encuesta {survey.status} {survey_pk} por {request.user.username}")
+        logger.warning(f"Intento de agregar pregunta a encuesta {survey.status} {public_id} por {request.user.username}")
         return JsonResponse({
             'success': False, 
             'error': 'Solo se pueden agregar preguntas a encuestas en estado borrador'
@@ -145,12 +145,12 @@ def add_question_view(request, survey_pk):
             order=max_order
         )
         
-        logger.info(f"Nueva pregunta {question.id} creada en encuesta {survey_pk} por usuario {request.user.username}")
+        logger.info(f"Nueva pregunta {question.id} creada en encuesta {public_id} por usuario {request.user.username}")
         return JsonResponse({
             'success': True,
             'question_id': question.id
         })
         
     except Exception as e:
-        logger.error(f"Error al crear pregunta en encuesta {survey_pk}: {e}", exc_info=True)
+        logger.error(f"Error al crear pregunta en encuesta {public_id}: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

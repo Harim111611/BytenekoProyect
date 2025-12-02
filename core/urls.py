@@ -10,5 +10,5 @@ urlpatterns = [
     path("reports/powerpoint/", views.report_powerpoint_view, name="report_pptx"),
     path('report/pdf/', views.report_pdf_view, name='report_pdf'),
     # --- NEW ROUTE FOR PREVIEW ---
-    path("reports/preview/<int:pk>/", views.report_preview_ajax, name="report_preview"),
+    path("reports/preview/<str:public_id>/", views.report_preview_ajax, name="report_preview"),
 ]

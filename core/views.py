@@ -64,7 +64,13 @@ def dashboard_view(request):
             goal = s.sample_goal if s.sample_goal > 0 else 1
             progress = int((resp_count / goal) * 100)
             recent_activity.append({
-                'id': s.id, 'titulo': s.title, 'estado': s.status, 'get_estado_display': s.get_status_display(),
+                'id': s.id,
+                'public_id': s.public_id,
+                'titulo': s.title,
+                'title': s.title,
+                'estado': s.status,
+                'status': s.status,
+                'get_estado_display': s.get_status_display(),
                 'respuestas': resp_count, 'objetivo': s.sample_goal, 'progreso_pct': progress,
                 'visual_progress': min(progress, 100), 'fecha': s.updated_at
             })
@@ -81,7 +87,11 @@ def dashboard_view(request):
                 if progress < 30 and s.created_at < seven_days_ago:
                     alerts.append({
                         'id': s.id,
+                        'public_id': s.public_id,
                         'titulo': s.title,
+                        'title': s.title,
+                        'estado': s.status,
+                        'status': s.status,
                         'tipo': 'bajo_rendimiento',
                         'icon': 'bi-exclamation-triangle-fill',
                         'color': 'warning',
@@ -95,7 +105,11 @@ def dashboard_view(request):
             days = (timezone.now() - s.created_at).days
             alerts.append({
                 'id': s.id,
+                'public_id': s.public_id,
                 'titulo': s.title,
+                'title': s.title,
+                'estado': s.status,
+                'status': s.status,
                 'tipo': 'borrador_antiguo',
                 'icon': 'bi-clock-history',
                 'color': 'info',
@@ -113,7 +127,11 @@ def dashboard_view(request):
                 if s.id not in [a['id'] for a in alerts]:  # Avoid duplicates
                     alerts.append({
                         'id': s.id,
+                        'public_id': s.public_id,
                         'titulo': s.title,
+                        'title': s.title,
+                        'estado': s.status,
+                        'status': s.status,
                         'tipo': 'sin_actividad',
                         'icon': 'bi-hourglass-split',
                         'color': 'secondary',
@@ -431,9 +449,10 @@ def reports_page_view(request):
 
 
 @login_required
-def report_preview_ajax(request, pk):
+def report_preview_ajax(request, public_id):
     """AJAX View for report preview."""
     try:
+        identifier_for_log = public_id
         # Validate boolean params
         show_kpis = SurveyValidator.validate_boolean_param(
             request.GET.get('include_kpis', 'true'), 'include_kpis'
@@ -446,9 +465,15 @@ def report_preview_ajax(request, pk):
         )
         
         try:
-            survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), pk=pk)
+            survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), public_id=public_id)
+            identifier_for_log = survey.public_id or public_id
         except Http404:
-            logger.warning(f"Intento AJAX de preview de reporte de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+            logger.warning(
+                "Intento AJAX de preview de reporte de encuesta inexistente: ID %s desde IP %s por usuario %s",
+                public_id,
+                request.META.get('REMOTE_ADDR'),
+                request.user.username,
+            )
             return HttpResponse(json.dumps({'error': 'Encuesta no encontrada'}), content_type='application/json', status=404)
         
         # Permission Check
@@ -472,7 +497,7 @@ def report_preview_ajax(request, pk):
         qs, start = apply_date_filters(qs, start, end, window)
 
         # Generate Cache Key
-        cache_key = f"survey_analysis_{pk}_{start or 'all'}_{end or 'all'}_{window or 'all'}"
+        cache_key = f"survey_analysis_{survey.id}_{start or 'all'}_{end or 'all'}_{window or 'all'}"
         
         # Get Analysis Data
         data = SurveyAnalysisService.get_analysis_data(
@@ -501,7 +526,7 @@ def report_preview_ajax(request, pk):
         logger.error(f"[REPORT][ERROR][VALIDATION] {e}")
         return HttpResponse(str(e), status=400)
     except Exception as e:
-        logger.error(f"[REPORT][ERROR][UNEXPECTED] encuesta={pk} error={e}", exc_info=True)
+        logger.error(f"[REPORT][ERROR][UNEXPECTED] encuesta={identifier_for_log} error={e}", exc_info=True)
         return HttpResponse("Error al generar la vista previa del reporte", status=500)
 
 
@@ -509,15 +534,19 @@ def report_preview_ajax(request, pk):
 @ratelimit(key='user', rate='10/h', method=['GET', 'POST'], block=True)
 def report_pdf_view(request):
     """View to generate and download PDF report."""
+    identifier_for_log = None
     try:
-        survey_id = request.POST.get('survey_id') or request.GET.get('survey_id')
-        survey_id = SurveyValidator.validate_survey_id(survey_id)
-        
+        raw_identifier = request.POST.get('survey_id') or request.GET.get('survey_id')
+        identifier = SurveyValidator.validate_survey_id(raw_identifier)
+        lookup = {'public_id': identifier} if isinstance(identifier, str) else {'pk': identifier}
+        identifier_for_log = identifier
+
         # Load survey with author for template
         survey = get_object_or_404(
             Survey.objects.prefetch_related('questions__options').select_related('author'), 
-            pk=survey_id
+            **lookup
         )
+        identifier_for_log = survey.public_id or survey.id
         
         # Verify permissions
         PermissionHelper.verify_survey_access(survey, request.user)
@@ -558,11 +587,14 @@ def report_pdf_view(request):
         filename = PDFReportGenerator.get_filename(survey)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+    except ValidationError as e:
+        logger.error(f"[PDF][ERROR][VALIDATION] {e}")
+        return HttpResponse(str(e), status=400)
     except ValueError as e:
         logger.error(f"[PDF][ERROR][VALIDATION] {e}")
         return HttpResponse(str(e), status=500)
     except Exception as e:
-        logger.error(f"[PDF][ERROR][UNEXPECTED] error={e}", exc_info=True)
+        logger.error(f"[PDF][ERROR][UNEXPECTED] encuesta={identifier_for_log} error={e}", exc_info=True)
         return HttpResponse("Error generating PDF", status=500)
 
 
@@ -572,14 +604,19 @@ def report_powerpoint_view(request):
     if request.method != 'POST':
         return HttpResponse("Method not allowed.", status=405)
 
+    identifier_for_log = None
     try:
-        survey_id = request.POST.get('survey_id')
-        
+        raw_identifier = request.POST.get('survey_id')
+        identifier = SurveyValidator.validate_survey_id(raw_identifier)
+        lookup = {'public_id': identifier} if isinstance(identifier, str) else {'pk': identifier}
+        identifier_for_log = identifier
+
         # Load survey
         survey = get_object_or_404(
             Survey.objects.prefetch_related('questions__options').select_related('author'), 
-            pk=survey_id
+            **lookup
         )
+        identifier_for_log = survey.public_id or survey.id
         
         # Verify permissions
         PermissionHelper.verify_survey_access(survey, request.user)
@@ -629,12 +666,15 @@ def report_powerpoint_view(request):
             pptx_file.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation'
         )
-        filename = f"Reporte_{survey.id}.pptx"
+        filename = f"Reporte_{survey.public_id or survey.id}.pptx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
         
+    except ValidationError as e:
+        logger.error(f"[PPTX][ERROR][VALIDATION] {e}")
+        return HttpResponse(str(e), status=400)
     except Exception as e:
-        logger.exception(f"Error generating PowerPoint: {e}")
+        logger.exception(f"Error generating PowerPoint: encuesta={identifier_for_log} error={e}")
         return HttpResponse(f"Error generating PowerPoint: {str(e)}", status=500)
 
 

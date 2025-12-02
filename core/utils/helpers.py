@@ -161,6 +161,7 @@ class ResponseDataBuilder:
         
         return [
             status_map.get('active', 0),
+            status_map.get('paused', 0),
             status_map.get('draft', 0),
             status_map.get('closed', 0)
         ]

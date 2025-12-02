@@ -7,7 +7,8 @@ from django.db import transaction, connection
 from surveys.signals import disable_signals, enable_signals
 from surveys.models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
 from django.contrib.auth import get_user_model
-import csv
+import importlib.util
+import sys
 import logging
 from datetime import datetime
 from collections import defaultdict
@@ -85,45 +86,30 @@ class Command(BaseCommand):
         total_question_responses = 0
         
         try:
-            with open(csv_file, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                
-                survey_responses_batch = []
-                csv_rows_batch = []  # Keep CSV data for later processing
-                
-                for row_num, row in enumerate(reader, start=1):
-                    # Create SurveyResponse object (not saved yet)
-                    survey_response = SurveyResponse(
-                        survey=survey,
-                        user=None,
-                        is_anonymous=True
-                    )
-                    survey_responses_batch.append(survey_response)
-                    csv_rows_batch.append(row)
-                    
-                    # STEP 2: Bulk insert when batch is full
-                    if len(survey_responses_batch) >= batch_size:
-                        qr_count = self._process_batch(
-                            survey_responses_batch, 
-                            csv_rows_batch, 
-                            questions_cache,
-                            survey
-                        )
-                        total_survey_responses += len(survey_responses_batch)
-                        total_question_responses += qr_count
-                        
-                        self.stdout.write(
-                            f'Imported {total_survey_responses} survey responses, '
-                            f'{total_question_responses} question responses...',
-                            ending='\r'
-                        )
-                        
-                        # Clear batches to free memory
-                        survey_responses_batch = []
-                        csv_rows_batch = []
-                
-                # Process remaining batch
-                if survey_responses_batch:
+            # Importar pybind_csv dinámicamente para evitar errores si no está compilado
+            pybind_csv_path = 'tools/cpp_csv/pybind_csv.py'
+            spec = importlib.util.spec_from_file_location('pybind_csv', pybind_csv_path)
+            pybind_csv = importlib.util.module_from_spec(spec)
+            sys.modules['pybind_csv'] = pybind_csv
+            spec.loader.exec_module(pybind_csv)
+
+            rows = pybind_csv.read_csv_as_dicts(csv_file)
+
+            survey_responses_batch = []
+            csv_rows_batch = []  # Keep CSV data for later processing
+
+            for row_num, row in enumerate(rows, start=1):
+                # Create SurveyResponse object (not saved yet)
+                survey_response = SurveyResponse(
+                    survey=survey,
+                    user=None,
+                    is_anonymous=True
+                )
+                survey_responses_batch.append(survey_response)
+                csv_rows_batch.append(row)
+
+                # STEP 2: Bulk insert when batch is full
+                if len(survey_responses_batch) >= batch_size:
                     qr_count = self._process_batch(
                         survey_responses_batch, 
                         csv_rows_batch, 
@@ -132,10 +118,31 @@ class Command(BaseCommand):
                     )
                     total_survey_responses += len(survey_responses_batch)
                     total_question_responses += qr_count
-            
+
+                    self.stdout.write(
+                        f'Imported {total_survey_responses} survey responses, '
+                        f'{total_question_responses} question responses...',
+                        ending='\r'
+                    )
+
+                    # Clear batches to free memory
+                    survey_responses_batch = []
+                    csv_rows_batch = []
+
+            # Process remaining batch
+            if survey_responses_batch:
+                qr_count = self._process_batch(
+                    survey_responses_batch, 
+                    csv_rows_batch, 
+                    questions_cache,
+                    survey
+                )
+                total_survey_responses += len(survey_responses_batch)
+                total_question_responses += qr_count
+
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
-            
+
             self.stdout.write(self.style.SUCCESS(
                 f'\n[SUCCESS] Imported in {duration:.2f}s:'
             ))
@@ -145,7 +152,7 @@ class Command(BaseCommand):
             self.stdout.write(f'   - Speed: {total_survey_responses/duration:.0f} surveys/sec')
             if total_question_responses > 0:
                 self.stdout.write(f'   - Speed: {total_question_responses/duration:.0f} answers/sec')
-            
+
         except FileNotFoundError:
             self.stderr.write(self.style.ERROR(f'File not found: {csv_file}'))
         except Exception as e:

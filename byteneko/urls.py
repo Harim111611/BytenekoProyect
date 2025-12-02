@@ -40,7 +40,7 @@ urlpatterns = [
         name="report_pptx",
     ),
     path(
-        "reportes/preview/<int:pk>/",
+        "reportes/preview/<str:public_id>/",
         core_views.report_preview_ajax,
         name="report_preview",
     ),

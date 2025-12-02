@@ -19,12 +19,35 @@
 </head>
 <body id="page-top" class="d-flex flex-column min-vh-100">
     <script>
-        // Script anti-flicker para modo oscuro
+        // Script anti-flicker para modo oscuro y modo auto por hora
         (function() {
-            const savedTheme = localStorage.getItem('theme');
+            const saved = localStorage.getItem('theme');
             const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            const theme = savedTheme || systemTheme;
-            document.documentElement.setAttribute('data-bs-theme', theme);
+            function themeByTime(date) {
+                const h = (date || new Date()).getHours();
+                return (h >= 19 || h < 6) ? 'dark' : 'light';
+            }
+            const initialTheme = saved === 'auto-time'
+                ? themeByTime()
+                : (saved || systemTheme);
+            document.documentElement.setAttribute('data-bs-theme', initialTheme);
+        })();
+    </script>
+    <script>
+        // Re-evaluar automáticamente si está en modo 'auto-time'
+        (function() {
+            const saved = localStorage.getItem('theme');
+            if (saved !== 'auto-time') return;
+            function themeByTime(date) {
+                const h = (date || new Date()).getHours();
+                return (h >= 19 || h < 6) ? 'dark' : 'light';
+            }
+            function apply() {
+                document.documentElement.setAttribute('data-bs-theme', themeByTime());
+            }
+            // Aplicar al cargar y luego cada 15 minutos
+            document.addEventListener('DOMContentLoaded', apply);
+            setInterval(apply, 15 * 60 * 1000);
         })();
     </script>
     <div class="main-content">

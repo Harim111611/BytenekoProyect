@@ -497,6 +497,6 @@ def import_csv_preview_view(request):
 
 
 @login_required
-def import_responses_view(request, pk):
+def import_responses_view(request, public_id):
     """Placeholder para importar respuestas a una encuesta existente"""
-    return redirect("surveys:detail", pk=pk)
+    return redirect("surveys:detail", public_id=public_id)

@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse
 from django.http import Http404
 from django_ratelimit.decorators import ratelimit
 
@@ -19,24 +20,25 @@ logger = logging.getLogger('surveys')
 
 
 @ratelimit(key='ip', rate='60/h', method='POST', block=True)
-def respond_survey_view(request, pk):
+def respond_survey_view(request, public_id):
     """Vista para responder una encuesta pública."""
     try:
         survey = get_object_or_404(
             Survey.objects.prefetch_related('questions__options'),
-            pk=pk
+            public_id=public_id
         )
     except Http404:
-        logger.warning(f"Intento de acceso a encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')}")
+        logger.warning(f"Intento de acceso a encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')}")
         return render(request, 'surveys/not_found.html', {
-            'survey_id': pk,
+            'survey_id': public_id,
             'message': 'La encuesta que intentas responder no existe o ha sido eliminada.'
         }, status=404)
 
     # Validar que la encuesta esté activa usando helper
     if not PermissionHelper.verify_survey_is_active(survey):
         messages.warning(request, "Esta encuesta no está activa actualmente")
-        return redirect('surveys:thanks')
+        thanks_url = f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
+        return redirect(thanks_url)
 
     if request.method == 'POST':
         try:
@@ -116,13 +118,14 @@ def respond_survey_view(request, pk):
                                     )
 
                 logger.info(f"Respuesta registrada exitosamente para encuesta {survey.id}")
-                return redirect('surveys:thanks')
+                thanks_url = f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status=active&success=1"
+                return redirect(thanks_url)
 
         except ValidationError as e:
-            logger.error(f"Error de validación al responder encuesta {pk}: {e}")
+            logger.error(f"Error de validación al responder encuesta {public_id}: {e}")
             messages.error(request, str(e))
         except Exception as e:
-            logger.exception(f"Error inesperado al guardar respuesta de encuesta {pk}: {e}")
+            logger.exception(f"Error inesperado al guardar respuesta de encuesta {public_id}: {e}")
             messages.error(request, "Ocurrió un error al guardar su respuesta. Por favor intente nuevamente.")
 
     return render(request, 'surveys/fill.html', {'survey': survey})

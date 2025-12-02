@@ -3,7 +3,11 @@
 
 {% block styles %}
 <style>
-    body { background-color: #f8f9fa; }
+    body { background-color: #f8f9fa; color: #000 !important; }
+    :root[data-bs-theme="dark"] body,
+    [data-bs-theme="dark"] body {
+        background-color: #212529 !important;
+    }
     .thanks-wrapper {
         min-height: 100vh;
         display: flex;
@@ -19,12 +23,36 @@
         background-color: #fff;
         border-radius: 16px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+        color: #000 !important;
     }
-    .thanks-icon {
-        font-size: 5rem;
-        color: var(--bs-success);
-        animation: scaleIn 0.5s ease-out;
-    }
+        /* Ensure muted text is also readable on white */
+        .thanks-container .text-muted { color: #000 !important; opacity: 0.8; }
+
+        /* Dark mode overrides: force readable black text on white card */
+        :root[data-bs-theme="dark"] .thanks-container,
+        [data-bs-theme="dark"] .thanks-container {
+            background-color: #ffffff !important;
+            color: #000 !important;
+        }
+        :root[data-bs-theme="dark"] .thanks-container h1,
+        :root[data-bs-theme="dark"] .thanks-container h2,
+        :root[data-bs-theme="dark"] .thanks-container h3,
+        :root[data-bs-theme="dark"] .thanks-container p,
+        :root[data-bs-theme="dark"] .thanks-container small,
+        :root[data-bs-theme="dark"] .thanks-container .small,
+        :root[data-bs-theme="dark"] .thanks-container .text-muted {
+            color: #000 !important;
+        }
+        :root[data-bs-theme="dark"] .thanks-container hr { border-color: #e5e7eb !important; }
+        :root[data-bs-theme="dark"] .thanks-container .btn-outline-secondary {
+            color: #212529 !important;
+            background-color: #ffffff !important;
+            border-color: #ced4da !important;
+        }
+        :root[data-bs-theme="dark"] .thanks-container .btn-outline-secondary:hover {
+            background-color: #f8f9fa !important;
+        }
+    .thanks-icon { font-size: 5rem; animation: scaleIn 0.5s ease-out; }
     @keyframes scaleIn {
         from {
             transform: scale(0);
@@ -48,21 +76,37 @@
 {% block content %}
 <div class="thanks-wrapper">
     <div class="thanks-container">
-        <i class="bi bi-check-circle-fill thanks-icon"></i>
-        <h1 class="h3 fw-bold mt-4 mb-2">¡Gracias por tu respuesta!</h1>
-        <p class="text-muted mb-4">Tu opinión ha sido registrada con éxito y es muy valiosa para nosotros.</p>
+        {% if survey_title %}
+        <div class="mb-2">
+            <div class="small text-muted">Encuesta</div>
+            <h2 class="h5 fw-bold m-0">{{ survey_title }}</h2>
+        </div>
+        <hr class="my-3">
+        {% endif %}
+        <i class="bi bi-{{ ui.icon }} thanks-icon text-{{ ui.color }}"></i>
+        <h1 class="h3 fw-bold mt-4 mb-2">{{ ui.title }}</h1>
+        <p class="text-muted mb-4">{{ ui.text }}</p>
         
         {% if user.is_authenticated %}
             <div class="d-flex gap-2 justify-content-center">
                 <a href="{% url 'surveys:list' %}" class="btn btn-primary">
                     <i class="bi bi-house-fill me-2"></i>Ir a mis surveys
                 </a>
+                {% if public_id %}
+                <a href="{% url 'surveys:respond' public_id %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-repeat me-2"></i>Volver al formulario
+                </a>
+                {% endif %}
             </div>
         {% else %}
-            <p class="small text-muted mt-4">
-                <i class="bi bi-info-circle me-1"></i>
-                Puedes cerrar esta ventana ahora
-            </p>
+            {% if public_id %}
+                <a href="{% url 'surveys:respond' public_id %}" class="btn btn-outline-primary">Volver al formulario</a>
+            {% else %}
+                <p class="small text-muted mt-4">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Puedes cerrar esta ventana ahora
+                </p>
+            {% endif %}
         {% endif %}
         
         <div class="powered-by">

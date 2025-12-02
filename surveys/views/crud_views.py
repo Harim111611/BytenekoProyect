@@ -3,11 +3,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
 from django.urls import reverse, reverse_lazy
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.core.cache import cache
 from django.db.models import Count, Prefetch
-from django.core.exceptions import FieldError
+from django.core.exceptions import FieldError, ValidationError
 from django.http import JsonResponse
 from django.db import connection
 from django.conf import settings
@@ -20,6 +20,17 @@ from core.utils.logging_utils import StructuredLogger, log_user_action
 import time
 
 logger = StructuredLogger('surveys')
+
+
+def legacy_survey_redirect_view(request, pk, legacy_path=None):
+    """Redirect old integer-based URLs to the new public_id versions."""
+    survey = get_object_or_404(Survey, pk=pk)
+    base = reverse('surveys:detail', args=[survey.public_id])
+    if legacy_path:
+        cleaned = legacy_path.strip('/')
+        if cleaned:
+            base = f"{base.rstrip('/')}/{cleaned}/"
+    return redirect(base)
 
 
 def _fast_delete_surveys(cursor, survey_ids):
@@ -282,6 +293,8 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     model = Survey
     template_name = 'surveys/detail.html'
     context_object_name = 'survey'
+    slug_field = 'public_id'
+    slug_url_kwarg = 'public_id'
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related(
@@ -307,7 +320,7 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             if host in ('127.0.0.1', 'localhost') and lan_ip:
                 scheme = 'http'
                 base_url = f"{scheme}://{lan_ip}:{port}"
-        respond_path = reverse('surveys:respond', args=[survey.pk])
+        respond_path = reverse('surveys:respond', args=[survey.public_id])
         context['respond_absolute_url'] = f"{base_url}{respond_path}"
         return context
 
@@ -327,13 +340,34 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
         if 'application/json' in content_type:
             try:
                 data = json.loads(request.body)
-                
+
+                # Compatibilidad con payloads antiguos (surveyInfo/titulo/descripcion)
+                legacy_info = data.get('surveyInfo') or {}
+                title = (
+                    data.get('title')
+                    or legacy_info.get('title')
+                    or legacy_info.get('titulo')
+                    or 'Sin título'
+                )
+                description = (
+                    data.get('description')
+                    or legacy_info.get('description')
+                    or legacy_info.get('descripcion')
+                    or ''
+                )
+                category = (
+                    data.get('category')
+                    or legacy_info.get('category')
+                    or legacy_info.get('categoria')
+                    or 'general'
+                )
+
                 # Crear la encuesta (siempre en borrador para encuestas web)
                 survey = Survey.objects.create(
-                    title=data.get('title', 'Sin título'),
-                    description=data.get('description', ''),
+                    title=title,
+                    description=description,
                     status='draft',  # Siempre empieza en borrador
-                    category=data.get('category', 'general'),
+                    category=category,
                     author=request.user,
                     is_imported=False  # Marca explícita de encuesta manual
                 )
@@ -341,16 +375,23 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
                 # Crear las preguntas
                 questions_data = data.get('questions', [])
                 for idx, q_data in enumerate(questions_data):
+                    question_text = (
+                        q_data.get('text')
+                        or q_data.get('title')
+                        or q_data.get('titulo')
+                        or ''
+                    )
+                    question_type = q_data.get('type') or q_data.get('tipo') or 'text'
                     question = Question.objects.create(
                         survey=survey,
-                        text=q_data.get('text', ''),
-                        type=q_data.get('type', 'text'),
+                        text=question_text,
+                        type=question_type,
                         order=idx + 1,
                         is_required=q_data.get('required', True)
                     )
                     
                     # Crear opciones de respuesta si aplica
-                    options = q_data.get('options', [])
+                    options = q_data.get('options') or q_data.get('opciones') or []
                     for opt_idx, opt_text in enumerate(options):
                         if opt_text:
                             AnswerOption.objects.create(
@@ -376,7 +417,7 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
                 return JsonResponse({
                     'success': True,
                     'survey_id': survey.id,
-                    'redirect_url': f'/surveys/{survey.id}/'
+                    'redirect_url': reverse('surveys:detail', args=[survey.public_id])
                 })
                 
             except json.JSONDecodeError:
@@ -413,6 +454,31 @@ class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
     fields = ['title', 'description', 'status']
     template_name = 'surveys/form.html'
     success_url = reverse_lazy('surveys:list')
+    slug_field = 'public_id'
+    slug_url_kwarg = 'public_id'
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if getattr(self, 'object', None) and self.object.is_imported:
+            form.fields.pop('status', None)
+        return form
+
+    def form_valid(self, form):
+        survey = form.instance
+        original_status = Survey.objects.only('status').get(pk=survey.pk).status
+        new_status = form.cleaned_data.get('status', original_status)
+
+        if survey.is_imported:
+            form.instance.status = original_status
+        else:
+            try:
+                survey.validate_status_transition(new_status, from_status=original_status)
+            except ValidationError as exc:
+                form.add_error('status', exc)
+                form.instance.status = original_status
+                return self.form_invalid(form)
+
+        return super().form_valid(form)
 
 
 
@@ -421,6 +487,8 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
     model = Survey
     template_name = 'surveys/confirm_delete.html'
     success_url = reverse_lazy('surveys:list')
+    slug_field = 'public_id'
+    slug_url_kwarg = 'public_id'
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()

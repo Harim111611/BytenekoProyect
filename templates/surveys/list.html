@@ -268,6 +268,9 @@
                                 {% if survey.status == 'active' %}
                                     <span class="status-dot bg-active"></span>
                                     <span class="text-success fw-bold" style="font-size: 0.8rem;">Activa</span>
+                                {% elif survey.status == 'paused' %}
+                                    <span class="status-dot bg-paused"></span>
+                                    <span class="text-warning" style="font-size: 0.8rem;">En pausa</span>
                                 {% elif survey.status == 'draft' %}
                                     <span class="status-dot bg-draft"></span>
                                     <span class="text-muted" style="font-size: 0.8rem;">Borrador</span>
@@ -281,7 +284,7 @@
                         <!-- Título -->
                         <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate"
                             title="{{ survey.title }}">
-                            <a href="{% url 'surveys:detail' survey.pk %}"
+                            <a href="{% url 'surveys:detail' survey.public_id %}"
                                class="text-decoration-none text-body-emphasis stretched-link">
                                 {{ survey.title }}
                             </a>
@@ -307,7 +310,7 @@
 
                         <!-- Botones de acción -->
                         <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
-                            <a href="{% url 'surveys:detail' survey.pk %}"
+                            <a href="{% url 'surveys:results' survey.public_id %}"
                                class="btn btn-sm btn-outline-primary flex-grow-1">
                                 <i class="bi bi-bar-chart-fill me-1"></i> Resultados
                             </a>
@@ -911,10 +914,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (titleInput) titleInput.value = '';
         previewData = null;
         showStep('upload');
+        // Resetear el texto del botón a su estado original
+        btnAnalyze.innerHTML = '<i class="bi bi-search me-2"></i>Ver Vista Previa';
     }
 
     // Reset al abrir el modal
     modalElement.addEventListener('show.bs.modal', resetModal);
+
+    // Actualizar el texto del botón según el número de archivos
+    fileInput.addEventListener('change', function() {
+        const files = fileInput.files;
+        if (files && files.length > 1) {
+            btnAnalyze.innerHTML = '<i class="bi bi-upload me-2"></i>Importar Directamente';
+        } else {
+            btnAnalyze.innerHTML = '<i class="bi bi-search me-2"></i>Ver Vista Previa';
+        }
+    });
 
     function renderPreview(data) {
         const questionColumns = data.columns.filter(c => !c.is_metadata);
@@ -975,8 +990,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (loadingAnim) {
             loadingAnim.innerHTML =
-                '<img src="{% static "img/loading.gif" %}" ' +
-                'alt="Cargando..." style="width: 128px; height: 128px;">';
+                '<div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">' +
+                '<span class="visually-hidden">Loading...</span></div>';
         }
         loadingTitle.textContent = 'Importando datos';
         loadingText.textContent  =
@@ -1165,6 +1180,10 @@ document.addEventListener('DOMContentLoaded', function() {
 .bg-active {
     background-color: #10b981;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+.bg-paused {
+    background-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
 }
 .bg-draft { background-color: #9ca3af; }
 .bg-closed { background-color: #ef4444; }

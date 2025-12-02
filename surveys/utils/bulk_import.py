@@ -9,7 +9,7 @@ import io
 import pandas as pd
 from datetime import datetime
 
-from django.db import transaction
+from django.db import transaction, connection
 from django.utils import timezone
 from django.conf import settings
 
@@ -44,12 +44,23 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
         return 0, 0
 
     chunk_size = getattr(settings, 'SURVEY_IMPORT_CHUNK_SIZE', 1000)
+    
+    # Pre-cachear created_at para evitar llamadas repetidas a datetime.now()
+    base_created_at = datetime.now()
+    if timezone.is_naive(base_created_at):
+        base_created_at = timezone.make_aware(base_created_at)
+    
     with transaction.atomic():
+        # OPTIMIZACIÓN: Desactivar espera de disco para velocidad extrema
+        # Riesgo aceptable: Si la DB crashea <500ms después, se pierden estos datos (el usuario reintenta).
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL synchronous_commit TO OFF;")
+        
         # 1) Crear SurveyResponse en bloque
         survey_responses = []
 
         for row in rows:
-            created_at = datetime.now()
+            created_at = base_created_at
 
             if date_column and date_column in row and row[date_column]:
                 try:
@@ -57,13 +68,12 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
                     if not pd.isna(val):
                         dt = pd.to_datetime(val)
                         created_at = dt.to_pydatetime()
+                        # Asegurar que created_at sea aware si USE_TZ=True
+                        if timezone.is_naive(created_at):
+                            created_at = timezone.make_aware(created_at)
                 except (ValueError, TypeError):
-                    # Si falla, usamos now()
-                    pass
-
-            # Asegurar que created_at sea aware si USE_TZ=True
-            if timezone.is_naive(created_at):
-                created_at = timezone.make_aware(created_at)
+                    # Si falla, usamos base_created_at
+                    created_at = base_created_at
 
             survey_responses.append(
                 SurveyResponse(
@@ -78,6 +88,7 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
 
         # 2) Crear QuestionResponse en bloque
         answer_objects = []
+        new_options_to_create = []  # Para crear opciones en batch
 
         for idx, row in enumerate(rows):
             sr = survey_responses[idx]
@@ -104,11 +115,13 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
                     option = options.get(val_str)
 
                     if option is None:
-                        option = AnswerOption.objects.create(
+                        # Crear nueva opción en memoria, se guardará en batch después
+                        option = AnswerOption(
                             question=question,
                             text=val_str,
-                            order=len(options) + 1,
+                            order=len(options) + len(new_options_to_create) + 1,
                         )
+                        new_options_to_create.append(option)
                         options[val_str] = option  # actualizar cache en questions_map
 
                     answer_objects.append(
@@ -130,11 +143,12 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
                             continue
                         option = options.get(val_str)
                         if option is None:
-                            option = AnswerOption.objects.create(
+                            option = AnswerOption(
                                 question=question,
                                 text=val_str,
-                                order=len(options) + 1,
+                                order=len(options) + len(new_options_to_create) + 1,
                             )
+                            new_options_to_create.append(option)
                             options[val_str] = option
                         answer_objects.append(
                             QuestionResponse(
@@ -181,6 +195,10 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
                             text_value=text_val,
                         )
                     )
+
+        # Crear nuevas opciones en batch ANTES de crear las respuestas
+        if new_options_to_create:
+            AnswerOption.objects.bulk_create(new_options_to_create, batch_size=chunk_size)
 
         if answer_objects:
             QuestionResponse.objects.bulk_create(answer_objects, batch_size=chunk_size)

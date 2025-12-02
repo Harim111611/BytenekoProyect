@@ -21,14 +21,20 @@ class OwnerRequiredMixin(UserPassesTestMixin):
     
     def dispatch(self, request, *args, **kwargs):
         """Intercepta dispatch para manejar Http404."""
-        pk = self.kwargs.get('pk')
-        if pk:
+        identifier = self.kwargs.get('public_id') or self.kwargs.get('pk')
+        lookup_field = 'public_id' if self.kwargs.get('public_id') else 'pk'
+        if identifier:
             try:
-                self.survey_object = get_object_or_404(Survey, pk=pk)
+                self.survey_object = get_object_or_404(Survey, **{lookup_field: identifier})
             except Http404:
-                logger.warning(f"Intento de acceso a encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+                logger.warning(
+                    "Intento de acceso a encuesta inexistente: ID %s desde IP %s por usuario %s",
+                    identifier,
+                    request.META.get('REMOTE_ADDR'),
+                    request.user.username,
+                )
                 return render(request, 'surveys/not_found.html', {
-                    'survey_id': pk,
+                    'survey_id': identifier,
                     'message': 'La encuesta que buscas no existe o ha sido eliminada.'
                 }, status=404)
         return super().dispatch(request, *args, **kwargs)
@@ -36,8 +42,8 @@ class OwnerRequiredMixin(UserPassesTestMixin):
     def test_func(self):
         """Verifica si el usuario es el creador de la encuesta."""
         # Para vistas basadas en clases con pk
-        pk = self.kwargs.get('pk')
-        if pk and hasattr(self, 'survey_object'):
+        identifier = self.kwargs.get('public_id') or self.kwargs.get('pk')
+        if identifier and hasattr(self, 'survey_object'):
             is_owner = self.survey_object.author == self.request.user
             return is_owner
         return True

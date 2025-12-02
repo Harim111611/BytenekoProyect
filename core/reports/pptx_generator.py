@@ -1,6 +1,7 @@
 """
 PowerPoint Report Generator using python-pptx.
-Maneja toda la lógica de creación de presentaciones.
+Generador profesional de reportes en formato PPTX con diseño moderno.
+Version: 2.0 - Professional Edition
 """
 import io
 import os
@@ -20,162 +21,213 @@ from surveys.models import QuestionResponse
 
 
 class PPTXStyleConfig:
-    """Configuración de estilos para presentaciones."""
+    """Configuración profesional de estilos para presentaciones."""
     
-    # Colores de marca
-    BYTE_BLUE = RGBColor(13, 110, 253)
-    BYTE_TEXT = RGBColor(17, 24, 39)
-    BYTE_GRAY = RGBColor(107, 114, 129)
-    BYTE_BG_CARD = RGBColor(248, 249, 250)
-    BYTE_BORDER = RGBColor(222, 226, 230)
-    BYTE_GREEN = RGBColor(15, 118, 110)
-    BYTE_SUCCESS = RGBColor(16, 185, 129)
-    BYTE_WARNING = RGBColor(239, 68, 68)
+    # Paleta de colores corporativos Byteneko
+    BYTE_BLUE = RGBColor(13, 110, 253)          # Azul principal
+    BYTE_DARK_BLUE = RGBColor(10, 88, 202)      # Azul oscuro
+    BYTE_TEXT = RGBColor(17, 24, 39)            # Texto principal
+    BYTE_TEXT_LIGHT = RGBColor(55, 65, 81)      # Texto secundario
+    BYTE_GRAY = RGBColor(107, 114, 129)         # Gris medio
+    BYTE_LIGHT_GRAY = RGBColor(156, 163, 175)   # Gris claro
+    BYTE_BG_CARD = RGBColor(248, 249, 250)      # Fondo de tarjetas
+    BYTE_BG_LIGHT = RGBColor(249, 250, 251)     # Fondo alternativo
+    BYTE_BORDER = RGBColor(222, 226, 230)       # Bordes
+    BYTE_GREEN = RGBColor(15, 118, 110)         # Verde principal
+    BYTE_SUCCESS = RGBColor(16, 185, 129)       # Verde éxito
+    BYTE_WARNING = RGBColor(239, 68, 68)        # Rojo advertencia
+    BYTE_ORANGE = RGBColor(249, 115, 22)        # Naranja
+    BYTE_PURPLE = RGBColor(139, 92, 246)        # Púrpura
+    BYTE_ACCENT = RGBColor(236, 72, 153)        # Rosa acento
     
-    # Dimensiones de diapositivas (16:9)
-    SLIDE_WIDTH = Inches(13.333)
+    # Dimensiones de diapositivas (16:9 - Formato estándar corporativo)
+    SLIDE_WIDTH = Inches(10)
     SLIDE_HEIGHT = Inches(7.5)
 
 
 class PPTXSlideBuilder:
-    """Constructor de diapositivas PowerPoint."""
+    """Constructor profesional de diapositivas PowerPoint con diseño moderno."""
     
     def __init__(self, presentation):
         self.prs = presentation
         self.logo_path = os.path.join(settings.BASE_DIR, 'static', 'img', 'favicon.ico')
         self.has_logo = os.path.exists(self.logo_path)
+        self.style = PPTXStyleConfig
     
     def apply_header(self, slide, title_text):
-        """Aplica encabezado estándar a una diapositiva."""
-        bar_height = Inches(1.0)
+        """Aplica encabezado profesional con gradiente y sombra a una diapositiva."""
+        bar_height = Inches(0.95)
         
-        # Barra principal
+        # Barra principal con diseño profesional
         bar = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE, 0, 0, 
             self.prs.slide_width, bar_height
         )
         bar.fill.solid()
-        bar.fill.fore_color.rgb = PPTXStyleConfig.BYTE_BLUE
+        bar.fill.fore_color.rgb = self.style.BYTE_BLUE
         bar.line.fill.background()
         
-        # Línea de acento
+        # Sombra sutil en la barra
+        bar.shadow.inherit = False
+        
+        # Línea de acento inferior más delgada y elegante
         accent = slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE, 0, Inches(0.96),
-            self.prs.slide_width, Inches(0.04)
+            MSO_SHAPE.RECTANGLE, 0, Inches(0.92),
+            self.prs.slide_width, Inches(0.03)
         )
         accent.fill.solid()
-        accent.fill.fore_color.rgb = PPTXStyleConfig.BYTE_GREEN
+        accent.fill.fore_color.rgb = self.style.BYTE_GREEN
         accent.line.fill.background()
         
-        # Título
-        tb = slide.shapes.add_textbox(Inches(0.6), Inches(0), Inches(10), bar_height)
+        # Título con mejor tipografía
+        tb = slide.shapes.add_textbox(Inches(0.6), Inches(0.18), Inches(7.5), Inches(0.6))
         tf = tb.text_frame
         tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        tf.word_wrap = True
         p = tf.paragraphs[0]
         p.text = title_text
         p.font.color.rgb = RGBColor(255, 255, 255)
-        p.font.size = Pt(24)
+        p.font.size = Pt(26)
         p.font.bold = True
+        p.font.name = 'Segoe UI'
         
-        # Logo o texto
+        # Logo o marca corporativa
         if self.has_logo:
             try:
                 pic_height = Inches(0.6)
                 top_pos = (bar_height - pic_height) / 2
                 slide.shapes.add_picture(
                     self.logo_path,
-                    self.prs.slide_width - Inches(2.0),
+                    self.prs.slide_width - Inches(1.5),
                     top_pos,
                     height=pic_height
                 )
             except:
-                pass
+                self._add_text_logo(slide, bar_height)
         else:
-            tb_logo = slide.shapes.add_textbox(
-                self.prs.slide_width - Inches(2.5), 0,
-                Inches(2.0), bar_height
-            )
-            tf_logo = tb_logo.text_frame
-            tf_logo.vertical_anchor = MSO_ANCHOR.MIDDLE
-            p_logo = tf_logo.paragraphs[0]
-            p_logo.text = "BYTENEKO"
-            p_logo.font.color.rgb = RGBColor(255, 255, 255)
-            p_logo.font.bold = True
-            p_logo.alignment = PP_ALIGN.RIGHT
+            self._add_text_logo(slide, bar_height)
+    
+    def _add_text_logo(self, slide, bar_height):
+        """Agrega logo de texto profesional."""
+        tb_logo = slide.shapes.add_textbox(
+            self.prs.slide_width - Inches(2.0), 0,
+            Inches(1.8), bar_height
+        )
+        tf_logo = tb_logo.text_frame
+        tf_logo.vertical_anchor = MSO_ANCHOR.MIDDLE
+        p_logo = tf_logo.paragraphs[0]
+        p_logo.text = "BYTENEKO"
+        p_logo.font.color.rgb = RGBColor(255, 255, 255)
+        p_logo.font.bold = True
+        p_logo.font.size = Pt(18)
+        p_logo.font.name = 'Segoe UI'
+        p_logo.alignment = PP_ALIGN.RIGHT
     
     def add_footer(self, slide, page_number, total_pages, date_range_label):
-        """Agrega pie de página a una diapositiva."""
+        """Agrega pie de página profesional con separadores visuales."""
+        footer_y = self.prs.slide_height - Inches(0.48)
+        
+        # Línea superior sutil
+        line = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0.5),
+            footer_y - Inches(0.02),
+            self.prs.slide_width - Inches(1.0),
+            Inches(0.01)
+        )
+        line.fill.solid()
+        line.fill.fore_color.rgb = self.style.BYTE_BORDER
+        line.line.fill.background()
+        
+        # Texto del pie de página
         tb = slide.shapes.add_textbox(
-            Inches(0.6),
-            self.prs.slide_height - Inches(0.45),
-            self.prs.slide_width - Inches(1.2),
-            Inches(0.3)
+            Inches(0.5),
+            footer_y,
+            self.prs.slide_width - Inches(1.0),
+            Inches(0.38)
         )
         tf = tb.text_frame
-        tf.vertical_anchor = MSO_ANCHOR.BOTTOM
+        tf.vertical_anchor = MSO_ANCHOR.TOP
         p = tf.paragraphs[0]
-        p.text = f"Página {page_number} de {total_pages} • {date_range_label} • Byteneko Analytics v1.0"
-        p.font.size = Pt(9)
-        p.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-        p.alignment = PP_ALIGN.LEFT
+        p.text = f"Pág. {page_number}/{total_pages}  •  {date_range_label}  •  Byteneko Analytics Platform"
+        p.font.size = Pt(8.5)
+        p.font.color.rgb = self.style.BYTE_GRAY
+        p.font.name = 'Segoe UI'
+        p.alignment = PP_ALIGN.CENTER
     
-    def draw_kpi_card(self, slide, x, y, title, value, color=None, subtitle=None):
-        """Dibuja una tarjeta KPI."""
+    def draw_kpi_card(self, slide, x, y, title, value, color=None, subtitle=None, icon=None):
+        """Dibuja una tarjeta KPI profesional con sombra, iconos y diseño moderno."""
         if color is None:
-            color = PPTXStyleConfig.BYTE_BLUE
+            color = self.style.BYTE_BLUE
         
         value = "--" if value is None else str(value)
-        w_card = Inches(3.6)
-        h_card = Inches(1.9)
+        w_card = Inches(2.95)
+        h_card = Inches(1.75)
         
-        # Sombra
+        # Sombra profesional
         shadow = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE,
-            x + Inches(0.05), y + Inches(0.05),
+            x + Inches(0.03), y + Inches(0.03),
             w_card, h_card
         )
         shadow.fill.solid()
-        shadow.fill.fore_color.rgb = RGBColor(210, 210, 210)
+        shadow.fill.fore_color.rgb = RGBColor(205, 205, 210)
         shadow.line.fill.background()
         
-        # Tarjeta
+        # Tarjeta principal con borde sutil
         card = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w_card, h_card
         )
         card.fill.solid()
-        card.fill.fore_color.rgb = PPTXStyleConfig.BYTE_BG_CARD
-        card.line.color.rgb = PPTXStyleConfig.BYTE_BORDER
+        card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+        card.line.color.rgb = self.style.BYTE_BORDER
+        card.line.width = Pt(1.2)
         
-        # Título
-        tb_title = slide.shapes.add_textbox(x, y + Inches(0.15), w_card, Inches(0.4))
+        # Barra de acento superior
+        accent_bar = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE,
+            x, y,
+            w_card, Inches(0.07)
+        )
+        accent_bar.fill.solid()
+        accent_bar.fill.fore_color.rgb = color
+        accent_bar.line.fill.background()
+        
+        # Título del KPI
+        tb_title = slide.shapes.add_textbox(x + Inches(0.18), y + Inches(0.18), w_card - Inches(0.36), Inches(0.38))
         tf_title = tb_title.text_frame
         tf_title.vertical_anchor = MSO_ANCHOR.TOP
         p1 = tf_title.paragraphs[0]
-        p1.text = title
-        p1.font.size = Pt(13)
-        p1.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-        p1.alignment = PP_ALIGN.CENTER
+        p1.text = title.upper()
+        p1.font.size = Pt(10.5)
+        p1.font.bold = True
+        p1.font.color.rgb = self.style.BYTE_GRAY
+        p1.font.name = 'Segoe UI'
+        p1.alignment = PP_ALIGN.LEFT
         
-        # Valor
-        tb_val = slide.shapes.add_textbox(x, y + Inches(0.4), w_card, Inches(1.0))
+        # Valor principal
+        tb_val = slide.shapes.add_textbox(x + Inches(0.18), y + Inches(0.62), w_card - Inches(0.36), Inches(0.75))
         tf_val = tb_val.text_frame
         tf_val.vertical_anchor = MSO_ANCHOR.MIDDLE
         p2 = tf_val.paragraphs[0]
         p2.text = value
-        p2.font.size = Pt(36)
+        p2.font.size = Pt(38)
         p2.font.bold = True
         p2.font.color.rgb = color
-        p2.alignment = PP_ALIGN.CENTER
+        p2.font.name = 'Segoe UI'
+        p2.alignment = PP_ALIGN.LEFT
         
-        # Subtítulo
+        # Subtítulo opcional
         if subtitle:
-            tb_sub = slide.shapes.add_textbox(x, y + Inches(1.4), w_card, Inches(0.4))
+            tb_sub = slide.shapes.add_textbox(x + Inches(0.18), y + Inches(1.42), w_card - Inches(0.36), Inches(0.28))
             tf_sub = tb_sub.text_frame
+            tf_sub.vertical_anchor = MSO_ANCHOR.BOTTOM
             p_sub = tf_sub.paragraphs[0]
             p_sub.text = subtitle
-            p_sub.font.size = Pt(10)
-            p_sub.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-            p_sub.alignment = PP_ALIGN.CENTER
+            p_sub.font.size = Pt(9.5)
+            p_sub.font.color.rgb = self.style.BYTE_LIGHT_GRAY
+            p_sub.font.name = 'Segoe UI'
+            p_sub.alignment = PP_ALIGN.LEFT
 
 
 class PPTXReportGenerator:
@@ -297,72 +349,118 @@ class PPTXReportGenerator:
     @staticmethod
     def _create_cover_slide(prs, builder, survey, date_range_label,
                            responses_queryset, current_page, total_pages):
-        """Crea slide de portada."""
+        """Crea slide de portada profesional con diseño moderno."""
         slide = prs.slides.add_slide(prs.slide_layouts[6])
         
-        # Barra lateral azul
-        side_width = Inches(4.0)
-        bg = slide.shapes.add_shape(
+        # Fondo con degradado visual simulado con capas
+        bg_main = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height
+        )
+        bg_main.fill.solid()
+        bg_main.fill.fore_color.rgb = RGBColor(249, 250, 251)
+        bg_main.line.fill.background()
+        
+        # Barra lateral azul moderna
+        side_width = Inches(3.5)
+        bg_side = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE, 0, 0, side_width, prs.slide_height
         )
-        bg.fill.solid()
-        bg.fill.fore_color.rgb = PPTXStyleConfig.BYTE_BLUE
-        bg.line.fill.background()
+        bg_side.fill.solid()
+        bg_side.fill.fore_color.rgb = builder.style.BYTE_BLUE
+        bg_side.line.fill.background()
+        
+        # Acento verde en barra lateral
+        accent_bar = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, 0, prs.slide_height - Inches(0.15),
+            side_width, Inches(0.15)
+        )
+        accent_bar.fill.solid()
+        accent_bar.fill.fore_color.rgb = builder.style.BYTE_GREEN
+        accent_bar.line.fill.background()
         
         # Logo si existe
         if builder.has_logo:
             try:
-                logo_w = Inches(2.5)
+                logo_w = Inches(2.0)
                 left_pos = (side_width - logo_w) / 2
-                slide.shapes.add_picture(builder.logo_path, left_pos, Inches(1.0), width=logo_w)
+                slide.shapes.add_picture(builder.logo_path, left_pos, Inches(1.2), width=logo_w)
             except:
                 pass
         
-        # Área derecha con título
+        # Marca de texto en sidebar
+        tb_brand = slide.shapes.add_textbox(
+            Inches(0.3), prs.slide_height - Inches(1.0),
+            side_width - Inches(0.6), Inches(0.6)
+        )
+        tf_brand = tb_brand.text_frame
+        tf_brand.vertical_anchor = MSO_ANCHOR.BOTTOM
+        p_brand = tf_brand.paragraphs[0]
+        p_brand.text = "BYTENEKO\nANALYTICS"
+        p_brand.font.color.rgb = RGBColor(255, 255, 255)
+        p_brand.font.bold = True
+        p_brand.font.size = Pt(14)
+        p_brand.font.name = 'Segoe UI'
+        p_brand.alignment = PP_ALIGN.CENTER
+        
+        # Área derecha con título profesional
         right_area_w = prs.slide_width - side_width
         right_area_start = side_width
-        textbox_h = Inches(4.0)
-        textbox_y = (prs.slide_height - textbox_h) / 2
         
+        # Título principal grande
+        titulo_encuesta = PPTXReportGenerator._clean_title(survey.title, max_len=80)
         tb_title = slide.shapes.add_textbox(
-            right_area_start + Inches(0.5), textbox_y,
-            right_area_w - Inches(1.0), textbox_h
+            right_area_start + Inches(0.6), Inches(1.9),
+            right_area_w - Inches(1.2), Inches(2.6)
         )
         tf_title = tb_title.text_frame
-        tf_title.vertical_anchor = MSO_ANCHOR.MIDDLE
+        tf_title.vertical_anchor = MSO_ANCHOR.TOP
         tf_title.word_wrap = True
-        
-        titulo_encuesta = PPTXReportGenerator._clean_title(survey.title)
         
         p = tf_title.paragraphs[0]
         p.text = titulo_encuesta
-        p.font.size = Pt(44)
+        p.font.size = Pt(46)
         p.font.bold = True
-        p.font.color.rgb = PPTXStyleConfig.BYTE_TEXT
+        p.font.color.rgb = builder.style.BYTE_TEXT
+        p.font.name = 'Segoe UI'
         p.alignment = PP_ALIGN.LEFT
+        p.line_spacing = 1.08
         
+        # Subtítulo elegante
         p_sub = tf_title.add_paragraph()
-        p_sub.text = f"\nReporte generado: {datetime.now().strftime('%d/%m/%Y')}"
-        p_sub.font.size = Pt(16)
-        p_sub.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
+        p_sub.text = "\nReporte Ejecutivo"
+        p_sub.font.size = Pt(22)
+        p_sub.font.color.rgb = builder.style.BYTE_BLUE
+        p_sub.font.bold = False
+        p_sub.font.name = 'Segoe UI Light'
+        p_sub.space_before = Pt(18)
         
-        p_sub2 = tf_title.add_paragraph()
-        p_sub2.text = f"Periodo: {date_range_label}"
-        p_sub2.font.size = Pt(16)
-        p_sub2.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-        
-        # Etiqueta inferior
-        tb_tag = slide.shapes.add_textbox(
-            right_area_start + Inches(0.5),
-            prs.slide_height - Inches(0.8),
-            right_area_w - Inches(1.0),
-            Inches(0.5)
+        # Metadata sin iconos para formalidad
+        tb_meta = slide.shapes.add_textbox(
+            right_area_start + Inches(0.6), Inches(4.9),
+            right_area_w - Inches(1.2), Inches(1.5)
         )
-        p_tag = tb_tag.text_frame.paragraphs[0]
-        p_tag.text = "Byteneko Analytics · Reporte automático"
-        p_tag.font.size = Pt(11)
-        p_tag.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-        p_tag.alignment = PP_ALIGN.RIGHT
+        tf_meta = tb_meta.text_frame
+        
+        p1 = tf_meta.paragraphs[0]
+        p1.text = f"Fecha de Generación: {datetime.now().strftime('%d de %B, %Y')}"
+        p1.font.size = Pt(12.5)
+        p1.font.color.rgb = builder.style.BYTE_TEXT_LIGHT
+        p1.font.name = 'Segoe UI'
+        p1.space_after = Pt(9)
+        
+        p2 = tf_meta.add_paragraph()
+        p2.text = f"Periodo Analizado: {date_range_label}"
+        p2.font.size = Pt(12.5)
+        p2.font.color.rgb = builder.style.BYTE_TEXT_LIGHT
+        p2.font.name = 'Segoe UI'
+        p2.space_after = Pt(9)
+        
+        p3 = tf_meta.add_paragraph()
+        resp_count = responses_queryset.count()
+        p3.text = f"Total de Respuestas: {resp_count:,}"
+        p3.font.size = Pt(12.5)
+        p3.font.color.rgb = builder.style.BYTE_TEXT_LIGHT
+        p3.font.name = 'Segoe UI'
         
         builder.add_footer(slide, current_page, total_pages, date_range_label)
         return current_page + 1
@@ -371,35 +469,35 @@ class PPTXReportGenerator:
     def _create_agenda_slide(prs, builder, current_page, total_pages, date_range_label):
         """Crea slide de agenda."""
         slide = prs.slides.add_slide(prs.slide_layouts[6])
-        builder.apply_header(slide, "Agenda del reporte")
+        builder.apply_header(slide, "Agenda del Reporte")
         
         content_margin = Inches(1.5)
         content_width = prs.slide_width - (content_margin * 2)
         tb_agenda = slide.shapes.add_textbox(
-            content_margin, Inches(2.0), content_width, Inches(4.0)
+            content_margin, Inches(1.9), content_width, Inches(4.2)
         )
         tf_ag = tb_agenda.text_frame
         tf_ag.word_wrap = True
         
         p0 = tf_ag.paragraphs[0]
-        p0.text = "En este reporte encontrarás:"
-        p0.font.size = Pt(20)
+        p0.text = "Contenido del Análisis"
+        p0.font.size = Pt(19)
         p0.font.bold = True
         p0.font.color.rgb = PPTXStyleConfig.BYTE_TEXT
-        p0.space_after = Pt(20)
+        p0.space_after = Pt(18)
         
         bullets = [
-            "Resumen ejecutivo con KPIs clave.",
-            "Mapa de relaciones entre variables (heatmap).",
-            "Conclusiones clave y principales oportunidades de mejora.",
-            "Detalle por pregunta con gráficas y hallazgos específicos."
+            "Resumen ejecutivo con indicadores clave de desempeño.",
+            "Mapa de correlaciones entre variables (heatmap).",
+            "Conclusiones estratégicas y oportunidades de mejora.",
+            "Análisis detallado por pregunta con visualizaciones."
         ]
         for txt in bullets:
             pb = tf_ag.add_paragraph()
             pb.text = f"•  {txt}"
-            pb.font.size = Pt(16)
+            pb.font.size = Pt(15.5)
             pb.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
-            pb.space_after = Pt(14)
+            pb.space_after = Pt(13)
         
         builder.add_footer(slide, current_page, total_pages, date_range_label)
         return current_page + 1
@@ -407,91 +505,126 @@ class PPTXReportGenerator:
     @staticmethod
     def _create_summary_slide(prs, builder, survey, nps_data, avg_sat,
                              responses_queryset, date_range_label, current_page, total_pages):
-        """Crea slide de resumen ejecutivo."""
+        """Crea slide de resumen ejecutivo profesional con KPIs destacados."""
         slide = prs.slides.add_slide(prs.slide_layouts[6])
-        builder.apply_header(slide, "Resumen ejecutivo")
+        builder.apply_header(slide, "Resumen Ejecutivo")
         
-        # Configuración de layout
-        card_w = Inches(3.5)
-        gap = Inches(0.5)
-        total_group_w = (card_w * 3) + (gap * 2)
-        start_x = (prs.slide_width - total_group_w) / 2
+        # Configuración de layout optimizado
+        margin_x = Inches(0.6)
+        content_width = prs.slide_width - (margin_x * 2)
         
-        y_desc = Inches(1.3)
-        h_desc = Inches(0.9)
-        y_kpi = Inches(2.5)
-        y_chart_label = Inches(4.6)
-        y_chart_img = Inches(4.9)
-        h_chart_target = Inches(2.2)
+        # Descripción contextual en tarjeta
+        y_context = Inches(1.15)
+        h_context = Inches(0.75)
         
-        # Descripción
+        card_context = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, margin_x, y_context, content_width, h_context
+        )
+        card_context.fill.solid()
+        card_context.fill.fore_color.rgb = builder.style.BYTE_BG_LIGHT
+        card_context.line.color.rgb = builder.style.BYTE_BORDER
+        card_context.line.width = Pt(0.8)
+        
         first_response_dt = responses_queryset.aggregate(first=Min('created_at'))['first']
-        description_lines = []
-        raw_desc = (getattr(survey, "description", "") or "").strip() # Changed 'descripcion' to 'description' if model allows, or keep original
-        # NOTE: Assuming the model has 'description' based on previous files. If it's 'descripcion', change it back.
-        # Checking models.py... it has 'description'.
-        if raw_desc:
-            description_lines.append(raw_desc)
-        elif first_response_dt:
-            description_lines.append(f"Importada {first_response_dt.date().isoformat()}")
-        if not description_lines:
-            description_lines.append("Sin descripción disponible.")
+        raw_desc = (getattr(survey, "description", "") or "").strip()
         
-        card_desc = slide.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE, start_x, y_desc, total_group_w, h_desc
+        description_text = raw_desc if raw_desc else (
+            f"Encuesta recopilada desde {first_response_dt.date().isoformat()}" if first_response_dt
+            else "Sin descripción disponible"
         )
-        card_desc.fill.solid()
-        card_desc.fill.fore_color.rgb = PPTXStyleConfig.BYTE_BG_CARD
-        card_desc.line.color.rgb = PPTXStyleConfig.BYTE_BORDER
         
-        tb_desc = slide.shapes.add_textbox(
-            start_x + Inches(0.2), y_desc, 
-            total_group_w - Inches(0.4), h_desc
+        tb_context = slide.shapes.add_textbox(
+            margin_x + Inches(0.22), y_context + Inches(0.14),
+            content_width - Inches(0.44), h_context - Inches(0.28)
         )
-        tf = tb_desc.text_frame
-        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-        p_label = tf.paragraphs[0]
-        p_label.text = "Sobre esta encuesta: "
+        tf_context = tb_context.text_frame
+        tf_context.word_wrap = True
+        tf_context.vertical_anchor = MSO_ANCHOR.MIDDLE
+        
+        p_label = tf_context.paragraphs[0]
+        p_label.text = "Contexto: "
         p_label.font.bold = True
-        p_label.font.size = Pt(12)
-        p_label.font.color.rgb = PPTXStyleConfig.BYTE_BLUE
+        p_label.font.size = Pt(11.5)
+        p_label.font.color.rgb = builder.style.BYTE_BLUE
+        p_label.font.name = 'Segoe UI'
+        
         run = p_label.add_run()
-        run.text = " ".join(description_lines)
+        run.text = description_text
         run.font.bold = False
-        run.font.color.rgb = PPTXStyleConfig.BYTE_TEXT
+        run.font.size = Pt(10.5)
+        run.font.color.rgb = builder.style.BYTE_TEXT_LIGHT
+        run.font.name = 'Segoe UI'
         
-        # KPIs
-        builder.draw_kpi_card(slide, start_x, y_kpi, "Total respuestas", responses_queryset.count())
+        # KPIs en grid profesional
+        y_kpis = Inches(2.1)
+        card_w = Inches(2.95)
+        gap = Inches(0.28)
         
+        # Calcular posición centrada para 3 KPIs
+        total_kpi_width = (card_w * 3) + (gap * 2)
+        start_x = (prs.slide_width - total_kpi_width) / 2
+        
+        # KPI 1: Total Respuestas
+        builder.draw_kpi_card(
+            slide, start_x, y_kpis,
+            "Total Respuestas", 
+            responses_queryset.count(),
+            color=builder.style.BYTE_BLUE,
+            subtitle="Participantes"
+        )
+        
+        # KPI 2: NPS Global
         nps_score = nps_data.get('score')
-        nps_text = None if nps_score is None else f"{nps_score:.1f}"
-        nps_color = PPTXStyleConfig.BYTE_BLUE
+        nps_text = "--" if nps_score is None else f"{nps_score:.0f}"
+        nps_color = builder.style.BYTE_BLUE
         if nps_score is not None:
             if nps_score >= 50:
-                nps_color = PPTXStyleConfig.BYTE_SUCCESS
+                nps_color = builder.style.BYTE_SUCCESS
             elif nps_score < 0:
-                nps_color = PPTXStyleConfig.BYTE_WARNING
+                nps_color = builder.style.BYTE_WARNING
         
-        builder.draw_kpi_card(slide, start_x + card_w + gap, y_kpi, "NPS global", nps_text, nps_color)
+        builder.draw_kpi_card(
+            slide, start_x + card_w + gap, y_kpis,
+            "NPS Score",
+            nps_text,
+            color=nps_color,
+            subtitle="Net Promoter Score"
+        )
         
-        avg_sat_text = None if avg_sat is None else f"{avg_sat:.1f}"
-        builder.draw_kpi_card(slide, start_x + (card_w + gap) * 2, y_kpi, "Satisfacción (/10)", avg_sat_text)
+        # KPI 3: Satisfacción Promedio
+        avg_sat_text = "--" if avg_sat is None else f"{avg_sat:.1f}"
+        builder.draw_kpi_card(
+            slide, start_x + (card_w + gap) * 2, y_kpis,
+            "Satisfacción",
+            avg_sat_text,
+            color=builder.style.BYTE_GREEN,
+            subtitle="Promedio sobre 10"
+        )
         
-        # Gráfico NPS
+        # Gráfico de distribución NPS (si existe)
         if nps_data.get('breakdown_chart'):
-            tb_g = slide.shapes.add_textbox(start_x, y_chart_label, total_group_w, Inches(0.3))
-            p_g = tb_g.text_frame.paragraphs[0]
-            p_g.text = "Distribución de sentimiento"
-            p_g.alignment = PP_ALIGN.CENTER
-            p_g.font.size = Pt(11)
-            p_g.font.bold = True
-            p_g.font.color.rgb = PPTXStyleConfig.BYTE_GRAY
+            y_chart_section = Inches(4.2)
             
+            # Título del gráfico
+            tb_chart_title = slide.shapes.add_textbox(
+                margin_x, y_chart_section, content_width, Inches(0.3)
+            )
+            p_chart = tb_chart_title.text_frame.paragraphs[0]
+            p_chart.text = "Distribución de Sentimiento (Promotores vs Detractores)"
+            p_chart.alignment = PP_ALIGN.CENTER
+            p_chart.font.size = Pt(11.5)
+            p_chart.font.bold = True
+            p_chart.font.color.rgb = builder.style.BYTE_TEXT
+            p_chart.font.name = 'Segoe UI'
+            
+            # Imagen del gráfico
             chart_img = io.BytesIO(base64.b64decode(nps_data['breakdown_chart']))
-            aspect_ratio = 5.0 / 3.0
-            chart_width = h_chart_target * aspect_ratio
-            chart_x = (prs.slide_width - chart_width) / 2
-            slide.shapes.add_picture(chart_img, chart_x, y_chart_img, width=chart_width, height=h_chart_target)
+            chart_h = Inches(2.3)
+            chart_w = chart_h * 1.8  # Aspecto 16:9 aprox
+            chart_x = (prs.slide_width - chart_w) / 2
+            chart_y = y_chart_section + Inches(0.4)
+            
+            slide.shapes.add_picture(chart_img, chart_x, chart_y, width=chart_w, height=chart_h)
         
         builder.add_footer(slide, current_page, total_pages, date_range_label)
         return current_page + 1

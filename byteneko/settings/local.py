@@ -89,36 +89,84 @@ TEMPLATES = [
     },
 ]
 
-# 5. LOGGING MINIMALISTA (Elimina lag de disco)
+# 5. LOGGING COMPLETO (mantiene todos los archivos de logs)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            'format': '[{levelname}] {asctime} {name} {module}.{funcName}:{lineno} - {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '[{levelname}] {asctime} - {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
         },
     },
     'handlers': {
         'console': {
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / "logs" / "server.log"),
-            'mode': 'a',
-            'encoding': 'utf-8',
+        'file_app': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'app.log'),
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'file_error': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'error.log'),
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'file_security': {
+            'level': 'WARNING',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'security.log'),
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
+        'file_performance': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'performance.log'),
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 3,
+            'formatter': 'verbose',
+        },
+        'file_server': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(BASE_DIR / 'logs' / 'server.log'),
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
             'formatter': 'verbose',
         },
     },
-    'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',
-    },
     'loggers': {
+        # Django core loggers
         'django': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file_app', 'file_server'],
             'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console', 'file_security'],
+            'level': 'WARNING',
             'propagate': False,
         },
         'django.db.backends': {
@@ -126,12 +174,32 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': False,
         },
+        # Application loggers
+        'core': {
+            'handlers': ['console', 'file_app', 'file_error'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
         'surveys': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'file_app', 'file_error', 'file_server'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'core.performance': {
+            'handlers': ['console', 'file_performance'],
             'level': 'INFO',
             'propagate': False,
         },
-    }
+        'core.security': {
+            'handlers': ['console', 'file_security'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file_app'],
+        'level': 'INFO',
+    },
 }
 # ... aquí van tus otras configuraciones de local.py ...
 # por ejemplo: DATABASES, LOGGING, etc.

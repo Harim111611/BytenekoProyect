@@ -30,7 +30,7 @@
                             <select class="form-select" id="survey_id" name="survey_id" required>
                                 <option value="" disabled selected>Selecciona una survey...</option>
                                 {% for survey in surveys %}
-                                    <option value="{{ survey.pk }}">{{ survey.title }}</option>
+                                    <option value="{{ survey.public_id }}">{{ survey.title }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -204,7 +204,8 @@ document.addEventListener('DOMContentLoaded', function() {
             include_table: checkTable.checked
         });
 
-        const url = "{% url 'report_preview' pk=9999 %}".replace('9999', surveyId);
+        const previewUrlTemplate = "{% url 'report_preview' public_id='__PUBLIC_ID__' %}";
+        const url = previewUrlTemplate.replace('__PUBLIC_ID__', encodeURIComponent(surveyId));
 
         fetch(`${url}?${params.toString()}`)
             .then(r => r.ok ? r.text() : Promise.reject(r.statusText))

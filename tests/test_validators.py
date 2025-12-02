@@ -98,6 +98,13 @@ class TestSurveyValidator:
         assert SurveyValidator.validate_survey_id('123') == 123
         assert SurveyValidator.validate_survey_id('1') == 1
         assert SurveyValidator.validate_survey_id(456) == 456
+        # tolera espacios accidentales
+        assert SurveyValidator.validate_survey_id(' 42 ') == 42
+
+    def test_validate_survey_id_public_identifier(self):
+        """Debe aceptar el nuevo identificador público"""
+        assert SurveyValidator.validate_survey_id('sur-001-0001') == 'SUR-001-0001'
+        assert SurveyValidator.validate_survey_id('SUR-1234-0456') == 'SUR-1234-0456'
     
     def test_validate_survey_id_none_or_empty(self):
         """Debe rechazar None o vacío"""
@@ -117,6 +124,9 @@ class TestSurveyValidator:
         
         with pytest.raises(ValidationError):
             SurveyValidator.validate_survey_id('-5')
+        
+        with pytest.raises(ValidationError):
+            SurveyValidator.validate_survey_id('SUR-1-0001')
     
     def test_validate_boolean_param_true_values(self):
         """Debe reconocer diversos formatos de 'true'"""

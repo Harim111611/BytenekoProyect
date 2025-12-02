@@ -312,6 +312,21 @@
             color: #198754;
             border: 1px solid #198754;
         }
+        .badge.paused {
+            background-color: #f8f1d7;
+            color: #8a6d3b;
+            border: 1px solid #f0ad4e;
+        }
+        .badge.draft {
+            background-color: #e2e3e5;
+            color: #495057;
+            border: 1px solid #ced4da;
+        }
+        .badge.closed {
+            background-color: #f8d7da;
+            color: #842029;
+            border: 1px solid #dc3545;
+        }
 
         .top-survey-item {
             padding: 8px 10px;
@@ -728,6 +743,12 @@
                             👥 {{ survey.response_count }} persona{{ survey.response_count|pluralize }}
                             {% if survey.status == 'active' %}
                                 <span class="badge active">● Activa</span>
+                            {% elif survey.status == 'paused' %}
+                                <span class="badge paused">● En pausa</span>
+                            {% elif survey.status == 'draft' %}
+                                <span class="badge draft">● Borrador</span>
+                            {% elif survey.status == 'closed' %}
+                                <span class="badge closed">● Cerrada</span>
                             {% endif %}
                         </div>
                     </div>
@@ -798,10 +819,12 @@
                 <td style="text-align: center;">
                     {% if survey.status == 'active' %}
                         <span class="badge success" style="font-size: 5.5pt;">Activa</span>
+                    {% elif survey.status == 'paused' %}
+                        <span class="badge paused" style="font-size: 5.5pt;">En pausa</span>
                     {% elif survey.status == 'draft' %}
-                        <span class="badge" style="background-color: #6c757d; color: white; font-size: 5.5pt;">Borrador</span>
+                        <span class="badge draft" style="font-size: 5.5pt;">Borrador</span>
                     {% else %}
-                        <span class="badge warning" style="font-size: 5.5pt;">Cerrada</span>
+                        <span class="badge closed" style="font-size: 5.5pt;">Cerrada</span>
                     {% endif %}
                 </td>
                 <td style="text-align: center; font-weight: 700; color: #0d6efd; font-size: 7pt;">

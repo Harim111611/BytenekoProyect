@@ -430,23 +430,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function submitSurvey() {
         const surveyData = {
-            surveyInfo: {
-                titulo: document.getElementById('surveyTitle').value,
-                descripcion: document.getElementById('surveyDescription').value,
-                categoria: 'General'
-            },
+            title: document.getElementById('surveyTitle').value.trim(),
+            description: document.getElementById('surveyDescription').value.trim(),
+            category: 'general',
             questions: []
         };
 
         document.querySelectorAll('.question-item').forEach(el => {
             const type = el.querySelector('.question-type').value;
             const qData = {
-                titulo: el.querySelector('.question-title').value,
-                tipo: type,
+                text: el.querySelector('.question-title').value.trim(),
+                type: type,
                 required: el.querySelector('.question-required').checked
             };
             if (['single', 'multi'].includes(type)) {
-                qData.opciones = el.querySelector('.question-options').value.split(',').map(s => s.trim()).filter(s => s);
+                qData.options = el.querySelector('.question-options').value
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
             }
             surveyData.questions.push(qData);
         });

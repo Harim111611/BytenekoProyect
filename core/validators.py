@@ -3,6 +3,7 @@ Validadores personalizados para el módulo core
 Centraliza la lógica de validación para mantener consistencia
 """
 from datetime import datetime
+import re
 from django.core.exceptions import ValidationError
 
 
@@ -66,18 +67,36 @@ class SurveyValidator:
     @staticmethod
     def validate_survey_id(survey_id):
         """Valida que el ID de encuesta sea válido."""
-        if not survey_id:
+        if survey_id is None:
             raise ValidationError("ID de encuesta faltante")
-        
-        try:
-            survey_id = int(survey_id)
-            if survey_id <= 0:
-                raise ValueError
-            return survey_id
-        except (ValueError, TypeError):
-            raise ValidationError(
-                f"ID de encuesta inválido: '{survey_id}'. Debe ser un número entero positivo"
-            )
+
+        # Normalizar strings (permite espacios accidentales)
+        if isinstance(survey_id, str):
+            survey_id = survey_id.strip()
+
+        if survey_id == "":
+            raise ValidationError("ID de encuesta faltante")
+
+        # Mantener compatibilidad con IDs numéricos (legacy)
+        if isinstance(survey_id, int) or (isinstance(survey_id, str) and survey_id.isdigit()):
+            try:
+                numeric_id = int(survey_id)
+            except (ValueError, TypeError):
+                numeric_id = None
+
+            if numeric_id is not None and numeric_id > 0:
+                return numeric_id
+
+        # Validar nuevo identificador público (SUR-AAA-BBBB)
+        if isinstance(survey_id, str):
+            normalized_id = survey_id.upper()
+            if re.match(r"^SUR-\d{3,}-\d{4,}$", normalized_id):
+                return normalized_id
+
+        raise ValidationError(
+            f"ID de encuesta inválido: '{survey_id}'. Use un identificador público (ej. SUR-001-0001) "
+            "o un número entero positivo"
+        )
     
     @staticmethod
     def validate_boolean_param(param_value, param_name):

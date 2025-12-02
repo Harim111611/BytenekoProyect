@@ -3,39 +3,9 @@
 
 {% block page_styles %}
 <style>
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        font-size: 0.875rem;
-        font-weight: 500;
-    }
-    .status-badge.active {
-        background-color: rgba(16, 185, 129, 0.1);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    .status-badge.draft {
-        background-color: rgba(156, 163, 175, 0.1);
-        color: #6b7280;
-        border: 1px solid rgba(156, 163, 175, 0.3);
-    }
-    .status-badge.closed {
-        background-color: rgba(239, 68, 68, 0.1);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.3);
-    }
     .info-card {
         background: linear-gradient(135deg, var(--bs-primary-bg-subtle) 0%, var(--bs-secondary-bg-subtle) 100%);
         border-left: 4px solid var(--bs-primary);
-    }
-    
-    /* Estilizar el select de estado */
-    #id_status option {
-        padding: 0.75rem;
-        font-weight: 500;
     }
 </style>
 {% endblock %}
@@ -47,7 +17,7 @@
     <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'surveys:detail' object.pk %}">{{ object.title|truncatechars:30 }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'surveys:detail' object.public_id %}">{{ object.title|truncatechars:30 }}</a></li>
             <li class="breadcrumb-item active" aria-current="page">Editar</li>
         </ol>
     </nav>
@@ -102,40 +72,58 @@
                             {% endif %}
                         </div>
 
-                        <!-- Estado -->
+                        {% if not object.is_imported %}
                         <div class="mb-4">
                             <label for="id_status" class="form-label fw-semibold text-body">
                                 Estado de la survey
                                 <span class="text-danger">*</span>
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Estados de la survey" data-bs-content="Borrador: editable y no visible; Activa: recibe respuestas; Cerrada: ya no acepta respuestas.">
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Cambios de estado" data-bs-content="Activa = recolecta respuestas. En pausa = detiene las respuestas sin volver a borrador. Cerrada = histórico definitivo.">
                                     <i class="bi bi-question-circle"></i>
                                 </a>
                             </label>
-                            <select class="form-select form-select-lg bg-body-tertiary border-0" 
-                                    id="id_status" 
-                                    name="status" 
+                            <select class="form-select form-select-lg bg-body-tertiary border-0"
+                                    id="id_status"
+                                    name="status"
                                     required>
-                                <option value="draft" {% if form.status.value == 'draft' %}selected{% endif %}>
-                                    <i class="bi bi-file-earmark-text"></i> Borrador - No visible para responder
+                                <option value="draft"
+                                        {% if object.status == 'draft' %}selected{% endif %}
+                                        {% if object.status != 'draft' %}disabled{% endif %}>
+                                    📝 Borrador - editable
                                 </option>
-                                <option value="active" {% if form.status.value == 'active' %}selected{% endif %}>
-                                    <i class="bi bi-play-circle"></i> Activa - Aceptando respuestas
+                                <option value="active"
+                                        {% if object.status == 'active' %}selected{% endif %}>
+                                    ✅ Activa - aceptando respuestas
                                 </option>
-                                <option value="closed" {% if form.status.value == 'closed' %}selected{% endif %}>
-                                    <i class="bi bi-lock"></i> Cerrada - No acepta más respuestas
+                                <option value="paused"
+                                        {% if object.status == 'paused' %}selected{% endif %}
+                                        {% if object.status == 'draft' %}disabled{% endif %}>
+                                    ⏸️ En pausa - detiene respuestas
+                                </option>
+                                <option value="closed"
+                                        {% if object.status == 'closed' %}selected{% endif %}>
+                                    🔒 Cerrada - histórico final
                                 </option>
                             </select>
                             <div class="form-text small text-muted">
-                                Solo las surveys activas pueden recibir respuestas
+                                Una vez activada, la encuesta no puede volver a borrador ni modificar preguntas. Usa <strong>En pausa</strong> para detener temporalmente las respuestas.
                             </div>
                             {% if form.status.errors %}
                                 <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
                             {% endif %}
                         </div>
+                        {% else %}
+                        <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
+                            <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
+                            <div>
+                                <p class="mb-1 fw-semibold text-body">Encuesta importada</p>
+                                <p class="mb-0 small text-muted">Este proyecto proviene de un CSV con respuestas registradas y permanece cerrado automáticamente.</p>
+                            </div>
+                        </div>
+                        {% endif %}
 
                         <!-- Botones de Acción -->
                         <div class="d-flex justify-content-between align-items-center pt-4 mt-4 border-top">
-                            <a href="{% url 'surveys:detail' object.pk %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'surveys:detail' object.public_id %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-x-lg me-2"></i>Cancelar
                             </a>
                             <button type="submit" class="btn btn-primary btn-lg px-4">
@@ -187,13 +175,13 @@
                     </h6>
                     
                     <div class="d-grid gap-2">
-                        <a href="{% url 'surveys:results' object.pk %}" class="btn btn-outline-primary btn-sm">
+                        <a href="{% url 'surveys:results' object.public_id %}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-graph-up me-2"></i>Ver Resultados
                         </a>
-                        <a href="{% url 'surveys:respond' object.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <a href="{% url 'surveys:respond' object.public_id %}" class="btn btn-outline-secondary btn-sm" target="_blank">
                             <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
                         </a>
-                        <a href="{% url 'surveys:export' object.pk %}" class="btn btn-outline-success btn-sm">
+                        <a href="{% url 'surveys:export' object.public_id %}" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-download me-2"></i>Exportar CSV
                         </a>
                     </div>

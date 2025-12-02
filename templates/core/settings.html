@@ -43,22 +43,28 @@
                     <p class="text-muted small mb-4">Elige cómo se ve la aplicación.</p>
 
                     <div class="row g-3 text-center">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="theme-option" onclick="setTheme('light')" id="theme-opt-light">
                                 <i class="bi bi-sun-fill theme-icon"></i>
                                 <h6 class="fw-bold mb-0">Claro</h6>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="theme-option" onclick="setTheme('dark')" id="theme-opt-dark">
                                 <i class="bi bi-moon-stars-fill theme-icon"></i>
                                 <h6 class="fw-bold mb-0">Oscuro</h6>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="theme-option" onclick="setTheme('auto')" id="theme-opt-auto">
                                 <i class="bi bi-display theme-icon"></i>
-                                <h6 class="fw-bold mb-0">Automático</h6>
+                                <h6 class="fw-bold mb-0">Auto (sistema)</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="theme-option" onclick="setTheme('auto-time')" id="theme-opt-auto-time">
+                                <i class="bi bi-clock-fill theme-icon"></i>
+                                <h6 class="fw-bold mb-0">Auto (hora)</h6>
                             </div>
                         </div>
                     </div>
@@ -99,12 +105,21 @@
 {{ block.super }}
 <script>
     function setTheme(theme) {
-        if (theme === 'auto') { localStorage.removeItem('theme'); }
-        else { localStorage.setItem('theme', theme); }
+        if (theme === 'auto') {
+            localStorage.setItem('theme', 'auto');
+        } else if (theme === 'auto-time') {
+            localStorage.setItem('theme', 'auto-time');
+        } else {
+            localStorage.setItem('theme', theme);
+        }
 
+        function themeByTime(date){
+            const h = (date || new Date()).getHours();
+            return (h >= 19 || h < 6) ? 'dark' : 'light';
+        }
         const applyTheme = theme === 'auto'
             ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : theme;
+            : (theme === 'auto-time' ? themeByTime() : theme);
 
         document.documentElement.setAttribute('data-bs-theme', applyTheme);
         updateActiveOption(theme);
@@ -113,7 +128,8 @@
     function updateActiveOption(selectedTheme) {
         document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
         const currentStored = localStorage.getItem('theme') || 'auto';
-        const activeEl = document.getElementById('theme-opt-' + currentStored);
+        const activeId = currentStored === 'auto-time' ? 'theme-opt-auto-time' : 'theme-opt-' + currentStored;
+        const activeEl = document.getElementById(activeId);
         if(activeEl) activeEl.classList.add('active');
     }
 

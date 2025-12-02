@@ -1,17 +1,32 @@
 # surveys/models.py
 from django.db import models
+from django.db.models import Max
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 
 class Survey(models.Model):
     """Survey model - Encuesta"""
-    
+
+    STATUS_DRAFT = 'draft'
+    STATUS_ACTIVE = 'active'
+    STATUS_PAUSED = 'paused'
+    STATUS_CLOSED = 'closed'
+
     STATUS_CHOICES = [
-        ('draft', 'Borrador'),
-        ('active', 'Activa'),
-        ('closed', 'Cerrada'),
+        (STATUS_DRAFT, 'Borrador'),
+        (STATUS_ACTIVE, 'Activa'),
+        (STATUS_PAUSED, 'En Pausa'),
+        (STATUS_CLOSED, 'Cerrada'),
     ]
+
+    ALLOWED_TRANSITIONS = {
+        STATUS_DRAFT: {STATUS_DRAFT, STATUS_ACTIVE, STATUS_CLOSED},
+        STATUS_ACTIVE: {STATUS_ACTIVE, STATUS_PAUSED, STATUS_CLOSED},
+        STATUS_PAUSED: {STATUS_PAUSED, STATUS_ACTIVE, STATUS_CLOSED},
+        STATUS_CLOSED: {STATUS_CLOSED},
+    }
 
     title = models.CharField(max_length=255, verbose_name='Title')
     description = models.TextField(null=True, blank=True, verbose_name='Description')
@@ -27,11 +42,27 @@ class Survey(models.Model):
     status = models.CharField(
         max_length=10,
         choices=STATUS_CHOICES,
-        default='draft',
+        default=STATUS_DRAFT,
         verbose_name='Status',
         db_index=True
     )
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Author', db_index=True)
+    author_sequence = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Author Sequence',
+        db_index=True,
+        help_text='Número incremental de la encuesta para el autor'
+    )
+    public_id = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name='Public ID',
+        db_index=True,
+        help_text='Identificador legible mostrado en URLs'
+    )
     sample_goal = models.PositiveIntegerField(default=0, verbose_name='Sample Goal')
     is_imported = models.BooleanField(
         default=False, 
@@ -44,11 +75,52 @@ class Survey(models.Model):
     def __str__(self):
         return self.title
 
+    def get_allowed_status_transitions(self, from_status=None):
+        """Return the allowed status transitions from the provided status."""
+        current_status = from_status or self.status
+        return self.ALLOWED_TRANSITIONS.get(current_status, {current_status})
+
+    def validate_status_transition(self, new_status, *, from_status=None):
+        """Validate if a transition towards `new_status` is allowed."""
+        valid_statuses = {code for code, _ in self.STATUS_CHOICES}
+        if new_status not in valid_statuses:
+            raise ValidationError(f"Estado inválido: {new_status}")
+        if new_status not in self.get_allowed_status_transitions(from_status):
+            raise ValidationError(
+                "La transición solicitada no está permitida."
+            )
+        return True
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Survey'
         verbose_name_plural = 'Surveys'
         db_table = 'surveys_survey'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['author', 'author_sequence'],
+                name='survey_author_sequence_unique'
+            )
+        ]
+
+    def _ensure_public_identifier(self):
+        """Assigns author_sequence and public_id if they are missing."""
+        if not self.author_id:
+            return
+
+        if self.author_sequence is None:
+            qs = self.__class__.objects.filter(author_id=self.author_id)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            max_seq = qs.aggregate(max_seq=Max('author_sequence')).get('max_seq') or 0
+            self.author_sequence = max_seq + 1
+
+        if not self.public_id:
+            self.public_id = f"SUR-{self.author_id:03d}-{self.author_sequence:04d}"
+
+    def save(self, *args, **kwargs):
+        self._ensure_public_identifier()
+        super().save(*args, **kwargs)
 
 
 class Question(models.Model):

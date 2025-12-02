@@ -10,6 +10,7 @@ from .views.crud_views import (
     SurveyUpdateView,
     SurveyDeleteView,
     bulk_delete_surveys_view,
+    legacy_survey_redirect_view,
 )
 
 app_name = "surveys"
@@ -18,17 +19,7 @@ urlpatterns = [
     # CRUD básico de encuestas
     path("", SurveyListView.as_view(), name="list"),
     path("create/", SurveyCreateView.as_view(), name="create"),
-    path("<int:pk>/", SurveyDetailView.as_view(), name="detail"),
-    path("<int:pk>/edit/", SurveyUpdateView.as_view(), name="edit"),
-    path("<int:pk>/delete/", SurveyDeleteView.as_view(), name="delete"),
 
-    # Cambiar estado de una encuesta (activar / desactivar)
-    path(
-        "<int:pk>/change-status/",
-        report_views.change_survey_status,
-        name="change_status",
-    ),
-    
     # Operaciones CRUD de preguntas (inline desde detail view)
     path(
         "questions/<int:pk>/update/",
@@ -39,19 +30,6 @@ urlpatterns = [
         "questions/<int:pk>/delete/",
         question_views.delete_question_view,
         name="question_delete",
-    ),
-    path(
-        "<int:survey_pk>/questions/add/",
-        question_views.add_question_view,
-        name="question_add",
-    ),
-
-    # Importar respuestas a una encuesta existente
-    # (CSV con columnas mapeadas a preguntas ya creadas)
-    path(
-        "<int:pk>/import/",
-        import_views.import_responses_view,
-        name="import",
     ),
 
     # Importar nueva encuesta desde CSV (flujo normal, síncrono)
@@ -82,30 +60,6 @@ urlpatterns = [
         name="bulk_delete",
     ),
 
-    # Responder encuesta pública
-    path(
-        "<int:pk>/respond/",
-        respond_views.respond_survey_view,
-        name="respond",
-    ),
-
-    # Resultados y exportación
-    path(
-        "<int:pk>/results/",
-        report_views.survey_results_view,
-        name="results",
-    ),
-    path(
-        "<int:pk>/results/debug/",
-        report_views.debug_analysis_view,
-        name="results_debug",
-    ),
-    path(
-        "<int:pk>/export/",
-        report_views.export_survey_csv_view,
-        name="export",
-    ),
-
     # Pantalla de agradecimiento al terminar una encuesta
     path(
         "thanks/",
@@ -118,9 +72,6 @@ urlpatterns = [
     # ===============================
 
     # Endpoint para lanzar una importación asíncrona
-    # - Crea un ImportJob
-    # - Dispara la tarea Celery process_survey_import
-    # - Devuelve JSON con job_id y estado inicial
     path(
         "import-async/",
         import_views.import_survey_csv_async,
@@ -128,10 +79,61 @@ urlpatterns = [
     ),
 
     # Endpoint para consultar el estado de un ImportJob (polling desde el frontend)
-    # - Devuelve: status, processed_rows, total_rows, error_message, survey_id, etc.
     path(
         "import-job/<int:job_id>/status/",
         import_views.import_job_status,
         name="import_job_status",
+    ),
+
+    # Rutas legadas basadas en pk entero: redirigir a public_id
+    path(
+        "<int:pk>/<path:legacy_path>/",
+        legacy_survey_redirect_view,
+        name="legacy_survey_with_path",
+    ),
+    path(
+        "<int:pk>/",
+        legacy_survey_redirect_view,
+        name="legacy_survey",
+    ),
+
+    # Rutas modernas con identificador público
+    path("<str:public_id>/", SurveyDetailView.as_view(), name="detail"),
+    path("<str:public_id>/edit/", SurveyUpdateView.as_view(), name="edit"),
+    path("<str:public_id>/delete/", SurveyDeleteView.as_view(), name="delete"),
+    path(
+        "<str:public_id>/change-status/",
+        report_views.change_survey_status,
+        name="change_status",
+    ),
+    path(
+        "<str:public_id>/questions/add/",
+        question_views.add_question_view,
+        name="question_add",
+    ),
+    path(
+        "<str:public_id>/import/",
+        import_views.import_responses_view,
+        name="import",
+    ),
+    path(
+        "<str:public_id>/respond/",
+        respond_views.respond_survey_view,
+        name="respond",
+    ),
+    path(
+        "<str:public_id>/results/",
+        report_views.survey_results_view,
+        name="results",
+    ),
+    path(
+        "<str:public_id>/results/debug/",
+        report_views.debug_analysis_view,
+        name="results_debug",
+    ),
+    path(
+        "<str:public_id>/export/",
+        report_views.export_survey_csv_view,
+        name="export",
     ),
 ]

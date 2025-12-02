@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.db.models import Count, Avg, Q, Min, Max
 from django.db.models.functions import TruncDate
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse
@@ -160,13 +161,13 @@ def _has_date_fields(survey_id):
 
 @login_required
 @ratelimit(key='user', rate='10/h', method='GET', block=True)
-def export_survey_csv_view(request, pk):
+def export_survey_csv_view(request, public_id):
     """Exportar resultados de encuesta a CSV."""
     
     try:
-        survey = get_object_or_404(Survey, pk=pk, author=request.user)
+        survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
     except Http404:
-        logger.warning(f"Intento de exportar CSV de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+        logger.warning(f"Intento de exportar CSV de encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
         messages.error(request, "La encuesta solicitada no existe o fue eliminada.")
         return redirect('dashboard')
     
@@ -178,7 +179,7 @@ def export_survey_csv_view(request, pk):
     
     if not respuestas.exists():
         messages.warning(request, "No hay respuestas para exportar en esta encuesta.")
-        return redirect('surveys:results', pk=pk)
+        return redirect('surveys:results', public_id=public_id)
     
     # Crear respuesta HTTP con CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -250,7 +251,7 @@ def export_survey_csv_view(request, pk):
 # ============================================================
 
 @login_required
-def survey_results_view(request, pk):
+def survey_results_view(request, public_id):
     """
     Vista INDIVIDUAL de resultados - OPTIMIZADA.
     Usa caché agresivo y carga diferida.
@@ -260,20 +261,21 @@ def survey_results_view(request, pk):
     try:
         survey = get_object_or_404(
             Survey.objects.select_related('author').prefetch_related('questions__options'),
-            pk=pk
+            public_id=public_id
         )
     except Http404:
-        logger.warning(f"Intento de acceso a resultados de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+        logger.warning(f"Intento de acceso a resultados de encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
         return render(request, 'surveys/not_found.html', {
-            'survey_id': pk,
+            'survey_id': public_id,
             'message': 'La encuesta cuyos resultados intentas ver no existe o ha sido eliminada.'
         }, status=404)
     
     # 2. Verificar permisos
     PermissionHelper.verify_survey_access(survey, request.user)
+    survey_id = survey.pk
     
     # 3. Obtener estadísticas rápidas (cacheadas)
-    quick_stats = _get_survey_quick_stats(pk, request.user.id)
+    quick_stats = _get_survey_quick_stats(survey_id, request.user.id)
     total_respuestas = quick_stats['total']
     
     # 4. Procesar filtros de fecha (solo si hay filtros)
@@ -302,12 +304,12 @@ def survey_results_view(request, pk):
         
         # Para filtros, usar análisis sin caché (datos específicos)
         # Cache key versioned to include demographic aggregation changes
-        cache_key = f"survey_results_v11_{pk}_{start}_{end}_{segment_col}_{segment_val}_{segment_demo}"
+        cache_key = f"survey_results_v11_{survey_id}_{start}_{end}_{segment_col}_{segment_val}_{segment_demo}"
         use_base_filter = False  # Use filtered IDs
     else:
         # Sin filtros: usar caché base
         respuestas_qs = SurveyResponse.objects.filter(survey=survey)
-        cache_key = f"survey_results_base_v11_{pk}"
+        cache_key = f"survey_results_base_v11_{survey_id}"
         use_base_filter = True  # Use direct survey_id (fastest)
     
     # 6. Obtener análisis (con caché)
@@ -320,7 +322,7 @@ def survey_results_view(request, pk):
     )
     
     # 7. Obtener tendencia (cacheada)
-    trend_data = _get_trend_data_fast(pk, days=14) if not has_filters else None
+    trend_data = _get_trend_data_fast(survey_id, days=14) if not has_filters else None
     
     # Si hay filtros, calcular tendencia específica
     if has_filters and total_respuestas > 0:
@@ -385,7 +387,7 @@ def survey_results_view(request, pk):
         'filter_demo': segment_demo,
         'has_filters': has_filters,
         'ignored_questions': analysis_result.get('ignored_questions', []),
-        'has_date_fields': _has_date_fields(pk),
+        'has_date_fields': _has_date_fields(survey_id),
     }
     
     return render(request, 'surveys/results.html', context)
@@ -459,15 +461,15 @@ def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segme
 # ============================================================
 
 @login_required
-def survey_analysis_ajax(request, pk):
+def survey_analysis_ajax(request, public_id):
     """
     API endpoint para cargar análisis bajo demanda.
     Útil para carga diferida de gráficos pesados.
     """
     try:
-        survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), pk=pk)
+        survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), public_id=public_id)
     except Http404:
-        logger.warning(f"Intento AJAX de acceso a análisis de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+        logger.warning(f"Intento AJAX de acceso a análisis de encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
         return JsonResponse({'error': 'Encuesta no encontrada'}, status=404)
     
     try:
@@ -476,7 +478,7 @@ def survey_analysis_ajax(request, pk):
         return JsonResponse({'error': 'Sin permisos'}, status=403)
     
     # Usar caché base
-    cache_key = f"survey_results_base_{pk}"
+    cache_key = f"survey_results_base_{survey.pk}"
     respuestas_qs = SurveyResponse.objects.filter(survey=survey)
     
     analysis = SurveyAnalysisService.get_analysis_data(
@@ -494,13 +496,13 @@ def survey_analysis_ajax(request, pk):
 
 
 @login_required
-def debug_analysis_view(request, pk):
+def debug_analysis_view(request, public_id):
     """DEBUG only: return lightweight analysis summary for a survey (JSON)."""
     
     try:
-        survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), pk=pk)
+        survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), public_id=public_id)
     except Http404:
-        logger.warning(f"Intento DEBUG de acceso a encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+        logger.warning(f"Intento DEBUG de acceso a encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
         return JsonResponse({'error': 'Encuesta no encontrada'}, status=404)
     
     PermissionHelper.verify_survey_access(survey, request.user)
@@ -527,12 +529,73 @@ def debug_analysis_view(request, pk):
 
 # --- Vista de agradecimiento ---
 def survey_thanks_view(request):
-    return render(request, 'surveys/thanks.html')
+    """Thank-you page that adapts content to survey status.
+
+    Accepts optional query params:
+    - public_id: survey identifier to link back if needed
+    - status: one of draft|active|paused|closed
+    - success: '1' when a response was recorded successfully
+    """
+    status = (request.GET.get('status') or '').lower()
+    success = request.GET.get('success') == '1'
+    public_id = request.GET.get('public_id')
+    survey_title = None
+    if public_id:
+        try:
+            s = Survey.objects.only('title').filter(public_id=public_id).first()
+            if s:
+                survey_title = s.title
+        except Exception:
+            survey_title = None
+
+    # Default to active success if unspecified
+    if not status and success:
+        status = 'active'
+
+    # Build UI hints
+    messages_map = {
+        'active_success': {
+            'icon': 'check-circle-fill',
+            'color': 'success',
+            'title': '¡Gracias por tu respuesta!',
+            'text': 'Tu opinión ha sido registrada con éxito y es muy valiosa para nosotros.'
+        },
+        'paused': {
+            'icon': 'pause-circle-fill',
+            'color': 'secondary',
+            'title': 'Encuesta en pausa',
+            'text': 'Este formulario no acepta respuestas por el momento. Intenta más tarde.'
+        },
+        'draft': {
+            'icon': 'tools',
+            'color': 'warning',
+            'title': 'Encuesta en preparación',
+            'text': 'El autor aún está configurando esta encuesta. Vuelve pronto.'
+        },
+        'closed': {
+            'icon': 'lock-fill',
+            'color': 'danger',
+            'title': 'Encuesta finalizada',
+            'text': 'Este formulario dejó de aceptar respuestas. ¡Gracias por tu interés!'
+        }
+    }
+
+    key = 'active_success' if success and status == 'active' else status
+    ui = messages_map.get(key) or messages_map['active_success']
+
+    context = {
+        'status': status or 'active',
+        'success': success,
+        'public_id': public_id,
+        'ui': ui,
+        'survey_title': survey_title,
+    }
+    return render(request, 'surveys/thanks.html', context)
 
 
 # --- Cambiar estado de encuesta ---
 @login_required
-def change_survey_status(request, pk):
+def change_survey_status(request, public_id):
     """
     Change the status of a survey (draft, active, closed).
     """
@@ -540,14 +603,14 @@ def change_survey_status(request, pk):
         return JsonResponse({'error': 'Método no permitido'}, status=405)
     
     try:
-        survey = get_object_or_404(Survey, pk=pk, author=request.user)
+        survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
     except Http404:
-        logger.warning(f"Intento de cambiar estado de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+        logger.warning(f"Intento de cambiar estado de encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
         return JsonResponse({'error': 'Encuesta no encontrada'}, status=404)
     
     # Verificar si la encuesta es importada
     if survey.is_imported:
-        logger.warning(f"Intento de cambiar estado de encuesta importada: ID {pk} por usuario {request.user.username}")
+        logger.warning(f"Intento de cambiar estado de encuesta importada: ID {public_id} por usuario {request.user.username}")
         return JsonResponse({
             'error': 'Las encuestas importadas desde CSV no pueden cambiar de estado. Permanecen siempre activas.'
         }, status=403)
@@ -555,13 +618,22 @@ def change_survey_status(request, pk):
     try:
         data = json.loads(request.body)
         new_status = data.get('status', data.get('estado'))
-        valid_statuses = ['draft', 'active', 'closed']
+        valid_statuses = {code for code, _ in Survey.STATUS_CHOICES}
         if new_status not in valid_statuses:
             return JsonResponse({'error': 'Estado no válido'}, status=400)
+
         previous_status = survey.status
+        if new_status == previous_status:
+            return JsonResponse({'success': True, 'new_status': new_status})
+
+        try:
+            survey.validate_status_transition(new_status)
+        except ValidationError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+
         survey.status = new_status
         survey.save(update_fields=['status'])
-        cache.delete(f"survey_quick_stats_{pk}")
+        cache.delete(f"survey_quick_stats_{survey.pk}")
         log_data_change(
             'UPDATE',
             'Survey',
@@ -575,5 +647,5 @@ def change_survey_status(request, pk):
             'mensaje': f'Estado actualizado a {dict(Survey.STATUS_CHOICES).get(new_status, new_status)}'
         })
     except Exception as e:
-        logger.exception(f"Error al cambiar estado de encuesta {pk}: {e}")
+        logger.exception(f"Error al cambiar estado de encuesta {public_id}: {e}")
         return JsonResponse({'error': str(e)}, status=500)
