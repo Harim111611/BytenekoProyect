@@ -187,13 +187,13 @@
                     </h6>
                     
                     <div class="d-grid gap-2">
-                        <a href="{% url 'surveys:resultados' object.pk %}" class="btn btn-outline-primary btn-sm">
+                        <a href="{% url 'surveys:results' object.pk %}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-graph-up me-2"></i>Ver Resultados
                         </a>
-                        <a href="{% url 'surveys:responder' object.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <a href="{% url 'surveys:respond' object.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank">
                             <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
                         </a>
-                        <a href="{% url 'surveys:exportar' object.pk %}" class="btn btn-outline-success btn-sm">
+                        <a href="{% url 'surveys:export' object.pk %}" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-download me-2"></i>Exportar CSV
                         </a>
                     </div>

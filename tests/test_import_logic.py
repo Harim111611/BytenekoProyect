@@ -1,12 +1,10 @@
 import pytest
 import os
 import django
-import pandas as pd
-from django.db import transaction
-from surveys.models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
+
+from surveys.models import ImportJob, Survey
 from django.contrib.auth.models import User
-from core.validators import CSVImportValidator
-from datetime import datetime
+from surveys.tasks import process_survey_import
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
 django.setup()
@@ -26,55 +24,13 @@ def test_import_logic():
         print(f"Procesando: {csv_filename}")
         print('='*80)
         try:
-            # Leer archivo
-            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
-            df = None
-            for encoding in encodings:
-                try:
-                    df = pd.read_csv(csv_filename, encoding=encoding)
-                    print(f"✓ Leído con: {encoding}")
-                    break
-                except:
-                    continue
-            if df is None:
-                print("✗ No se pudo leer")
-                continue
-            # Validar
-            df = CSVImportValidator.validate_dataframe(df)
-            print(f"✓ Validado: {len(df)} filas, {len(df.columns)} columnas")
-            # Título
-            base_name = csv_filename.rsplit('.', 1)[0]
-            title = base_name.replace('_', ' ').replace('-', ' ').title()
-            print(f"Título: {title}")
-            # Detectar columnas
-            date_col = None
-            preguntas = []
-            for col in df.columns:
-                col_lower = col.lower()
-                if not date_col and any(x in col_lower for x in ['fecha', 'date', 'periodo', 'visita', 'checkout']):
-                    date_col = col
-                    print(f"  Fecha: {col}")
-                    continue
-                if col_lower == 'id':
-                    print(f"  Saltar ID exacto: {col}")
-                    continue
-                sample = df[col].dropna()
-                if len(sample) == 0:
-                    print(f"  Saltar vacía: {col}")
-                    continue
-                unique_count = sample.nunique()
-                if pd.api.types.is_numeric_dtype(sample):
-                    tipo = 'scale'
-                elif unique_count <= 20:
-                    tipo = 'single'
-                else:
-                    tipo = 'text'
-                preguntas.append((col, tipo, unique_count))
-                print(f"  Pregunta: {col} (type={tipo}, únicos={unique_count})")
-            print(f"\n✓ Total preguntas a crear: {len(preguntas)}")
-            # Simular creación (SIN guardar realmente)
-            print(f"✓ Se crearían {len(df)} respuestas")
-            print("✓ SIMULACIÓN EXITOSA")
+            job = ImportJob.objects.create(user=user, csv_file=csv_filename, status='pending')
+            result = process_survey_import(job.id)
+            job.refresh_from_db()
+            if result['success']:
+                print(f"✓ Importación exitosa: {job.total_rows} filas, encuesta id={job.survey.id}")
+            else:
+                print(f"✗ Error: {job.error_message}")
         except Exception as e:
             print(f"✗ ERROR: {e}")
             import traceback

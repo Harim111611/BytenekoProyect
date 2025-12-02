@@ -1,36 +1,137 @@
 # surveys/urls.py
-from django.urls import path
-from .views import import_views, report_views, respond_views
-from .views.crud_views import EncuestaListView, EncuestaCreateView, EncuestaDetailView, EncuestaUpdateView, EncuestaDeleteView
-from .views.report_views import cambiar_estado_encuesta
-from .views.crud_views import bulk_delete_surveys_view
-from .views.report_views import debug_analysis_view
-from .views.import_views import import_csv_preview_view, import_multiple_surveys_view
 
-app_name = 'surveys'
+from django.urls import path
+
+from .views import import_views, report_views, respond_views, question_views
+from .views.crud_views import (
+    SurveyListView,
+    SurveyCreateView,
+    SurveyDetailView,
+    SurveyUpdateView,
+    SurveyDeleteView,
+    bulk_delete_surveys_view,
+)
+
+app_name = "surveys"
 
 urlpatterns = [
-    path('', EncuestaListView.as_view(), name='list'),
-    path('crear/', EncuestaCreateView.as_view(), name='crear'),
-    path('<int:pk>/', EncuestaDetailView.as_view(), name='detail'),
-    path('<int:pk>/editar/', EncuestaUpdateView.as_view(), name='editar'),
-    path('<int:pk>/borrar/', EncuestaDeleteView.as_view(), name='borrar'),
-    path('<int:pk>/cambiar-estado/', cambiar_estado_encuesta, name='cambiar_estado'),
+    # CRUD básico de encuestas
+    path("", SurveyListView.as_view(), name="list"),
+    path("create/", SurveyCreateView.as_view(), name="create"),
+    path("<int:pk>/", SurveyDetailView.as_view(), name="detail"),
+    path("<int:pk>/edit/", SurveyUpdateView.as_view(), name="edit"),
+    path("<int:pk>/delete/", SurveyDeleteView.as_view(), name="delete"),
 
-    # Importar en encuesta existente (método antiguo, lo mantenemos por si acaso)
-    path('<int:pk>/importar/', import_views.import_responses_view, name='importar'),
+    # Cambiar estado de una encuesta (activar / desactivar)
+    path(
+        "<int:pk>/change-status/",
+        report_views.change_survey_status,
+        name="change_status",
+    ),
+    
+    # Operaciones CRUD de preguntas (inline desde detail view)
+    path(
+        "questions/<int:pk>/update/",
+        question_views.update_question_view,
+        name="question_update",
+    ),
+    path(
+        "questions/<int:pk>/delete/",
+        question_views.delete_question_view,
+        name="question_delete",
+    ),
+    path(
+        "<int:survey_pk>/questions/add/",
+        question_views.add_question_view,
+        name="question_add",
+    ),
 
-    # --- NUEVA RUTA: IMPORTAR DESDE CERO ---
-    path('importar-nueva/', import_views.import_survey_view, name='importar_nueva'),
-    path('importar-preview/', import_csv_preview_view, name='importar_preview'),
-    path('importar-multiple/', import_multiple_surveys_view, name='importar_multiple'),
+    # Importar respuestas a una encuesta existente
+    # (CSV con columnas mapeadas a preguntas ya creadas)
+    path(
+        "<int:pk>/import/",
+        import_views.import_responses_view,
+        name="import",
+    ),
 
-    path('bulk-delete/', bulk_delete_surveys_view, name='bulk_delete'),
+    # Importar nueva encuesta desde CSV (flujo normal, síncrono)
+    path(
+        "import-new/",
+        import_views.import_survey_view,
+        name="import_new",
+    ),
 
-    path('<int:pk>/responder/', respond_views.respond_survey_view, name='responder'),
-    path('<int:pk>/resultados/', report_views.survey_results_view, name='resultados'),
-    path('<int:pk>/resultados/debug/', debug_analysis_view, name='resultados_debug'),
-    path('<int:pk>/exportar/', report_views.export_survey_csv_view, name='exportar'),
-    path('gracias/', report_views.survey_thanks_view, name='thanks'),
-    path('<int:pk>/cambiar-estado/', report_views.cambiar_estado_encuesta, name='cambiar_estado'),
+    # Vista previa de CSV (detecta tipos de columnas, muestra muestra, etc.)
+    path(
+        "import-preview/",
+        import_views.import_csv_preview_view,
+        name="import_preview",
+    ),
+
+    # Importar múltiples encuestas en un solo request
+    path(
+        "import-multiple/",
+        import_views.import_multiple_surveys_view,
+        name="import_multiple",
+    ),
+
+    # Borrado masivo de encuestas (usado por el listado + tests)
+    path(
+        "bulk-delete/",
+        bulk_delete_surveys_view,
+        name="bulk_delete",
+    ),
+
+    # Responder encuesta pública
+    path(
+        "<int:pk>/respond/",
+        respond_views.respond_survey_view,
+        name="respond",
+    ),
+
+    # Resultados y exportación
+    path(
+        "<int:pk>/results/",
+        report_views.survey_results_view,
+        name="results",
+    ),
+    path(
+        "<int:pk>/results/debug/",
+        report_views.debug_analysis_view,
+        name="results_debug",
+    ),
+    path(
+        "<int:pk>/export/",
+        report_views.export_survey_csv_view,
+        name="export",
+    ),
+
+    # Pantalla de agradecimiento al terminar una encuesta
+    path(
+        "thanks/",
+        report_views.survey_thanks_view,
+        name="thanks",
+    ),
+
+    # ===============================
+    #  MODO TRYHARD AWS: IMPORT ASYNC
+    # ===============================
+
+    # Endpoint para lanzar una importación asíncrona
+    # - Crea un ImportJob
+    # - Dispara la tarea Celery process_survey_import
+    # - Devuelve JSON con job_id y estado inicial
+    path(
+        "import-async/",
+        import_views.import_survey_csv_async,
+        name="import_survey_csv_async",
+    ),
+
+    # Endpoint para consultar el estado de un ImportJob (polling desde el frontend)
+    # - Devuelve: status, processed_rows, total_rows, error_message, survey_id, etc.
+    path(
+        "import-job/<int:job_id>/status/",
+        import_views.import_job_status,
+        name="import_job_status",
+    ),
 ]

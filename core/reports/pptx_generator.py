@@ -42,7 +42,7 @@ class PPTXSlideBuilder:
     
     def __init__(self, presentation):
         self.prs = presentation
-        self.logo_path = os.path.join(settings.BASE_DIR, 'static', 'img', 'byteneko_logo.png')
+        self.logo_path = os.path.join(settings.BASE_DIR, 'static', 'img', 'favicon.ico')
         self.has_logo = os.path.exists(self.logo_path)
     
     def apply_header(self, slide, title_text):

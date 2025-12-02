@@ -34,19 +34,19 @@ def test_date_filter_helper_build_date_range_label():
     assert 'Últimos' in label2 or 'ultimos' in label2.lower()
 
 @pytest.mark.django_db
-def test_permission_helper_verify_encuesta_access():
+def test_permission_helper_verify_survey_access():
     user = User.objects.create_user(username='user', password='123')
     survey = Survey.objects.create(title='Test', author=user)
     # Should not raise
-    PermissionHelper.verify_encuesta_access(survey, user)
+    PermissionHelper.verify_survey_access(survey, user)
     other = User.objects.create_user(username='other', password='123')
     with pytest.raises(PermissionDenied):
-        PermissionHelper.verify_encuesta_access(survey, other)
+        PermissionHelper.verify_survey_access(survey, other)
 
 @pytest.mark.django_db
-def test_permission_helper_verify_encuesta_is_active():
+def test_permission_helper_verify_survey_is_active():
     user = User.objects.create_user(username='user', password='123')
     survey = Survey.objects.create(title='Test', author=user, status='active')
-    assert PermissionHelper.verify_encuesta_is_active(survey) is True
+    assert PermissionHelper.verify_survey_is_active(survey) is True
     survey.status = 'closed'
-    assert PermissionHelper.verify_encuesta_is_active(survey) is False
+    assert PermissionHelper.verify_survey_is_active(survey) is False

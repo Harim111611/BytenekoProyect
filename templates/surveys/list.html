@@ -2,6 +2,9 @@
 {% load static %}
 
 {% block app_content %}
+{% include 'surveys/delete_selected_modal.html' %}
+{% include 'surveys/delete_all_modal.html' %}
+{% include 'surveys/delete_one_modal.html' %}
 <!-- Modal Importar CSV con Vista Previa -->
 <div class="modal fade" id="importModalPreview" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -182,7 +185,7 @@
                     title="Importar CSV">
                 <i class="bi bi-cloud-upload me-2"></i>Importar CSV
             </button>
-            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-medium shadow-sm px-4">
+            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-medium shadow-sm px-4">
                 <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
             </a>
             <!-- BOTÓN PARA ENTRAR/SALIR DE MODO SELECCIÓN -->
@@ -203,7 +206,7 @@
 
     <!-- BARRA DE ACCIONES MASIVAS -->
         <div id="bulkActionsBar"
-            class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4"
+            class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 bulk-actions-bar-custom"
             style="display:none !important;">
         <div class="d-flex align-items-center mb-2 mb-md-0 gap-2">
             <i class="bi bi-exclamation-triangle-fill"></i>
@@ -251,9 +254,16 @@
 
                         <!-- Fecha + estado -->
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                {{ survey.created_at|date:"d M Y" }}
-                            </span>
+                            <div class="d-flex gap-2 align-items-center">
+                                <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
+                                    {{ survey.created_at|date:"d M Y" }}
+                                </span>
+                                {% if survey.is_imported %}
+                                <span class="badge rounded-pill bg-warning-subtle text-warning border border-warning fw-normal" title="Esta encuesta fue importada desde CSV y está cerrada">
+                                    <i class="bi bi-file-earmark-lock2 me-1"></i>Importada (Cerrada)
+                                </span>
+                                {% endif %}
+                            </div>
                             <div class="d-flex align-items-center small">
                                 {% if survey.status == 'active' %}
                                     <span class="status-dot bg-active"></span>
@@ -327,7 +337,7 @@
                 Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar a analizar datos hoy mismo.
             </p>
             <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'surveys:crear' %}" class="btn btn-primary btn-lg px-4">
+                <a href="{% url 'surveys:create' %}" class="btn btn-primary btn-lg px-4">
                     <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
                 </a>
                 <button class="btn btn-outline-secondary btn-lg px-4"
@@ -595,9 +605,15 @@ function showPageAlert(type, title, body, durationMs) {
                 throw new Error(data.error || 'No se pudieron eliminar las encuestas.');
             }
 
+
             cardsToDelete.forEach(card => card.remove());
             selectedSurveys.clear();
             updateSelectionUI();
+
+            // Si ya no quedan encuestas, recargar para mostrar el aviso vacío
+            if (document.querySelectorAll('.survey-card').length === 0) {
+                window.location.reload();
+            }
 
             if (selectionMode) {
                 toggleSelectionMode();
@@ -636,28 +652,41 @@ function showPageAlert(type, title, body, durationMs) {
                 return;
             }
 
-            const heavyNotice = total >= 5
-                ? ' Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse.'
-                : '';
-            const msg = `¿Quieres eliminar las ${total} encuestas de esta lista? ` +
-                        'Esta acción no se puede deshacer.' + heavyNotice;
+            // Set modal values
+            document.getElementById('deleteAllCount').textContent = `${total}`;
+            const heavyNotice = document.getElementById('deleteAllHeavyNotice');
+            if (total >= 5) {
+                heavyNotice.textContent = 'Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse.';
+                heavyNotice.style.display = '';
+            } else {
+                heavyNotice.style.display = 'none';
+            }
 
-            if (!confirm(msg)) return;
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('deleteAllModal'));
+            modal.show();
 
-            selectedSurveys.clear();
-            selectBtns.forEach(btn => {
-                const surveyId = btn.dataset.surveyId;
-                if (!surveyId) return;
-                selectedSurveys.add(surveyId);
-                btn.classList.add('btn-primary', 'text-white');
-                btn.style.border = '2px solid var(--bk-primary)';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = 'bi bi-check-circle-fill';
-            });
-            updateSelectionUI();
+            // Confirm button handler
+            const confirmBtn = document.getElementById('confirmDeleteAllBtn');
+            const handler = function () {
+                selectedSurveys.clear();
+                selectBtns.forEach(btn => {
+                    const surveyId = btn.dataset.surveyId;
+                    if (!surveyId) return;
+                    selectedSurveys.add(surveyId);
+                    btn.classList.add('btn-primary', 'text-white');
+                    btn.style.border = '2px solid var(--bk-primary)';
+                    const icon = btn.querySelector('i');
+                    if (icon) icon.className = 'bi bi-check-circle-fill';
+                });
+                updateSelectionUI();
 
-            skipConfirmBulk = true;
-            deleteSelectedBtn.click();
+                skipConfirmBulk = true;
+                deleteSelectedBtn.click();
+                modal.hide();
+                confirmBtn.removeEventListener('click', handler);
+            };
+            confirmBtn.addEventListener('click', handler);
         });
     }
 
@@ -722,7 +751,45 @@ document.addEventListener('DOMContentLoaded', function() {
         const surveyId = btn.getAttribute('data-survey-id');
         if (!surveyId) return;
 
-        if (!confirm('¿Seguro que quieres eliminar esta encuesta? Esta acción no se puede deshacer.')) return;
+
+        // Modal de confirmación en vez de confirm() con check defensivo
+        let confirmDelete = await new Promise((resolve) => {
+            const deleteOneModal = document.getElementById('deleteOneModal');
+            const confirmDeleteOneBtn = document.getElementById('confirmDeleteOneBtn');
+            // Si no existe el modal, no reventar la app
+            if (!deleteOneModal || !confirmDeleteOneBtn) {
+                console.error('No se encontró el modal de eliminación individual');
+                resolve(false);
+                return;
+            }
+            const modal = bootstrap.Modal.getOrCreateInstance(deleteOneModal);
+            // Asegura aria-hidden correcto al mostrar
+            deleteOneModal.setAttribute('aria-hidden', 'false');
+            const onHide = function () {
+                confirmDeleteOneBtn.removeEventListener('click', onConfirm);
+                deleteOneModal.removeEventListener('hidden.bs.modal', onHide);
+                // Al ocultar, poner aria-hidden y mover foco fuera del modal
+                deleteOneModal.setAttribute('aria-hidden', 'true');
+                // Mueve el foco al botón de selección principal si existe
+                const fallbackBtn = document.getElementById('toggleSelectionBtn');
+                if (fallbackBtn) fallbackBtn.focus();
+                resolve(false);
+            };
+            const onConfirm = function () {
+                confirmDeleteOneBtn.removeEventListener('click', onConfirm);
+                deleteOneModal.removeEventListener('hidden.bs.modal', onHide);
+                modal.hide();
+                // Al ocultar, poner aria-hidden y mover foco fuera del modal
+                deleteOneModal.setAttribute('aria-hidden', 'true');
+                const fallbackBtn = document.getElementById('toggleSelectionBtn');
+                if (fallbackBtn) fallbackBtn.focus();
+                resolve(true);
+            };
+            deleteOneModal.addEventListener('hidden.bs.modal', onHide);
+            confirmDeleteOneBtn.addEventListener('click', onConfirm);
+            modal.show();
+        });
+        if (!confirmDelete) return;
 
         const card = btn.closest('.survey-card');
         if (!card) return;
@@ -750,8 +817,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'No se pudo eliminar la encuesta.');
 
+
             card.remove();
             removeDeletingId(surveyId);
+
+            // Si ya no quedan encuestas, recargar para mostrar el aviso vacío
+            if (document.querySelectorAll('.survey-card').length === 0) {
+                window.location.reload();
+                return;
+            }
 
             const summary = data.message || 'La encuesta se eliminó correctamente.';
             const detail  = data.detail || '';
@@ -915,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('csrfmiddlewaretoken', getCsrfToken());
 
         try {
-            const response = await fetch("{% url 'surveys:importar_multiple' %}", {
+            const response = await fetch("{% url 'surveys:import_multiple' %}", {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -973,7 +1047,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('csrfmiddlewaretoken', getCsrfToken());
 
             try {
-                const response = await fetch("{% url 'surveys:importar_preview' %}", {
+                const response = await fetch("{% url 'surveys:import_preview' %}", {
                     method: 'POST',
                     body: formData,
                     headers: { 'X-CSRFToken': getCsrfToken() },
@@ -1037,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('csrfmiddlewaretoken', getCsrfToken());
 
             try {
-                const response = await fetch("{% url 'surveys:importar_nueva' %}", {
+                const response = await fetch("{% url 'surveys:import_new' %}", {
                     method: 'POST',
                     body: formData,
                     headers: { 'X-CSRFToken': getCsrfToken() }
@@ -1099,21 +1173,61 @@ document.addEventListener('DOMContentLoaded', function() {
     border-radius: 8px;
 }
 
+
+/* --- Botón de selección múltiple (checkbox circular) --- */
 .survey-select-btn {
     transition: all 0.2s ease;
-    background-color: white;
+    background: var(--card-bg);
     cursor: pointer;
+    border: 2px solid #dee2e6;
+    color: var(--bs-secondary-color, #6c757d);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .survey-select-btn:hover {
     transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    border-color: var(--bk-primary);
+    color: var(--bk-primary);
 }
-.survey-select-btn.btn-primary {
-    background-color: var(--bk-primary) !important;
-    border-color: var(--bk-primary) !important;
+.survey-select-btn.btn-primary, .survey-select-btn.selected {
+    background: linear-gradient(135deg, var(--bk-primary) 60%, var(--bk-primary-light) 100%);
+    border-color: var(--bk-primary);
+    color: #fff !important;
+    box-shadow: 0 0 0 3px var(--bk-primary-10);
 }
+.survey-select-btn.btn-primary i, .survey-select-btn.selected i {
+    color: #fff !important;
+    text-shadow: 0 2px 8px rgba(13,110,253,0.15);
+}
+/* Dark mode: mejorar contraste y borders */
 [data-bs-theme="dark"] .survey-select-btn {
-    background-color: var(--bs-body-bg);
+    background: var(--card-bg);
+    border: 2px solid #30363d;
+    color: #b3b3b3;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+[data-bs-theme="dark"] .survey-select-btn:hover {
+    border-color: var(--bk-primary);
+    color: var(--bk-primary);
+    background: #23272f;
+}
+[data-bs-theme="dark"] .survey-select-btn.btn-primary, [data-bs-theme="dark"] .survey-select-btn.selected {
+    background: linear-gradient(135deg, #2563eb 60%, #60a5fa 100%);
+    border-color: #60a5fa;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px rgba(96,165,250,0.18);
+}
+[data-bs-theme="dark"] .survey-select-btn.btn-primary i, [data-bs-theme="dark"] .survey-select-btn.selected i {
+    color: #fff !important;
+    text-shadow: 0 2px 8px #2563eb44;
+}
+/* Mejorar el círculo de selección (ícono) */
+.survey-select-btn i {
+    font-size: 1.25rem;
+    transition: color 0.2s;
+}
+.survey-select-btn.selected i, .survey-select-btn.btn-primary i {
+    color: #fff !important;
 }
 
 .selection-checkbox {
@@ -1138,6 +1252,38 @@ document.addEventListener('DOMContentLoaded', function() {
     background-size: 48px 48px;
     z-index: 10;
     border-radius: inherit;
+}
+<style>
+.bulk-actions-bar-custom {
+    /* Mejor contraste para modo noche */
+    border: 1.5px solid var(--bs-warning-border-subtle, #facc15);
+    background: var(--bs-warning-bg-subtle, #f59e42);
+    color: var(--bs-warning-text-emphasis, #fffbe6);
+}
+[data-bs-theme="dark"] .bulk-actions-bar-custom {
+    background: #2d2600 !important;
+    color: #ffe066 !important;
+    border-color: #ffe066 !important;
+}
+/* Botones dentro de la barra para modo noche */
+[data-bs-theme="dark"] .bulk-actions-bar-custom .btn,
+[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-outline-secondary {
+    background: #232323;
+    color: #ffe066;
+    border-color: #ffe066;
+}
+[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-outline-danger {
+    background: #2d0000;
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+}
+[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-danger {
+    background: #ff6b6b;
+    color: #fff;
+    border-color: #ff8787;
+}
+[data-bs-theme="dark"] .bulk-actions-bar-custom .btn:disabled {
+    opacity: 0.5;
 }
 </style>
 {% endblock %}

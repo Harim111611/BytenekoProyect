@@ -3,8 +3,9 @@ Mixins reutilizables para vistas de Django.
 Evita duplicación de código y centraliza lógica común.
 """
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
 import logging
 
 from surveys.models import Survey
@@ -18,19 +19,26 @@ class OwnerRequiredMixin(UserPassesTestMixin):
     Usar en vistas que requieran acceso exclusivo al creador.
     """
     
+    def dispatch(self, request, *args, **kwargs):
+        """Intercepta dispatch para manejar Http404."""
+        pk = self.kwargs.get('pk')
+        if pk:
+            try:
+                self.survey_object = get_object_or_404(Survey, pk=pk)
+            except Http404:
+                logger.warning(f"Intento de acceso a encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+                return render(request, 'surveys/not_found.html', {
+                    'survey_id': pk,
+                    'message': 'La encuesta que buscas no existe o ha sido eliminada.'
+                }, status=404)
+        return super().dispatch(request, *args, **kwargs)
+    
     def test_func(self):
         """Verifica si el usuario es el creador de la encuesta."""
         # Para vistas basadas en clases con pk
         pk = self.kwargs.get('pk')
-        if pk:
-            survey = get_object_or_404(Survey, pk=pk)
-            is_owner = survey.author == self.request.user
-            
-            if not is_owner:
-                logger.warning(
-                    f"Usuario {self.request.user.id} intentó acceder a encuesta {pk} sin permiso"
-                )
-            
+        if pk and hasattr(self, 'survey_object'):
+            is_owner = self.survey_object.author == self.request.user
             return is_owner
         return True
     

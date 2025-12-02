@@ -104,16 +104,15 @@ class ResponseDataBuilder:
     """Helper para construir estructura de datos de respuestas."""
     
     @staticmethod
-    def get_daily_counts(queryset, days=14):
+    def get_daily_counts(survey_response_queryset, days=14):
         """
-        Obtiene conteos diarios de respuestas para gráficos.
+        Get daily counts of survey responses for charts.
         
         Args:
-            queryset: QuerySet de RespuestaEncuesta
-            days: Número de días a incluir
-            
+            survey_response_queryset: QuerySet of SurveyResponse
+            days: Number of days to include
         Returns:
-            tuple: (labels, data) para gráficos Chart.js
+            tuple: (labels, data) for Chart.js
         """
         from django.db.models.functions import TruncDate
         from django.db.models import Count
@@ -122,7 +121,7 @@ class ResponseDataBuilder:
         start_date = today - timedelta(days=days - 1)
         
         daily_data = (
-            queryset
+            survey_response_queryset
             .filter(created_at__date__gte=start_date)
             .annotate(date=TruncDate('created_at'))
             .values('date')
@@ -146,19 +145,18 @@ class ResponseDataBuilder:
         return labels, data
     
     @staticmethod
-    def get_status_distribution(queryset):
+    def get_status_distribution(survey_queryset):
         """
-        Obtiene distribución de estados de encuestas.
+        Get distribution of survey statuses.
         
         Args:
-            queryset: QuerySet de Encuesta
-            
+            survey_queryset: QuerySet of Survey
         Returns:
-            list: [activas, borradores, cerradas]
+            list: [active, draft, closed]
         """
         from django.db.models import Count
         
-        status_counts = queryset.values('status').annotate(count=Count('id'))
+        status_counts = survey_queryset.values('status').annotate(count=Count('id'))
         status_map = {s['status']: s['count'] for s in status_counts}
         
         return [
@@ -172,42 +170,39 @@ class PermissionHelper:
     """Helper para validación de permisos de usuario."""
     
     @staticmethod
-    def verify_encuesta_access(encuesta, user):
+    def verify_survey_access(survey, user):
         """
-        Verifica que el usuario tenga acceso a la encuesta.
+        Verify that the user has access to the survey.
         
         Args:
-            encuesta: Instancia de Encuesta
-            user: Usuario a verificar
-            
+            survey: Survey instance
+            user: User to verify
         Raises:
-            PermissionDenied: Si el usuario no tiene acceso
+            PermissionDenied: If the user does not have access
         """
-        if encuesta.author != user:
+        if survey.author != user:
             # Log security event
             log_security = get_log_security_event()
             log_security(
-                'unauthorized_encuesta_access',
+                'unauthorized_survey_access',
                 severity='WARNING',
                 user_id=user.id,
-                encuesta_id=encuesta.id,
-                encuesta_creador_id=encuesta.author.id
+                survey_id=survey.id,
+                survey_author_id=survey.author.id
             )
-            
             logger.warning(
-                f"Usuario {user.id} intentó acceder a encuesta {encuesta.id} sin permiso"
+                f"User {user.id} tried to access survey {survey.id} without permission"
             )
             raise PermissionDenied("No tiene permiso para acceder a esta encuesta")
     
     @staticmethod
-    def verify_encuesta_is_active(encuesta):
+    def verify_survey_is_active(survey):
         """
-        Verifica que la encuesta esté activa.
+        Verify that the survey is active.
         
         Args:
-            encuesta: Instancia de Encuesta
-            
+            survey: Survey instance
         Returns:
-            bool: True si está activa
+            bool: True if active
         """
-        return encuesta.status == 'active'
+        return survey.status == 'active'

@@ -1,3 +1,5 @@
+# Tamaño de chunk para importación masiva de encuestas
+SURVEY_IMPORT_CHUNK_SIZE = 5000
 """
 Production settings for ByteNeko project.
 Extends base settings with production-specific configurations.
@@ -194,27 +196,27 @@ LOGGING = {
         'django': {
             'handlers': ['console', 'file_error'],
             'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
         'django.request': {
             'handlers': ['console', 'file_error', 'sentry'],
             'level': 'ERROR',
-            'propagate': False,
+            'propagate': True,
         },
         'core': {
             'handlers': ['console', 'file_error'],
             'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
         'surveys': {
             'handlers': ['console', 'file_error'],
             'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
         'celery': {
             'handlers': ['console', 'file_error'],
             'level': 'INFO',
-            'propagate': False,
+            'propagate': True,
         },
     },
     'root': {

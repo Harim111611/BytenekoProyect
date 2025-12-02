@@ -11,113 +11,105 @@ from surveys.models import Survey, Question, AnswerOption, SurveyResponse, Quest
 
 
 @pytest.mark.django_db
-class TestEncuestaModel:
-    """Tests para el modelo Encuesta"""
+
+class TestSurveyModel:
+    """Tests para el modelo Survey"""
     
-    def test_create_encuesta(self):
-        """Debe poder crear una encuesta básica"""
+    def test_create_survey(self):
+        """Debe poder crear una survey básica"""
         user = User.objects.create_user(username='testuser', password='12345')
-        encuesta = Survey.objects.create(
+        survey = Survey.objects.create(
             title='Test Survey',
             description='Test description',
             author=user,
             status='draft'
         )
-        
-        assert encuesta.title == 'Test Survey'
-        assert encuesta.status == 'draft'
-        assert encuesta.author == user
-        assert encuesta.id is not None
+        assert survey.title == 'Test Survey'
+        assert survey.status == 'draft'
+        assert survey.author == user
+        assert survey.id is not None
     
-    def test_encuesta_str(self):
+    def test_survey_str(self):
         """__str__ debe retornar el título"""
         user = User.objects.create_user(username='testuser', password='12345')
-        encuesta = Survey.objects.create(
+        survey = Survey.objects.create(
             title='Mi Encuesta',
             author=user
         )
-        
-        assert str(encuesta) == 'Mi Encuesta'
+        assert str(survey) == 'Mi Encuesta'
     
-    def test_encuesta_default_values(self):
+    def test_survey_default_values(self):
         """Debe tener valores por defecto correctos"""
         user = User.objects.create_user(username='testuser', password='12345')
-        encuesta = Survey.objects.create(
+        survey = Survey.objects.create(
             title='Test',
             author=user
         )
-        
-        assert encuesta.category == 'General'
-        assert encuesta.status == 'draft'
-        assert encuesta.sample_goal == 0
+        assert survey.category == 'General'
+        assert survey.status == 'draft'
+        assert survey.sample_goal == 0
     
-    def test_encuesta_estados(self):
+    def test_survey_statuses(self):
         """Debe permitir todos los estados válidos"""
         user = User.objects.create_user(username='testuser', password='12345')
-        
-        for estado, _ in Survey.STATUS_CHOICES:
+        for status, _ in Survey.STATUS_CHOICES:
             survey = Survey.objects.create(
-                title=f'Test {estado}',
+                title=f'Test {status}',
                 author=user,
-                status=estado
+                status=status
             )
-            assert survey.status == estado
+            assert survey.status == status
     
-    def test_encuesta_ordering(self):
+    def test_survey_ordering(self):
         """Debe ordenar por fecha_creacion descendente"""
         user = User.objects.create_user(username='testuser', password='12345')
-        
-        e1 = Survey.objects.create(title='First', author=user)
-        e2 = Survey.objects.create(title='Second', author=user)
-        e3 = Survey.objects.create(title='Third', author=user)
-        
-        encuestas = list(Survey.objects.all())
-        assert encuestas[0] == e3
-        assert encuestas[1] == e2
-        assert encuestas[2] == e1
+        s1 = Survey.objects.create(title='First', author=user)
+        s2 = Survey.objects.create(title='Second', author=user)
+        s3 = Survey.objects.create(title='Third', author=user)
+        surveys = list(Survey.objects.all())
+        assert surveys[0] == s3
+        assert surveys[1] == s2
+        assert surveys[2] == s1
 
 
 @pytest.mark.django_db
-class TestPreguntaModel:
-    """Tests para el modelo Pregunta"""
+
+class TestQuestionModel:
+    """Tests para el modelo Question"""
     
-    def test_create_pregunta(self):
+    def test_create_question(self):
         """Debe poder crear una pregunta"""
         user = User.objects.create_user(username='testuser', password='12345')
         survey = Survey.objects.create(title='Test', author=user)
-        
-        pregunta = Question.objects.create(
+        question = Question.objects.create(
             survey=survey,
             text='¿Qué piensas?',
             type='text',
             order=1
         )
-        
-        assert pregunta.text == '¿Qué piensas?'
-        assert pregunta.type == 'text'
-        assert pregunta.survey == survey
+        assert question.text == '¿Qué piensas?'
+        assert question.type == 'text'
+        assert question.survey == survey
     
-    def test_pregunta_tipos(self):
+    def test_question_types(self):
         """Debe permitir todos los tipos de pregunta"""
         user = User.objects.create_user(username='testuser', password='12345')
-        encuesta = Survey.objects.create(title='Test', author=user)
-        
-        tipos_esperados = ['text', 'number', 'scale', 'single', 'multi']
-        for tipo, _ in Question.TYPE_CHOICES:
-            assert tipo in tipos_esperados
+        survey = Survey.objects.create(title='Test', author=user)
+        expected_types = ['text', 'number', 'scale', 'single', 'multi']
+        for type_, _ in Question.TYPE_CHOICES:
+            assert type_ in expected_types
     
-    def test_pregunta_ordering(self):
-        """Debe ordenar por campo 'orden'"""
+    def test_question_ordering(self):
+        """Debe ordenar por campo 'order'"""
         user = User.objects.create_user(username='testuser', password='12345')
         survey = Survey.objects.create(title='Test', author=user)
-        
-        p3 = Question.objects.create(survey=survey, text='Third', type='text', order=3)
-        p1 = Question.objects.create(survey=survey, text='First', type='text', order=1)
-        p2 = Question.objects.create(survey=survey, text='Second', type='text', order=2)
+        q3 = Question.objects.create(survey=survey, text='Third', type='text', order=3)
+        q1 = Question.objects.create(survey=survey, text='First', type='text', order=1)
+        q2 = Question.objects.create(survey=survey, text='Second', type='text', order=2)
         questions = list(survey.questions.all())
-        assert questions[0] == p1
-        assert questions[1] == p2
-        assert questions[2] == p3
+        assert questions[0] == q1
+        assert questions[1] == q2
+        assert questions[2] == q3
     
     def test_pregunta_relacionada_con_encuesta(self):
         """Debe acceder a preguntas desde encuesta"""

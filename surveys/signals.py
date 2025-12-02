@@ -104,9 +104,7 @@ def invalidate_survey_cache(sender, instance, **kwargs):
         invalidate_pattern(pdf_pattern)
         invalidate_pattern(pptx_pattern)
         
-        logger.info(
-            logger.debug(f"Cache invalidated for survey {instance.id} (user: {instance.author.username})")
-        )
+        logger.debug(f"Cache invalidated for survey {instance.id} (user: {instance.author.username})")
 
 
 @receiver(post_save, sender=Question)
@@ -143,10 +141,7 @@ def invalidate_question_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    # Cambiar a debug para reducir ruido en logs
-    logger.debug(
-        logger.debug(f"Cache invalidated for question changes in survey {survey.id}")
-    )
+    logger.debug(f"Cache invalidated for question changes in survey {survey.id}")
 
 
 @receiver(post_save, sender=AnswerOption)
@@ -172,9 +167,7 @@ def invalidate_option_cache(sender, instance, **kwargs):
     invalidate_pattern(analysis_pattern)
     invalidate_pattern(results_pattern)
     
-    logger.info(
-        logger.debug(f"Cache invalidated for answer option changes in survey {survey.id}")
-    )
+    logger.debug(f"Cache invalidated for answer option changes in survey {survey.id}")
 
 
 @receiver(post_save, sender=SurveyResponse)
@@ -220,10 +213,7 @@ def invalidate_response_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    # Cambiar a debug para reducir ruido en logs
-    logger.debug(
-        logger.debug(f"Cache invalidated for response changes in survey {survey.id}")
-    )
+    logger.debug(f"Cache invalidated for response changes in survey {survey.id}")
 
 
 @receiver(post_save, sender=QuestionResponse)
@@ -255,10 +245,7 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
         stats_key = f"survey_stats_{survey.id}"
         cache.delete(stats_key)
         
-        # Cambiar a debug para reducir ruido en logs
-        logger.debug(
-            logger.debug(f"Cache invalidated for question response changes in survey {survey.id}")
-        )
+        logger.debug(f"Cache invalidated for question response changes in survey {survey.id}")
     except (AttributeError, SurveyResponse.DoesNotExist, Exception):
         # La respuesta padre ya fue eliminada, ignorar silenciosamente
         pass

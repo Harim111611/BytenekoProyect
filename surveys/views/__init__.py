@@ -9,14 +9,15 @@ from . import crud_views
 from . import import_views
 from . import report_views
 from . import respond_views
+from . import question_views
 
 # Re-export class-based views from crud_views
 from .crud_views import (
-    EncuestaListView,
-    EncuestaDetailView,
-    EncuestaCreateView,
-    EncuestaUpdateView,
-    EncuestaDeleteView,
+    SurveyListView,
+    SurveyDetailView,
+    SurveyCreateView,
+    SurveyUpdateView,
+    SurveyDeleteView,
     bulk_delete_surveys_view,
 )
 
@@ -33,7 +34,7 @@ from .report_views import (
     survey_results_view,
     export_survey_csv_view,
     survey_thanks_view,
-    cambiar_estado_encuesta,
+    change_survey_status,
     debug_analysis_view,
     survey_analysis_ajax,
 )

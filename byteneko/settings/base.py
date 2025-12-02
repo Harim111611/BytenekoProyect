@@ -27,6 +27,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
+PUBLIC_BASE_URL = config('PUBLIC_BASE_URL', default='')
 
 
 # Application definition
@@ -59,6 +60,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'byteneko.urls'
+
+# Asegura que Django agregue el slash final automáticamente a las URLs
+APPEND_SLASH = True
 
 TEMPLATES = [
     {

@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.views.generic.base import RedirectView
+from django.conf import settings
 
 from core import views as core_views
 
@@ -50,3 +51,7 @@ urlpatterns = [
     # Inicio (Redirección)
     path("", RedirectView.as_view(pattern_name="login", permanent=False), name="index"),
 ]
+
+# Configurar handlers de error personalizados
+handler404 = 'byteneko.views.custom_404'
+handler500 = 'byteneko.views.custom_500'

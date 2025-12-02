@@ -33,6 +33,11 @@ class Survey(models.Model):
     )
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='Author', db_index=True)
     sample_goal = models.PositiveIntegerField(default=0, verbose_name='Sample Goal')
+    is_imported = models.BooleanField(
+        default=False, 
+        verbose_name='Is Imported',
+        help_text='Indica si la encuesta fue importada desde CSV (no permite cambiar estado)'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Created At', db_index=True)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Updated At')
 
@@ -153,6 +158,34 @@ class SurveyResponse(models.Model):
             models.Index(fields=['survey', 'is_anonymous'], name='survey_response_anon_idx'),
             models.Index(fields=['user', 'created_at'], name='user_response_date_idx'),
         ]
+class ImportJob(models.Model):
+    """Modelo para rastrear el estado de una importación masiva de respuestas desde CSV."""
+    STATUS_CHOICES = [
+        ("pending", "Pendiente"),
+        ("processing", "Procesando"),
+        ("completed", "Completado"),
+        ("failed", "Fallido"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
+    survey = models.ForeignKey(Survey, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Encuesta")
+    csv_file = models.CharField(max_length=512, verbose_name="Ruta archivo CSV")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    total_rows = models.PositiveIntegerField(default=0)
+    processed_rows = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"ImportJob {self.id} - {self.status} ({self.csv_file})"
+
+    class Meta:
+        verbose_name = "Importación de CSV"
+        verbose_name_plural = "Importaciones de CSV"
+        db_table = "surveys_importjob"
+
+
 class QuestionResponse(models.Model):
     """Individual question response - Respuesta a Pregunta"""
     
@@ -187,10 +220,3 @@ class QuestionResponse(models.Model):
             models.Index(fields=['question', 'selected_option'], name='qresponse_q_option_idx'),
         ]
 
-
-# Legacy model aliases for backward compatibility during migration
-Encuesta = Survey
-Pregunta = Question
-OpcionRespuesta = AnswerOption
-RespuestaEncuesta = SurveyResponse
-RespuestaPregunta = QuestionResponse

@@ -62,7 +62,7 @@
             <a href="{% url 'dashboard_results' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-bar-chart-line me-1"></i>Análisis Global
             </a>
-            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
+            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
                 <i class="bi bi-plus-lg me-2"></i>Nueva Encuesta
             </a>
         </div>
@@ -101,7 +101,7 @@
         <div class="card-body p-4">
             <div class="row g-3">
                 <div class="col-md-3 col-sm-6">
-                    <a href="{% url 'surveys:crear' %}" class="text-decoration-none">
+                    <a href="{% url 'surveys:create' %}" class="text-decoration-none">
                         <div class="card quick-action-card h-100 text-center p-3 border shadow-sm">
                             <i class="bi bi-plus-circle text-primary fs-2 mb-2"></i>
                             <h6 class="fw-bold text-body mb-1">Crear Encuesta</h6>
@@ -281,10 +281,10 @@
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{% url 'surveys:resultados' item.id %}" class="btn btn-outline-primary" title="Ver Resultados">
-                                            <i class="bi bi-bar-chart-fill"></i>
-                                        </a>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'surveys:results' item.id %}" class="btn btn-outline-primary" title="Ver Resultados">
+                                                <i class="bi bi-bar-chart-fill"></i>
+                                            </a>
                                         <a href="{% url 'surveys:detail' item.id %}" class="btn btn-outline-secondary" title="Configurar">
                                             <i class="bi bi-gear-fill"></i>
                                         </a>
@@ -297,7 +297,7 @@
                                     <div class="mb-3 opacity-25"><i class="bi bi-inbox fs-1"></i></div>
                                     <h6 class="fw-bold">No hay proyectos</h6>
                                     <p class="small mb-3">Comienza creando tu primera survey</p>
-                                    <a href="{% url 'surveys:crear' %}" class="btn btn-sm btn-primary">
+                                    <a href="{% url 'surveys:create' %}" class="btn btn-sm btn-primary">
                                         <i class="bi bi-plus-lg me-1"></i>Crear Encuesta
                                     </a>
                                 </td>

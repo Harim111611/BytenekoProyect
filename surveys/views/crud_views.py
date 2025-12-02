@@ -2,7 +2,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.core.cache import cache
@@ -10,6 +10,9 @@ from django.db.models import Count, Prefetch
 from django.core.exceptions import FieldError
 from django.http import JsonResponse
 from django.db import connection
+from django.conf import settings
+
+import json
 
 from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey, Question, AnswerOption
@@ -35,7 +38,7 @@ def _fast_delete_surveys(cursor, survey_ids):
 
     start_time = time.time()
     logger.info(f"[DELETE] 🚀 INICIANDO eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")
-    logger.info("[DELETE][TEST] Logger de surveys funcionando correctamente en archivo de log.")
+    # Log de prueba eliminado para evitar ruido en producción
 
     # Inicializar variables de tiempo para evitar errores si hay excepciones
     qr_time = sr_time = ao_time = q_time = s_time = 0.0
@@ -165,9 +168,10 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'IDs de encuestas inválidos.')
         return redirect('surveys:list')
 
-    # Solo encuestas del usuario actual
+    # Solo encuestas del usuario actual (seguridad reforzada)
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
     if not base_qs.exists():
+        logger.warning(f"[BULK_DELETE][PERMISSION_DENIED] user_id={request.user.id} ids={clean_ids}")
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse(
                 {'success': False, 'error': 'No tienes permisos para eliminar las encuestas seleccionadas.'},
@@ -201,20 +205,17 @@ def bulk_delete_surveys_view(request):
         deleted_count = len(ordered_ids)
         used_fast_path = True
         logger.info(
-            f'[BULK_DELETE][SQL_FAST] Eliminadas {deleted_count} encuestas '
-            f'para user_id={request.user.id}. ordered_by_size={using_annotation} IDs={ordered_ids}'
+            f'[BULK_DELETE][SQL_FAST] Eliminadas {deleted_count} encuestas para user_id={request.user.id}. ordered_by_size={using_annotation} IDs={ordered_ids}'
         )
     except Exception as e:
         # Fallback: ORM
         logger.error(
-            '[BULK_DELETE][SQL_FAST] Error, usando fallback ORM: %s',
-            e,
+            f'[BULK_DELETE][SQL_FAST][ERROR] user_id={request.user.id} ids={clean_ids} error={e}',
             exc_info=True
         )
         deleted_count, _ = base_qs.delete()
         logger.info(
-            f'[BULK_DELETE][ORM_FALLBACK] Eliminadas {deleted_count} encuestas '
-            f'para user_id={request.user.id}. IDs={clean_ids}'
+            f'[BULK_DELETE][ORM_FALLBACK] Eliminadas {deleted_count} encuestas para user_id={request.user.id}. IDs={clean_ids}'
         )
 
     # Respuesta AJAX (la que usa tu JS de selección múltiple)
@@ -244,8 +245,9 @@ def bulk_delete_surveys_view(request):
     return redirect('surveys:list')
 
 
-class EncuestaListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
-    """Listado de encuestas del usuario actual."""
+
+class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
+    """List of surveys for the current user."""
     model = Survey
     template_name = 'surveys/list.html'
     context_object_name = 'surveys'
@@ -253,43 +255,35 @@ class EncuestaListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset()
-
-        # Limitar a encuestas del usuario actual
         qs = qs.filter(author=self.request.user)
-
-        # Anotar contadores para tarjetas
         try:
             qs = qs.annotate(
-                total_respuestas=Count('responses', distinct=True),
-                total_preguntas=Count('questions', distinct=True),
+                total_responses=Count('responses', distinct=True),
+                total_questions=Count('questions', distinct=True),
             )
         except FieldError:
-            # Fallback si el related_name de respuestas es otro
             try:
                 qs = qs.annotate(
-                    total_respuestas=Count('surveyresponse', distinct=True),
-                    total_preguntas=Count('questions', distinct=True),
+                    total_responses=Count('surveyresponse', distinct=True),
+                    total_questions=Count('questions', distinct=True),
                 )
             except FieldError:
                 pass
-
-        # Orden más reciente primero
         try:
             qs = qs.order_by('-created_at')
         except FieldError:
             qs = qs.order_by('-id')
-
         return qs
 
 
-class EncuestaDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
-    """Vista detalle de encuesta (solo creador)."""
+
+class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
+    """Survey detail view (creator only)."""
     model = Survey
     template_name = 'surveys/detail.html'
     context_object_name = 'survey'
 
     def get_queryset(self):
-        # 🚀 OPTIMIZACIÓN: pre-carga preguntas y opciones para evitar N+1
         return super().get_queryset().prefetch_related(
             Prefetch(
                 'questions',
@@ -299,16 +293,104 @@ class EncuestaDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             )
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        survey = context.get('survey') or self.object
+        base_url = getattr(settings, 'PUBLIC_BASE_URL', '').strip()
+        if base_url:
+            base_url = base_url.rstrip('/')
+        else:
+            base_url = self.request.build_absolute_uri('/').rstrip('/')
+            host = self.request.get_host().split(':')[0]
+            port = self.request.get_port() or '80'
+            lan_ip = getattr(settings, 'LOCAL_LAN_IP', '')
+            if host in ('127.0.0.1', 'localhost') and lan_ip:
+                scheme = 'http'
+                base_url = f"{scheme}://{lan_ip}:{port}"
+        respond_path = reverse('surveys:respond', args=[survey.pk])
+        context['respond_absolute_url'] = f"{base_url}{respond_path}"
+        return context
 
-class EncuestaCreateView(LoginRequiredMixin, CreateView):
-    """Vista para crear nueva encuesta."""
+
+
+class SurveyCreateView(LoginRequiredMixin, CreateView):
+    """View to create a new survey."""
     model = Survey
     template_name = 'surveys/survey_create.html'
-    fields = ['title', 'description', 'status', 'category']
+    fields = ['title', 'description', 'category']  # Removido 'status', siempre será draft
     success_url = reverse_lazy('surveys:list')
+
+    def post(self, request, *args, **kwargs):
+        """Handle both form POST and JSON API POST."""
+        content_type = request.content_type or ''
+        
+        if 'application/json' in content_type:
+            try:
+                data = json.loads(request.body)
+                
+                # Crear la encuesta (siempre en borrador para encuestas web)
+                survey = Survey.objects.create(
+                    title=data.get('title', 'Sin título'),
+                    description=data.get('description', ''),
+                    status='draft',  # Siempre empieza en borrador
+                    category=data.get('category', 'general'),
+                    author=request.user,
+                    is_imported=False  # Marca explícita de encuesta manual
+                )
+                
+                # Crear las preguntas
+                questions_data = data.get('questions', [])
+                for idx, q_data in enumerate(questions_data):
+                    question = Question.objects.create(
+                        survey=survey,
+                        text=q_data.get('text', ''),
+                        type=q_data.get('type', 'text'),
+                        order=idx + 1,
+                        is_required=q_data.get('required', True)
+                    )
+                    
+                    # Crear opciones de respuesta si aplica
+                    options = q_data.get('options', [])
+                    for opt_idx, opt_text in enumerate(options):
+                        if opt_text:
+                            AnswerOption.objects.create(
+                                question=question,
+                                text=opt_text,
+                                order=opt_idx + 1
+                            )
+                
+                log_user_action(
+                    'create_survey',
+                    success=True,
+                    user_id=request.user.id,
+                    survey_title=survey.title,
+                    category=survey.category
+                )
+                
+                try:
+                    cache.delete(f"dashboard_data_user_{request.user.id}")
+                    cache.delete(f"survey_count_user_{request.user.id}")
+                except Exception:
+                    pass
+                
+                return JsonResponse({
+                    'success': True,
+                    'survey_id': survey.id,
+                    'redirect_url': f'/surveys/{survey.id}/'
+                })
+                
+            except json.JSONDecodeError:
+                return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+            except Exception as e:
+                logger.error(f"[CREATE_SURVEY][ERROR] user_id={request.user.id} error={e}", exc_info=True)
+                return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        
+        # Formulario HTML estándar
+        return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         form.instance.author = self.request.user
+        form.instance.status = 'draft'  # Forzar estado draft en creación por formulario HTML
         log_user_action(
             'create_survey',
             success=True,
@@ -316,8 +398,6 @@ class EncuestaCreateView(LoginRequiredMixin, CreateView):
             survey_title=form.instance.title,
             category=form.instance.category
         )
-
-        # Invalidar cache del dashboard para que se actualicen contadores
         try:
             cache.delete(f"dashboard_data_user_{self.request.user.id}")
             cache.delete(f"survey_count_user_{self.request.user.id}")
@@ -326,36 +406,31 @@ class EncuestaCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class EncuestaUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
-    """Vista para actualizar encuesta (solo creador)."""
+
+class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
+    """View to update a survey (creator only)."""
     model = Survey
     fields = ['title', 'description', 'status']
     template_name = 'surveys/form.html'
     success_url = reverse_lazy('surveys:list')
 
 
-class EncuestaDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
-    """Vista para eliminar encuesta (solo creador)."""
+
+class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
+    """View to delete a survey (creator only)."""
     model = Survey
     template_name = 'surveys/confirm_delete.html'
     success_url = reverse_lazy('surveys:list')
 
     def delete(self, request, *args, **kwargs):
-        """
-        Borrado SÍNCRONO y directo, como en el shell.
-        """
         self.object = self.get_object()
         sid = self.object.id
-
         logger.info(
             "[DEBUG_DELETE_VIEW] Entrando a delete() para survey_id=%s user_id=%s",
             sid,
             request.user.id,
         )
-
         response = super().delete(request, *args, **kwargs)
-
         messages.success(request, f"La encuesta {sid} se eliminó correctamente.")
-        logger.info("[DELETE][VIEW] Encuesta %s eliminada vía DeleteView", sid)
-
+        logger.info("[DELETE][VIEW] Survey %s deleted via DeleteView", sid)
         return response

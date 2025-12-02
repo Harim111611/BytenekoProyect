@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render, redirect
+from django.http import Http404
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, AnswerOption
@@ -20,13 +21,20 @@ logger = logging.getLogger('surveys')
 @ratelimit(key='ip', rate='60/h', method='POST', block=True)
 def respond_survey_view(request, pk):
     """Vista para responder una encuesta pública."""
-    survey = get_object_or_404(
-        Survey.objects.prefetch_related('questions__options'),
-        pk=pk
-    )
+    try:
+        survey = get_object_or_404(
+            Survey.objects.prefetch_related('questions__options'),
+            pk=pk
+        )
+    except Http404:
+        logger.warning(f"Intento de acceso a encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')}")
+        return render(request, 'surveys/not_found.html', {
+            'survey_id': pk,
+            'message': 'La encuesta que intentas responder no existe o ha sido eliminada.'
+        }, status=404)
 
     # Validar que la encuesta esté activa usando helper
-    if not PermissionHelper.verify_encuesta_is_active(survey):
+    if not PermissionHelper.verify_survey_is_active(survey):
         messages.warning(request, "Esta encuesta no está activa actualmente")
         return redirect('surveys:thanks')
 

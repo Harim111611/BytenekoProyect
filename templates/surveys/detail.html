@@ -27,13 +27,13 @@
             </div>
 
             <div class="d-flex flex-wrap gap-2">
-                <a href="{% url 'surveys:editar' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium">
+                <a href="{% url 'surveys:edit' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium">
                     <i class="bi bi-pencil me-2"></i>Editar
                 </a>
-                <a href="{% url 'surveys:exportar' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
+                <a href="{% url 'surveys:export' survey.pk %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
                     <i class="bi bi-download me-2"></i>Exportar
                 </a>
-                <a href="{% url 'surveys:resultados' survey.pk %}" class="btn btn-primary shadow-sm fw-medium">
+                <a href="{% url 'surveys:results' survey.pk %}" class="btn btn-primary shadow-sm fw-medium">
                     <i class="bi bi-bar-chart-fill me-2"></i>Ver Resultados
                 </a>
             </div>
@@ -53,27 +53,104 @@
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush">
                         {% for question in survey.questions.all %}
-                        <div class="list-group-item px-4 py-3 border-bottom-dashed bg-transparent">
+                        <div class="list-group-item px-4 py-3 border-bottom-dashed bg-transparent" id="question-{{ question.id }}">
                             <div class="d-flex gap-3">
                                 <div class="q-index flex-shrink-0">P{{ forloop.counter }}</div>
                                 <div class="flex-grow-1">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <h6 class="fw-bold text-body mb-0 pt-1">{{ question.text }}</h6>
-                                        {% if question.is_required %}
-                                            <span class="badge bg-danger-subtle text-danger rounded-pill ms-2" style="font-size: 0.65rem;">Requerida</span>
-                                        {% endif %}
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div class="flex-grow-1">
+                                            <!-- Modo vista -->
+                                            <div class="view-mode-{{ question.id }}">
+                                                <h6 class="fw-bold text-body mb-0 pt-1">{{ question.text }}</h6>
+                                            </div>
+                                            <!-- Modo edición -->
+                                            <div class="edit-mode-{{ question.id }} d-none">
+                                                <input type="text" class="form-control" id="text-{{ question.id }}" value="{{ question.text }}">
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-1 ms-2">
+                                            {% if question.is_required %}
+                                                <span class="badge bg-danger-subtle text-danger rounded-pill" style="font-size: 0.65rem;">Requerida</span>
+                                            {% endif %}
+                                            <!-- Botones de acción (solo en borrador) -->
+                                            {% if survey.status == 'draft' %}
+                                            <div class="btn-group btn-group-sm view-mode-{{ question.id }}" role="group">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="editQuestion({{ question.id }})" title="Editar">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{ question.id }})" title="Eliminar">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                            <div class="btn-group btn-group-sm edit-mode-{{ question.id }} d-none" role="group">
+                                                <button type="button" class="btn btn-success btn-sm" onclick="saveQuestion({{ question.id }})" title="Guardar">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEdit({{ question.id }})" title="Cancelar">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
-                                    <div class="small text-muted mb-2">
-                                        <i class="bi bi-ui-radios me-1"></i> {{ question.get_type_display }}
+                                    
+                                    <div class="d-flex gap-3 align-items-center mb-2">
+                                        <!-- Tipo de pregunta -->
+                                        <div class="view-mode-{{ question.id }}">
+                                            <div class="small text-muted">
+                                                {% if question.type == 'text' %}
+                                                    <i class="bi bi-textarea-t me-1"></i>
+                                                {% elif question.type == 'number' %}
+                                                    <i class="bi bi-123 me-1"></i>
+                                                {% elif question.type == 'scale' %}
+                                                    <i class="bi bi-sliders me-1"></i>
+                                                {% elif question.type == 'single' %}
+                                                    <i class="bi bi-ui-radios me-1"></i>
+                                                {% elif question.type == 'multi' %}
+                                                    <i class="bi bi-ui-checks me-1"></i>
+                                                {% else %}
+                                                    <i class="bi bi-question-circle me-1"></i>
+                                                {% endif %}
+                                                {{ question.get_type_display }}
+                                            </div>
+                                        </div>
+                                        <div class="edit-mode-{{ question.id }} d-none">
+                                            <select class="form-select form-select-sm" id="type-{{ question.id }}" style="width: auto;">
+                                                <option value="text" {% if question.type == 'text' %}selected{% endif %}>Texto libre</option>
+                                                <option value="number" {% if question.type == 'number' %}selected{% endif %}>Número</option>
+                                                <option value="scale" {% if question.type == 'scale' %}selected{% endif %}>Escala 1-10</option>
+                                                <option value="single" {% if question.type == 'single' %}selected{% endif %}>Opción única</option>
+                                                <option value="multi" {% if question.type == 'multi' %}selected{% endif %}>Opción múltiple</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Toggle requerida -->
+                                        <div class="edit-mode-{{ question.id }} d-none">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="required-{{ question.id }}" {% if question.is_required %}checked{% endif %}>
+                                                <label class="form-check-label small text-muted" for="required-{{ question.id }}">
+                                                    Requerida
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {% if question.options.exists %}
-                                    <div class="d-flex flex-wrap gap-2 mt-2">
-                                        {% for option in question.options.all %}
-                                            <span class="badge bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                                {{ option.text }}
-                                            </span>
-                                        {% endfor %}
+                                    <div class="view-mode-{{ question.id }}">
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            {% for option in question.options.all %}
+                                                <span class="badge bg-body-tertiary text-secondary border border-dashed fw-normal">
+                                                    {{ option.text }}
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <div class="edit-mode-{{ question.id }} d-none">
+                                        <div class="mt-2">
+                                            <label class="form-label small text-muted">Opciones (una por línea):</label>
+                                            <textarea class="form-control form-control-sm" id="options-{{ question.id }}" rows="3">{% for option in question.options.all %}{{ option.text }}
+{% endfor %}</textarea>
+                                        </div>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -84,11 +161,21 @@
                             <div class="mb-3">
                                 <i class="bi bi-file-earmark-plus fs-1 opacity-25"></i>
                             </div>
-                            <p class="mb-3">No hay questions configuradas.</p>
-                            <a href="{% url 'surveys:editar' survey.pk %}" class="btn btn-sm btn-outline-primary">Agregar Preguntas</a>
+                            <p class="mb-3">No hay preguntas configuradas.</p>
+                            <button class="btn btn-sm btn-primary" onclick="addNewQuestion()">
+                                <i class="bi bi-plus-lg me-2"></i>Agregar Primera Pregunta
+                            </button>
                         </div>
                         {% endfor %}
                     </div>
+                    
+                    {% if survey.questions.exists and survey.status == 'draft' %}
+                    <div class="card-footer bg-transparent border-top-dashed py-3">
+                        <button class="btn btn-sm btn-outline-primary w-100" onclick="addNewQuestion()">
+                            <i class="bi bi-plus-lg me-2"></i>Agregar Nueva Pregunta
+                        </button>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -100,11 +187,38 @@
                     <div class="card-body p-4">
                         <h6 class="text-uppercase text-muted small fw-bold mb-3">Estado del Proyecto</h6>
                         <div class="mb-3">
-                            <select class="form-select" id="estadoSelect" onchange="cambiarEstado({{ survey.pk }}, this.value)">
-                                <option value="draft" {% if survey.status == 'draft' %}selected{% endif %}>📝 Borrador</option>
-                                <option value="active" {% if survey.status == 'active' %}selected{% endif %}>✅ Activa</option>
-                                <option value="closed" {% if survey.status == 'closed' %}selected{% endif %}>🔒 Cerrada</option>
-                            </select>
+                            {% if survey.is_imported %}
+                                <div class="alert alert-warning border-warning mb-3 py-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark-lock2 fs-4 me-3"></i>
+                                        <div>
+                                            <div class="fw-bold mb-1">🔒 Encuesta Cerrada</div>
+                                            <small class="text-muted">Esta encuesta fue importada desde CSV con respuestas ya registradas. No se pueden modificar preguntas ni cambiar el estado.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% elif survey.status == 'active' or survey.status == 'closed' %}
+                                <div class="alert alert-info border-info mb-3 py-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-lock fs-4 me-3"></i>
+                                        <div>
+                                            <div class="fw-bold mb-1">⚠️ Encuesta {% if survey.status == 'active' %}Activa{% else %}Cerrada{% endif %}</div>
+                                            <small class="text-muted">Las preguntas no pueden modificarse una vez que la encuesta está activa o cerrada. Solo puedes editar en estado borrador.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <select class="form-select" id="estadoSelect" onchange="cambiarEstado({{ survey.pk }}, this.value)">
+                                    <option value="draft" {% if survey.status == 'draft' %}selected{% endif %}>📝 Borrador</option>
+                                    <option value="active" {% if survey.status == 'active' %}selected{% endif %}>✅ Activa</option>
+                                    <option value="closed" {% if survey.status == 'closed' %}selected{% endif %}>🔒 Cerrada</option>
+                                </select>
+                            {% else %}
+                                <select class="form-select" id="estadoSelect" onchange="cambiarEstado({{ survey.pk }}, this.value)">
+                                    <option value="draft" {% if survey.status == 'draft' %}selected{% endif %}>📝 Borrador</option>
+                                    <option value="active" {% if survey.status == 'active' %}selected{% endif %}>✅ Activa</option>
+                                    <option value="closed" {% if survey.status == 'closed' %}selected{% endif %}>🔒 Cerrada</option>
+                                </select>
+                            {% endif %}
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="text-muted small">Total de respuestas</span>
@@ -116,13 +230,13 @@
                         <label class="form-label small text-muted fw-bold">Enlace público</label>
                         <div class="input-group mb-2">
                             <input type="text" class="form-control bg-body-tertiary border-0 small text-muted"
-                                   value="{{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' survey.pk %}"
+                                   value="{{ respond_absolute_url }}"
                                    readonly id="shareLink">
                             <button class="btn btn-outline-secondary bg-body-tertiary border-0" type="button" onclick="copyLink()">
                                 <i class="bi bi-clipboard"></i>
                             </button>
                         </div>
-                        <a href="{% url 'surveys:responder' survey.pk %}" target="_blank" class="small fw-bold text-primary text-decoration-none">
+                        <a href="{{ respond_absolute_url }}" target="_blank" class="small fw-bold text-primary text-decoration-none">
                             <i class="bi bi-box-arrow-up-right me-1"></i>Probar enlace
                         </a>
                     </div>
@@ -132,7 +246,7 @@
                     <div class="card-body p-4 text-center">
                         <h6 class="text-uppercase text-muted small fw-bold mb-3">Acceso Rápido Móvil</h6>
                         <div class="bg-white p-2 d-inline-block rounded-3 border">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ request.scheme }}://{{ request.get_host }}{% url 'surveys:responder' survey.pk %}"
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ respond_absolute_url|urlencode }}"
                                  alt="QR Code" class="img-fluid" style="width: 120px; height: 120px;">
                         </div>
                         <p class="small text-muted mt-3 mb-0">Escanea para testear en móvil.</p>
@@ -166,7 +280,7 @@
                         </ul>
                         {% if survey.responses.count > 0 %}
                         <div class="card-footer bg-transparent text-center border-0 py-2">
-                            <a href="{% url 'surveys:resultados' survey.pk %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
+                            <a href="{% url 'surveys:results' survey.pk %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
                                 Ver todos los resultados <i class="bi bi-arrow-right"></i>
                             </a>
                         </div>
@@ -179,8 +293,79 @@
     </div>
 </div>
 
+<!-- Modal de confirmación para activar encuesta -->
+<div class="modal fade" id="confirmActivateModal" tabindex="-1" aria-labelledby="confirmActivateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-warning-subtle border-bottom-0">
+                <h5 class="modal-title fw-bold d-flex align-items-center" id="confirmActivateModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2 fs-4"></i>
+                    ⚠️ Confirmar Activación de Encuesta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning border-warning mb-3">
+                    <div class="d-flex">
+                        <i class="bi bi-info-circle-fill me-3 fs-5"></i>
+                        <div>
+                            <p class="mb-2 fw-bold">Una vez que actives esta encuesta:</p>
+                            <ul class="mb-0 small">
+                                <li>No podrás modificar las preguntas existentes</li>
+                                <li>No podrás agregar nuevas preguntas</li>
+                                <li>No podrás eliminar preguntas</li>
+                                <li>El título y descripción seguirán siendo editables</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-lightbulb me-1"></i>
+                    <strong>Recomendación:</strong> Asegúrate de que todas las preguntas estén correctamente configuradas antes de continuar.
+                </p>
+            </div>
+            <div class="modal-footer border-top-0 bg-body-tertiary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-2"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" onclick="confirmarActivacion()">
+                    <i class="bi bi-check-lg me-2"></i>Sí, Activar Encuesta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function cambiarEstado(encuestaId, nuevoEstado) {
+        const estadoActual = '{{ survey.status }}';
+        
+        // Si está en borrador y se intenta activar, mostrar modal de confirmación
+        if (estadoActual === 'draft' && nuevoEstado === 'active') {
+            const modal = new bootstrap.Modal(document.getElementById('confirmActivateModal'));
+            modal.show();
+            
+            // Guardar el callback para confirmar
+            window.confirmarActivacion = function() {
+                ejecutarCambioEstado(encuestaId, nuevoEstado);
+                modal.hide();
+            };
+            
+            // Si cancela, volver al estado anterior
+            document.getElementById('confirmActivateModal').addEventListener('hidden.bs.modal', function() {
+                if (document.getElementById('estadoSelect').value !== estadoActual) {
+                    document.getElementById('estadoSelect').value = estadoActual;
+                }
+            }, { once: true });
+            
+            return;
+        }
+        
+        // Para otros cambios de estado, ejecutar directamente
+        ejecutarCambioEstado(encuestaId, nuevoEstado);
+    }
+    
+    function ejecutarCambioEstado(encuestaId, nuevoEstado) {
         fetch(`/surveys/${encuestaId}/cambiar-estado/`, {
             method: 'POST',
             headers: {
@@ -192,14 +377,10 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Mostrar notificación de éxito
-                const select = document.getElementById('estadoSelect');
-                select.classList.add('border-success');
-                setTimeout(() => {
-                    select.classList.remove('border-success');
-                }, 1000);
+                // Recargar la página para actualizar la UI completamente
+                location.reload();
             } else {
-                alert('Error al cambiar el estado');
+                alert('Error al cambiar el estado: ' + (data.error || 'Error desconocido'));
                 location.reload();
             }
         })
@@ -216,7 +397,6 @@
         copyText.setSelectionRange(0, 99999);
         navigator.clipboard.writeText(copyText.value);
 
-        // Feedback visual
         const btn = document.querySelector("button[onclick='copyLink()']");
         const originalContent = btn.innerHTML;
         btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
@@ -225,6 +405,108 @@
             btn.innerHTML = originalContent;
             btn.classList.remove('border-success');
         }, 2000);
+    }
+    
+    // Funciones de edición de preguntas
+    function editQuestion(questionId) {
+        document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
+        document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+    }
+    
+    function cancelEdit(questionId) {
+        document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+        document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.add('d-none'));
+    }
+    
+    function saveQuestion(questionId) {
+        const text = document.getElementById('text-' + questionId).value;
+        const type = document.getElementById('type-' + questionId).value;
+        const isRequired = document.getElementById('required-' + questionId).checked;
+        const optionsEl = document.getElementById('options-' + questionId);
+        const options = optionsEl ? optionsEl.value.split('\n').filter(o => o.trim()) : [];
+        
+        fetch(`/surveys/questions/${questionId}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ 
+                text: text,
+                type: type,
+                is_required: isRequired,
+                options: options
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error al guardar: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al guardar la pregunta');
+        });
+    }
+    
+    function deleteQuestion(questionId) {
+        if (!confirm('¿Estás seguro de eliminar esta pregunta? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        fetch(`/surveys/questions/${questionId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('question-' + questionId).remove();
+            } else {
+                alert('Error al eliminar: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al eliminar la pregunta');
+        });
+    }
+    
+    function addNewQuestion() {
+        const surveyId = {{ survey.pk }};
+        const text = prompt('Texto de la nueva pregunta:');
+        if (!text) return;
+        
+        fetch(`/surveys/${surveyId}/questions/add/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ 
+                text: text,
+                type: 'text',
+                is_required: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error al crear pregunta: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al crear la pregunta');
+        });
     }
 </script>
 {% endblock %}

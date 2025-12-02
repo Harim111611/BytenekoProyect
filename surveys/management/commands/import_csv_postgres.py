@@ -134,10 +134,39 @@ class Command(BaseCommand):
                     survey_response_id = survey_response_ids[idx]
                     
                     for column_name, value in row.items():
-                        if not value or column_name not in questions_cache:
+                        # Skip empty/null values
+                        if not value or (isinstance(value, str) and not value.strip()):
                             continue
                         
-                        question_data = questions_cache[column_name]
+                        # Skip ONLY technical/system metadata columns
+                        # Permiten fechas, IDs, usuarios, comentarios para historial
+                        skip_completely_keywords = [
+                            'ip_address', 'user_agent', 'navigator'
+                        ]
+                        
+                        col_lower = column_name.strip().lower()
+                        if any(kw in col_lower for kw in skip_completely_keywords):
+                            continue  # Skip only these technical columns
+                        
+                        # Try to find question in cache with multiple matching strategies
+                        question_data = None
+                        
+                        if column_name in questions_cache:
+                            question_data = questions_cache[column_name]
+                        else:
+                            # Extract numeric order from column name and try matching
+                            import re
+                            numeric_match = re.search(r'(\d+)', column_name.lower())
+                            numeric_order = numeric_match.group(1) if numeric_match else None
+                            
+                            if numeric_order:
+                                for key_variant in [f'question_{numeric_order}', numeric_order]:
+                                    if key_variant in questions_cache:
+                                        question_data = questions_cache[key_variant]
+                                        break
+                        
+                        if not question_data:
+                            continue
                         question_id = question_data['question_id']
                         
                         # Buscar option_id

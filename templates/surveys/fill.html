@@ -2,37 +2,6 @@
 {% load static %}
 
 {% block content %}
-<style>
-    .hover-card {
-        transition: all 0.2s ease;
-    }
-    .hover-card:hover {
-        background-color: var(--bs-primary-bg-subtle) !important;
-        border-color: var(--bs-primary) !important;
-        transform: translateY(-2px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .form-check-input:checked ~ .form-check-label {
-        font-weight: 600;
-    }
-    .form-check:has(.form-check-input:checked) {
-        background-color: var(--bs-primary-bg-subtle) !important;
-        border-color: var(--bs-primary) !important;
-        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.15);
-    }
-    
-    /* Hacer que toda la card sea clickeable */
-    .option-card {
-        position: relative;
-    }
-    .option-card .form-check-input {
-        pointer-events: none;
-    }
-    .option-card .form-check-label {
-        pointer-events: none;
-    }
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Hacer que toda la card sea clickeable
@@ -56,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<div class="min-vh-100 d-flex align-items-center py-5" style="background-color: #f3f4f6;">
+<div class="survey-fill-page">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-8 col-xl-6">

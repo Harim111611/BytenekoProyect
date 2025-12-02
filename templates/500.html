@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="survey-fill-page">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6 col-xl-5">
+                <div class="card border-0 shadow-lg rounded-4 overflow-hidden text-center">
+                    <div class="bg-warning p-2"></div>
+                    
+                    <div class="card-body p-5">
+                        <div class="mb-4">
+                            <div class="rounded-circle bg-warning-subtle d-inline-flex align-items-center justify-content-center mb-3 w-100 h-100">
+                                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                            </div>
+                            <h1 class="h3 fw-bold text-body mb-3">Algo salió mal</h1>
+                            <p class="text-muted mb-4">
+                                Ha ocurrido un error inesperado. Por favor, intenta nuevamente más tarde.
+                            </p>
+                        </div>
+
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-house-door me-2"></i>Volver al Inicio
+                            </a>
+                            <button onclick="history.back()" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Regresar
+                            </button>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-top">
+                            <small class="text-muted">
+                                Error 500 - Internal Server Error
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

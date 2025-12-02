@@ -24,8 +24,8 @@ def user():
 
 
 @pytest.fixture
-def encuesta_completa(user):
-    """Encuesta completa con varias preguntas."""
+def complete_survey(user):
+    """Complete survey with several questions."""
     survey = Survey.objects.create(
         title='Satisfaction Survey',
         description='Full test',
@@ -67,11 +67,10 @@ def encuesta_completa(user):
 
 
 @pytest.fixture
-def respuestas_completas(encuesta_completa, user):
-    """Crear respuestas completas para la encuesta."""
-    questions = list(encuesta_completa.questions.all().order_by('order'))
+def complete_responses(complete_survey, user):
+    """Create complete responses for the survey."""
+    questions = list(complete_survey.questions.all().order_by('order'))
     p_scale, p_number, p_single, p_text = questions
-    # Create 5 responses
     responses = []
     scale_values = [9, 10, 8, 9, 7]
     number_values = [25, 30, 28, 35, 22]
@@ -84,7 +83,7 @@ def respuestas_completas(encuesta_completa, user):
     ]
     for i in range(5):
         resp = SurveyResponse.objects.create(
-            survey=encuesta_completa,
+            survey=complete_survey,
             user=user
         )
         # Scale response
@@ -124,12 +123,12 @@ class TestSurveyAnalysisService:
     """Tests para SurveyAnalysisService."""
     
     @pytest.mark.django_db
-    def test_get_analysis_data_empty_survey(self, encuesta_completa):
+    def test_get_analysis_data_empty_survey(self, complete_survey):
         """Debe retornar estructura básica sin respuestas."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         assert 'analysis_data' in result
@@ -140,13 +139,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_with_responses(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe analizar encuesta completa con respuestas."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Verificar que hay datos de análisis
@@ -162,13 +161,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_scale_question(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe analizar pregunta de escala correctamente."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Primera pregunta es de tipo scale
@@ -182,13 +181,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_number_question(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe analizar pregunta numérica correctamente."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Segunda pregunta es de tipo number
@@ -202,13 +201,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_single_question(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe analizar pregunta de opción única correctamente."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Tercera pregunta es de tipo single
@@ -221,13 +220,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_text_question(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe analizar pregunta de texto correctamente."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Cuarta pregunta es de tipo text
@@ -240,13 +239,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_respects_orden(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe respetar el orden de las preguntas."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Verificar que el orden es correcto
@@ -255,13 +254,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_calculates_nps(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe calcular NPS correctamente."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # NPS should be calculated from scale values [9, 10, 8, 9, 7]
@@ -272,13 +271,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_generates_heatmap_for_small_datasets(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe generar heatmap para datasets pequeños si include_charts=True."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=True
+            complete_survey, qs, include_charts=True
         )
         
         # For small datasets (<=1000 responses), heatmap may be generated
@@ -287,27 +286,27 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_no_heatmap_if_charts_disabled(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """No debe generar heatmap si include_charts=False."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         assert result['heatmap_image'] is None
     
     @pytest.mark.django_db
     def test_get_analysis_data_handles_heatmap_error(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe manejar errores en generación de heatmap."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         # Even if heatmap fails, analysis should continue
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=True
+            complete_survey, qs, include_charts=True
         )
         
         # No debe fallar, solo no tener heatmap o tenerlo
@@ -340,13 +339,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_includes_question_metadata(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe incluir metadata de preguntas en el resultado."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         for item in result['analysis_data']:
@@ -358,13 +357,13 @@ class TestSurveyAnalysisService:
     
     @pytest.mark.django_db
     def test_get_analysis_data_generates_charts_when_enabled(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe generar datos de gráficos cuando include_charts=True."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=True
+            complete_survey, qs, include_charts=True
         )
         
         # Check that chart data is present for scale question
@@ -390,20 +389,20 @@ class TestSurveyAnalysisServiceCache:
     
     @pytest.mark.django_db
     def test_get_analysis_data_uses_cache(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Debe usar caché si cache_key es proporcionado."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         cache_key = 'test_analysis_cache'
         
         # Primera llamada - debe cachear
         result1 = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False, cache_key=cache_key
+            complete_survey, qs, include_charts=False, cache_key=cache_key
         )
         
         # Segunda llamada - debe usar caché
         result2 = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False, cache_key=cache_key
+            complete_survey, qs, include_charts=False, cache_key=cache_key
         )
         
         # Resultados deben ser idénticos
@@ -411,20 +410,20 @@ class TestSurveyAnalysisServiceCache:
     
     @pytest.mark.django_db
     def test_get_analysis_data_cache_hit_avoids_computation(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Cache hit debe evitar recalcular análisis."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         cache_key = 'test_cache_hit'
         
         # Primera llamada - calcula
         result1 = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False, cache_key=cache_key
+            complete_survey, qs, include_charts=False, cache_key=cache_key
         )
         
         # Segunda llamada - debe usar caché
         result2 = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False, cache_key=cache_key
+            complete_survey, qs, include_charts=False, cache_key=cache_key
         )
         
         # Results should be identical (from cache)
@@ -432,14 +431,14 @@ class TestSurveyAnalysisServiceCache:
     
     @pytest.mark.django_db
     def test_get_analysis_data_no_cache_without_key(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """No debe cachear si no se proporciona cache_key."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         
         # Sin cache_key
         result = SurveyAnalysisService.get_analysis_data(
-            encuesta_completa, qs, include_charts=False
+            complete_survey, qs, include_charts=False
         )
         
         # Verificar que no se guardó en caché
@@ -448,15 +447,15 @@ class TestSurveyAnalysisServiceCache:
     
     @pytest.mark.django_db
     def test_get_analysis_data_cache_expiration(
-        self, encuesta_completa, respuestas_completas
+        self, complete_survey, complete_responses
     ):
         """Caché debe expirar después de 3600 segundos."""
-        qs = SurveyResponse.objects.filter(survey=encuesta_completa)
+        qs = SurveyResponse.objects.filter(survey=complete_survey)
         cache_key = 'test_expiration'
         
         with patch('django.core.cache.cache.set') as mock_cache_set:
             SurveyAnalysisService.get_analysis_data(
-                encuesta_completa, qs, include_charts=False, cache_key=cache_key
+                complete_survey, qs, include_charts=False, cache_key=cache_key
             )
             
             # Verificar que se llamó con timeout de 3600

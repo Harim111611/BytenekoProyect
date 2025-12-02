@@ -1,0 +1,19 @@
+<!-- Modal Confirmar Eliminación de Todas las Encuestas -->
+<div class="modal fade" id="deleteAllModal" tabindex="-1" aria-labelledby="deleteAllModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteAllModalLabel">Confirmar eliminación masiva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">¿Quieres eliminar <span id="deleteAllCount"></span> encuestas de esta lista? <br>Esta acción no se puede deshacer.</p>
+        <div class="alert alert-warning mt-3 mb-0 small" id="deleteAllHeavyNotice" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteAllBtn">Eliminar todas</button>
+      </div>
+    </div>
+  </div>
+</div>

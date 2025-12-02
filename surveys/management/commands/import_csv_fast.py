@@ -212,16 +212,40 @@ class Command(BaseCommand):
             for i, (survey_response, csv_row) in enumerate(zip(created_responses, csv_rows_batch)):
                 # Process each column in the CSV row
                 for column_name, answer_value in csv_row.items():
-                    if not answer_value or column_name in ['ip_address', 'user_agent']:
-                        continue  # Skip empty answers and metadata columns
+                    # Skip empty/null values
+                    if not answer_value or (isinstance(answer_value, str) and not answer_value.strip()):
+                        continue
+                    
+                    # Skip ONLY technical/system metadata columns
+                    # Permiten fechas, IDs, usuarios, comentarios para historial
+                    skip_completely_keywords = [
+                        'ip_address', 'user_agent', 'navigator'
+                    ]
+                    
+                    col_lower = column_name.strip().lower()
+                    if any(kw in col_lower for kw in skip_completely_keywords):
+                        continue  # Skip only these technical columns
                     
                     # Normalize column name for cache lookup
                     normalized_col = column_name.strip().lower()
                     
                     # Try to find question in cache
                     question_data = None
-                    for key_variant in [normalized_col, f'question_{normalized_col}', f'q{normalized_col}']:
-                        if key_variant in questions_cache:
+                    
+                    # Extract numeric order from column name (e.g., "question_1" -> "1")
+                    import re
+                    numeric_match = re.search(r'(\d+)', normalized_col)
+                    numeric_order = numeric_match.group(1) if numeric_match else None
+                    
+                    # Try multiple matching strategies
+                    for key_variant in [
+                        normalized_col,           # exact match (e.g., "question_1")
+                        f'question_{normalized_col}',  # add prefix if missing
+                        f'q{normalized_col}',    # short prefix
+                        numeric_order,           # just the number
+                        f'question_{numeric_order}' if numeric_order else None,  # reconstruct
+                    ]:
+                        if key_variant and key_variant in questions_cache:
                             question_data = questions_cache[key_variant]
                             break
                     

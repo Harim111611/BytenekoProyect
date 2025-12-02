@@ -1,6 +1,6 @@
 # core/views.py
 from django.shortcuts import render, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from django.utils import timezone
 from django.db.models.functions import TruncDate
 from django.contrib.auth.decorators import login_required
@@ -149,25 +149,42 @@ def dashboard_results_view(request):
     """
     user = request.user
     
-    # Get period from GET param (default 7 days)
-    period = request.GET.get('periodo', '7')
-    
-    # Determine days based on period
-    if period == 'all':
-        days = None
-    else:
-        try:
-            days = int(period)
-        except ValueError:
-            days = 7  # Default
 
-    user_surveys = Survey.objects.filter(author=user).select_related('author')
-    responses_qs = SurveyResponse.objects.filter(survey__author=user).select_related('survey')
-    
-    # Apply period filter
-    if days is not None:
-        start_date = timezone.now() - timedelta(days=days)
-        responses_qs = responses_qs.filter(created_at__gte=start_date)
+    # Soporte para rango personalizado
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+    period = request.GET.get('periodo', '30')
+    days = None
+    custom_range = False
+    if start and end:
+        try:
+            start_date = datetime.strptime(start, '%Y-%m-%d')
+            end_date = datetime.strptime(end, '%Y-%m-%d')
+            # Ajustar a zona horaria local
+            start_date = timezone.make_aware(start_date)
+            end_date = timezone.make_aware(end_date)
+            custom_range = True
+        except Exception:
+            start_date = end_date = None
+    if custom_range and start_date and end_date:
+        user_surveys = Survey.objects.filter(author=user).select_related('author')
+        responses_qs = SurveyResponse.objects.filter(survey__author=user).select_related('survey')
+        responses_qs = responses_qs.filter(created_at__date__gte=start_date.date(), created_at__date__lte=end_date.date())
+    else:
+        # Determine days based on period
+        if period == 'all':
+            days = None
+        else:
+            try:
+                days = int(period)
+            except ValueError:
+                days = 30  # Default
+        user_surveys = Survey.objects.filter(author=user).select_related('author')
+        responses_qs = SurveyResponse.objects.filter(survey__author=user).select_related('survey')
+        # Apply period filter
+        if days is not None:
+            start_date = timezone.now() - timedelta(days=days)
+            responses_qs = responses_qs.filter(created_at__gte=start_date)
 
     total_responses = responses_qs.count()
     total_surveys = user_surveys.count()
@@ -428,10 +445,14 @@ def report_preview_ajax(request, pk):
             request.GET.get('include_table', 'true'), 'include_table'
         )
         
-        survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), pk=pk)
+        try:
+            survey = get_object_or_404(Survey.objects.prefetch_related('questions__options'), pk=pk)
+        except Http404:
+            logger.warning(f"Intento AJAX de preview de reporte de encuesta inexistente: ID {pk} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
+            return HttpResponse(json.dumps({'error': 'Encuesta no encontrada'}), content_type='application/json', status=404)
         
         # Permission Check
-        PermissionHelper.verify_encuesta_access(survey, request.user)
+        PermissionHelper.verify_survey_access(survey, request.user)
         
         qs = SurveyResponse.objects.filter(survey=survey).select_related('survey')
 
@@ -477,10 +498,10 @@ def report_preview_ajax(request, pk):
             )
         )
     except ValidationError as e:
-        logger.error(f"Error de validación en report_preview_ajax: {e}")
+        logger.error(f"[REPORT][ERROR][VALIDATION] {e}")
         return HttpResponse(str(e), status=400)
     except Exception as e:
-        logger.exception(f"Error inesperado en report_preview_ajax (encuesta {pk}): {e}")
+        logger.error(f"[REPORT][ERROR][UNEXPECTED] encuesta={pk} error={e}", exc_info=True)
         return HttpResponse("Error al generar la vista previa del reporte", status=500)
 
 
@@ -499,7 +520,7 @@ def report_pdf_view(request):
         )
         
         # Verify permissions
-        PermissionHelper.verify_encuesta_access(survey, request.user)
+        PermissionHelper.verify_survey_access(survey, request.user)
 
         start = request.POST.get('start_date') or request.GET.get('start_date')
         end = request.POST.get('end_date') or request.GET.get('end_date')
@@ -538,10 +559,10 @@ def report_pdf_view(request):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
     except ValueError as e:
-        logger.error(f"Error generating PDF: {e}")
+        logger.error(f"[PDF][ERROR][VALIDATION] {e}")
         return HttpResponse(str(e), status=500)
     except Exception as e:
-        logger.exception(f"Unexpected error in report_pdf_view: {e}")
+        logger.error(f"[PDF][ERROR][UNEXPECTED] error={e}", exc_info=True)
         return HttpResponse("Error generating PDF", status=500)
 
 
@@ -561,7 +582,7 @@ def report_powerpoint_view(request):
         )
         
         # Verify permissions
-        PermissionHelper.verify_encuesta_access(survey, request.user)
+        PermissionHelper.verify_survey_access(survey, request.user)
 
         qs = SurveyResponse.objects.filter(survey=survey).select_related('survey')
 

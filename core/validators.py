@@ -131,13 +131,17 @@ class CSVImportValidator:
         """Valida que el DataFrame tenga estructura válida."""
         if df is None or df.empty:
             raise ValidationError("El archivo CSV está vacío")
-        
+
         if len(df.columns) == 0:
             raise ValidationError("El archivo CSV no tiene columnas")
-        
+
+        # 🚩 Nueva regla: mínimo 2 columnas para ser válido
+        if len(df.columns) < 2:
+            raise ValidationError("El archivo CSV debe tener al menos 2 columnas (preguntas)")
+
         if len(df) == 0:
             raise ValidationError("El archivo CSV no tiene filas de datos")
-        
+
         # Detectar si es un CSV de resumen/agregados en lugar de respuestas individuales
         suspicious_columns = ['indicador', 'valor', 'tipo', 'formato', 'métrica', 'promedio', 'total']
         if len(df.columns) <= 4 and any(col.lower() in suspicious_columns for col in df.columns):
@@ -152,19 +156,19 @@ class CSVImportValidator:
                 "Juan,25,8,Laptop\n"
                 "María,30,9,Mouse"
             )
-        
+
         # Validar que no haya demasiadas columnas
         if len(df.columns) > 100:
             raise ValidationError(
                 f"El CSV tiene demasiadas columnas ({len(df.columns)}). Máximo permitido: 100"
             )
-        
+
         # Validar que no haya demasiadas filas
         if len(df) > 10000:
             raise ValidationError(
                 f"El CSV tiene demasiadas filas ({len(df)}). Máximo permitido: 10,000"
             )
-        
+
         return df
     
     @staticmethod

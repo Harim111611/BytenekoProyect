@@ -39,6 +39,82 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btnSuggestQuestions) btnSuggestQuestions.addEventListener('click', suggestQuestions);
     if(btnPublish) btnPublish.addEventListener('click', submitSurvey);
 
+    // --- IMPORTACIÓN CSV ---
+    const importForm = document.getElementById('importCsvForm');
+    if(importForm) {
+        importForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = importForm.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+            const formData = new FormData(importForm);
+            try {
+                const resp = await fetch(importForm.action, {method: 'POST', body: formData});
+                const data = await resp.json();
+                if(data.success) {
+                    showToast('✅ Importación completada', 'success');
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    showToast(data.error || 'Error en importación', 'danger');
+                }
+            } catch {
+                showToast('Error de red', 'danger');
+            }
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        });
+    }
+
+    // --- BULK DELETE ---
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if(bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', async function() {
+            if(this.disabled) return;
+            const checked = Array.from(document.querySelectorAll('.survey-checkbox:checked')).map(cb => cb.value);
+            if(!checked.length) return showToast('Selecciona al menos una encuesta', 'warning');
+            if(!confirm(`¿Seguro que quieres eliminar ${checked.length} encuestas y todas sus respuestas?`)) return;
+            this.disabled = true;
+            const original = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminando...';
+            try {
+                const resp = await fetch('/surveys/bulk-delete/', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value, 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new URLSearchParams(checked.map(id => ['survey_ids', id]))
+                });
+                const data = await resp.json();
+                if(data.success) {
+                    showToast(`✅ Eliminadas ${data.deleted} encuestas`, 'success');
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    showToast(data.error || 'Error al eliminar', 'danger');
+                }
+            } catch {
+                showToast('Error de red', 'danger');
+            }
+            this.disabled = false;
+            this.innerHTML = original;
+        });
+    }
+
+    // --- TOAST FEEDBACK ---
+    function showToast(msg, type) {
+        let toast = document.getElementById('mainToast');
+        if(!toast) {
+            toast = document.createElement('div');
+            toast.id = 'mainToast';
+            toast.className = 'toast align-items-center text-bg-' + (type||'info') + ' border-0 position-fixed bottom-0 end-0 m-3';
+            toast.style.zIndex = 9999;
+            toast.innerHTML = `<div class="d-flex"><div class="toast-body"></div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+            document.body.appendChild(toast);
+        }
+        toast.querySelector('.toast-body').textContent = msg;
+        toast.className = 'toast align-items-center text-bg-' + (type||'info') + ' border-0 position-fixed bottom-0 end-0 m-3';
+        const bsToast = bootstrap.Toast.getOrCreateInstance(toast, {delay: 3000});
+        bsToast.show();
+    }
+
     // Iniciar el Wizard en el Paso 1
     goToStep(1);
 
@@ -377,7 +453,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-        fetch('/surveys/crear/', {
+        fetch('/surveys/create/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify(surveyData)

@@ -7,7 +7,24 @@ from decouple import config
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+LOCAL_LAN_IP = config('LAN_IP', default='192.168.100.2')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', LOCAL_LAN_IP]
+
+# ============================================================
+# MIDDLEWARE (con logging de requests)
+# ============================================================
+MIDDLEWARE = [
+    'core.middleware_logging.RequestLoggingMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
 
 # 1. CONFIGURACIÓN PARA HTTP EN DESARROLLO (usando manage.py runserver)
 # Deshabilitar HTTPS en desarrollo - runserver solo soporta HTTP
@@ -24,6 +41,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8001',
     'http://127.0.0.1:8080',  # HTTP puerto 8080 (alternativo)
     'http://localhost:8080',
+    f'http://{LOCAL_LAN_IP}:8000',
 ]
 
 # 2. OPTIMIZACIÓN DE ARCHIVOS ESTÁTICOS

@@ -69,3 +69,12 @@ coverage.xml
 
 # Pytest
 .pytest_cache/
+
+# Housekeeping: asegurados
+.venv/
+logs/
+ssl/
+data_export.json
+
+# Entorno y variables
+.env

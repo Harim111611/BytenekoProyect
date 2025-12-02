@@ -254,7 +254,7 @@
                 <p class="text-muted mb-0">Reporte generado el {{ "now"|date:"d/m/Y H:i" }}</p>
             </div>
             <div class="col-4 text-end">
-                <img src="{% static 'img/byteneko_logo.png' %}" alt="Byteneko" style="height: 40px;" onerror="this.style.display='none'">
+                <img src="{% static 'img/favicon.ico' %}" alt="Byteneko" style="height: 40px;" onerror="this.style.display='none'">
             </div>
         </div>
     </div>
@@ -271,7 +271,7 @@
             <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary fw-medium">
                 <i class="bi bi-house-door me-1"></i>Dashboard
             </a>
-            <a href="{% url 'surveys:crear' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
+            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-bold shadow-sm px-4 py-2">
                 <i class="bi bi-plus-lg me-2"></i>Nueva Encuesta
             </a>
         </div>
@@ -288,16 +288,22 @@
                     <div class="btn-group btn-group-sm" role="group">
                         <input type="radio" class="btn-check" name="periodo" id="periodo7" autocomplete="off" {% if periodo == '7' %}checked{% endif %}>
                         <label class="btn btn-outline-primary" for="periodo7">7 días</label>
-                        
                         <input type="radio" class="btn-check" name="periodo" id="periodo30" autocomplete="off" {% if periodo == '30' %}checked{% endif %}>
                         <label class="btn btn-outline-primary" for="periodo30">30 días</label>
-                        
                         <input type="radio" class="btn-check" name="periodo" id="periodo90" autocomplete="off" {% if periodo == '90' %}checked{% endif %}>
                         <label class="btn btn-outline-primary" for="periodo90">90 días</label>
-                        
                         <input type="radio" class="btn-check" name="periodo" id="periodoAll" autocomplete="off" {% if periodo == 'all' %}checked{% endif %}>
                         <label class="btn btn-outline-primary" for="periodoAll">Todo</label>
                     </div>
+                </div>
+                <div class="col-auto">
+                    <form id="custom-range-form" class="d-flex align-items-center gap-2" method="get" action="">
+                        <label for="start-date" class="small mb-0">De</label>
+                        <input type="date" id="start-date" name="start" class="form-control form-control-sm" value="{{ request.GET.start|default_if_none:'' }}">
+                        <label for="end-date" class="small mb-0">a</label>
+                        <input type="date" id="end-date" name="end" class="form-control form-control-sm" value="{{ request.GET.end|default_if_none:'' }}">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Filtrar</button>
+                    </form>
                 </div>
                 <div class="col-auto ms-auto">
                     <a href="{% url 'global_results_pdf' %}" class="btn btn-sm btn-primary">
@@ -483,7 +489,7 @@
                                     <tr>
                                         <td class="text-muted fw-bold">{{ forloop.counter }}</td>
                                         <td class="text-truncate" style="max-width: 300px;" title="{{ question.text }}">
-                                            <a href="{% url 'surveys:resultados' question.survey.id %}" class="text-decoration-none text-body">
+                                            <a href="{% url 'surveys:results' question.survey.id %}" class="text-decoration-none text-body">
                                                 {{ question.text }}
                                             </a>
                                             <br>
@@ -540,7 +546,7 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                                <a href="{% url 'surveys:resultados' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill flex-shrink-0">
+                                <a href="{% url 'surveys:results' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill flex-shrink-0">
                                     Ver <i class="bi bi-arrow-right"></i>
                                 </a>
                             </div>

@@ -159,7 +159,7 @@ def log_data_change(model_name: str, operation: str, instance_id: Any, user_id: 
     Loggea cambios en datos para auditoría.
     
     Args:
-        model_name: Nombre del modelo (ej: 'Encuesta', 'RespuestaPregunta')
+        model_name: Model name (e.g., 'Survey', 'QuestionResponse')
         operation: Tipo de operación ('CREATE', 'UPDATE', 'DELETE')
         instance_id: ID de la instancia modificada
         user_id: ID del usuario que realizó el cambio
@@ -167,7 +167,7 @@ def log_data_change(model_name: str, operation: str, instance_id: Any, user_id: 
         
     Usage:
         log_data_change(
-            'Encuesta',
+            'Survey',
             'UPDATE',
             instance_id=123,
             user_id=5,
