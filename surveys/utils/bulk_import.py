@@ -160,10 +160,11 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
                             )
                         )
 
-                # NUMERIC / SCALE
-                elif dtype in ["number", "scale"]:
+                # NUMBER / SCALE (valor numérico)
+                elif dtype == "number" or dtype == "scale":
                     try:
-                        num_val = float(value)
+                        # Convertir a int primero (el campo es IntegerField, no FloatField)
+                        num_val = int(float(value))
                     except (ValueError, TypeError):
                         continue
 
@@ -200,7 +201,49 @@ def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, da
         if new_options_to_create:
             AnswerOption.objects.bulk_create(new_options_to_create, batch_size=chunk_size)
 
-        if answer_objects:
+        # Inserción de QuestionResponse: vía COPY para máximo rendimiento si está habilitado
+        use_copy = getattr(settings, 'SURVEY_IMPORT_USE_COPY_QR', True)
+        if use_copy and answer_objects:
+            table = QuestionResponse._meta.db_table
+            columns = [
+                'survey_response_id',
+                'question_id',
+                'selected_option_id',
+                'text_value',
+                'numeric_value',
+            ]
+
+            # Construir CSV en memoria con valores NULL como \N
+            buf = io.StringIO()
+            for obj in answer_objects:
+                sr_id = obj.survey_response_id or (obj.survey_response.id if obj.survey_response else None)
+                q_id = obj.question_id or (obj.question.id if obj.question else None)
+                so_id = obj.selected_option_id or (obj.selected_option.id if obj.selected_option else None)
+                txt = obj.text_value if obj.text_value is not None else '\\N'
+                num = obj.numeric_value if obj.numeric_value is not None else '\\N'
+                # Escapar comas y nuevas líneas en texto
+                if txt != '\\N':
+                    txt = str(txt).replace('\n', ' ').replace('\r', ' ')
+                buf.write(f"{sr_id},{q_id},{so_id if so_id is not None else '\\N'},{txt},{num}\n")
+
+            buf.seek(0)
+            with connection.cursor() as cursor:
+                copy_sql = (
+                    f"COPY {table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT CSV, DELIMITER ',', NULL '\\N')"
+                )
+                # Soporte para psycopg2
+                if hasattr(cursor, 'copy_expert'):
+                    cursor.copy_expert(copy_sql, buf)
+                # Soporte para psycopg3
+                elif hasattr(cursor, 'copy'):
+                    # psycopg3 API: cursor.copy(sql) context manager y .write()
+                    buf.seek(0)
+                    with cursor.copy(copy_sql) as cp:
+                        cp.write(buf.read())
+                else:
+                    # Fallback: si el driver no soporta COPY, usar bulk_create
+                    QuestionResponse.objects.bulk_create(answer_objects, batch_size=chunk_size)
+        elif answer_objects:
             QuestionResponse.objects.bulk_create(answer_objects, batch_size=chunk_size)
 
     return len(survey_responses), len(answer_objects)

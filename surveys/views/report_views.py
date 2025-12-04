@@ -64,7 +64,7 @@ def _get_survey_quick_stats(survey_id, user_id):
 
 def _get_trend_data_fast(survey_id, days=14):
     """
-    Get daily response counts using efficient SQL.
+    Obtiene conteo diario de respuestas y promedio diario de satisfacción (solo preguntas de tipo 'scale').
     """
     cache_key = f"survey_trend_{survey_id}_{days}"
     trend = cache.get(cache_key)
@@ -75,6 +75,7 @@ def _get_trend_data_fast(survey_id, days=14):
         
         start_date = timezone.now() - timedelta(days=days)
         
+        # 1) Conteo de respuestas por día
         daily_counts = list(
             SurveyResponse.objects.filter(
                 survey_id=survey_id,
@@ -87,12 +88,34 @@ def _get_trend_data_fast(survey_id, days=14):
         )
         
         if daily_counts:
+            labels = [item['dia'].strftime('%Y-%m-%d') for item in daily_counts]
+            
+            # 2) Promedio de satisfacción por día (preguntas 'scale')
+            daily_satisfaction = list(
+                QuestionResponse.objects.filter(
+                    survey_response__survey_id=survey_id,
+                    survey_response__created_at__gte=start_date,
+                    question__type='scale',
+                    numeric_value__isnull=False
+                ).annotate(
+                    dia=TruncDate('survey_response__created_at')
+                ).values('dia').annotate(
+                    avg_satisfaction=Avg('numeric_value')
+                ).order_by('dia')
+            )
+            
+            sat_map = {
+                item['dia']: round(item['avg_satisfaction'] or 0, 1)
+                for item in daily_satisfaction
+            }
+            
             trend = {
-                'labels': [item['dia'].strftime('%Y-%m-%d') for item in daily_counts],
-                'data': [item['count'] for item in daily_counts]
+                'labels': labels,
+                'data': [item['count'] for item in daily_counts],
+                'satisfaction': [sat_map.get(item['dia']) for item in daily_counts],
             }
         else:
-            trend = {'labels': [], 'data': []}
+            trend = {'labels': [], 'data': [], 'satisfaction': []}
         
         cache.set(cache_key, trend, CACHE_TIMEOUT_STATS)
     
@@ -265,7 +288,7 @@ def survey_results_view(request, public_id):
         )
     except Http404:
         logger.warning(f"Intento de acceso a resultados de encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')} por usuario {request.user.username}")
-        return render(request, 'surveys/not_found.html', {
+        return render(request, 'surveys/crud/not_found.html', {
             'survey_id': public_id,
             'message': 'La encuesta cuyos resultados intentas ver no existe o ha sido eliminada.'
         }, status=404)
@@ -324,18 +347,43 @@ def survey_results_view(request, public_id):
     # 7. Obtener tendencia (cacheada)
     trend_data = _get_trend_data_fast(survey_id, days=14) if not has_filters else None
     
-    # Si hay filtros, calcular tendencia específica
+    # Si hay filtros, calcular tendencia específica (respuestas + satisfacción)
     if has_filters and total_respuestas > 0:
-        daily_counts = respuestas_qs.annotate(
+        daily_counts_qs = respuestas_qs.annotate(
             dia=TruncDate('created_at')
         ).values('dia').annotate(
             count=Count('id')
         ).order_by('dia')
         
-        trend_data = {
-            'labels': [item['dia'].strftime('%Y-%m-%d') for item in daily_counts],
-            'data': [item['count'] for item in daily_counts]
-        } if daily_counts else None
+        daily_counts = list(daily_counts_qs)
+        
+        if daily_counts:
+            labels = [item['dia'].strftime('%Y-%m-%d') for item in daily_counts]
+            
+            daily_satisfaction = list(
+                QuestionResponse.objects.filter(
+                    survey_response__in=respuestas_qs,
+                    question__type='scale',
+                    numeric_value__isnull=False
+                ).annotate(
+                    dia=TruncDate('survey_response__created_at')
+                ).values('dia').annotate(
+                    avg_satisfaction=Avg('numeric_value')
+                ).order_by('dia')
+            )
+            
+            sat_map = {
+                item['dia']: round(item['avg_satisfaction'] or 0, 1)
+                for item in daily_satisfaction
+            }
+            
+            trend_data = {
+                'labels': labels,
+                'data': [item['count'] for item in daily_counts],
+                'satisfaction': [sat_map.get(item['dia']) for item in daily_counts],
+            }
+        else:
+            trend_data = None
     
     # 8. Preparar datos para JSON (completo para gráficas)
     analysis_data_json = [
@@ -356,8 +404,27 @@ def survey_results_view(request, public_id):
         for item in analysis_result['analysis_data']
     ]
     
-    # 9. Top insights (ya filtrados)
-    top_insights = [item for item in analysis_result['analysis_data'] if item.get('insight')][:3]
+    # 9. Top insights (ordenados por criticidad/impacto)
+    STATE_PRIORITY = {
+        'CRITICO': 3,
+        'REGULAR': 2,
+        'BUENO': 1,
+        'EXCELENTE': 0,
+    }
+
+    def _insight_score(item):
+        state = (item.get('state') or '').upper()
+        base = STATE_PRIORITY.get(state, 0)
+        avg = item.get('avg')
+        extra = 0
+        # Dentro del mismo estado, valores promedio más bajos se consideran más críticos
+        if isinstance(avg, (int, float)):
+            extra = -avg
+        return (base, extra)
+
+    candidate_insights = [item for item in analysis_result['analysis_data'] if item.get('insight')]
+    candidate_insights.sort(key=_insight_score, reverse=True)
+    top_insights = candidate_insights[:3]
     
     # 10. Preguntas para filtro (con información demográfica)
     preguntas_filtro = list(
@@ -371,14 +438,14 @@ def survey_results_view(request, public_id):
         'nps_score': analysis_result['nps_data'].get('score', 0),
         'nps_data': analysis_result['nps_data'],
         'metrics': {
-            'promedio_satisfaccion': quick_stats.get('satisfaction_avg') if not has_filters
-                else analysis_result.get('kpi_prom_satisfaccion', 0)
+            'promedio_satisfaccion': round(analysis_result.get('kpi_prom_satisfaccion', 0), 1)
         },
         'analysis_data': analysis_result['analysis_data'],
         'analysis_data_json': json.dumps(analysis_data_json),
         'trend_data': json.dumps(trend_data) if trend_data else None,
         'top_insights': top_insights,
         'heatmap_image': analysis_result.get('heatmap_image'),
+        'heatmap_image_dark': analysis_result.get('heatmap_image_dark'),
         'preguntas_filtro': preguntas_filtro,
         'filter_start': start,
         'filter_end': end,
@@ -388,9 +455,10 @@ def survey_results_view(request, public_id):
         'has_filters': has_filters,
         'ignored_questions': analysis_result.get('ignored_questions', []),
         'has_date_fields': _has_date_fields(survey_id),
+        'data_quality': analysis_result.get('data_quality'),
     }
     
-    return render(request, 'surveys/results.html', context)
+    return render(request, 'surveys/responses/results.html', context)
 
 
 def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segment_demo):
@@ -491,6 +559,7 @@ def survey_analysis_ajax(request, public_id):
         'analysis_data': analysis['analysis_data'],
         'nps_data': analysis['nps_data'],
         'heatmap_image': analysis.get('heatmap_image'),
+        'heatmap_image_dark': analysis.get('heatmap_image_dark'),
         'ignored_questions': analysis.get('ignored_questions', []),
     })
 
@@ -590,7 +659,7 @@ def survey_thanks_view(request):
         'ui': ui,
         'survey_title': survey_title,
     }
-    return render(request, 'surveys/thanks.html', context)
+    return render(request, 'surveys/responses/thanks.html', context)
 
 
 # --- Cambiar estado de encuesta ---

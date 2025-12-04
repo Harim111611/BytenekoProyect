@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views import import_views, report_views, respond_views, question_views
+from .views import crud_views
 from .views.crud_views import (
     SurveyListView,
     SurveyCreateView,
@@ -30,13 +31,6 @@ urlpatterns = [
         "questions/<int:pk>/delete/",
         question_views.delete_question_view,
         name="question_delete",
-    ),
-
-    # Importar nueva encuesta desde CSV (flujo normal, síncrono)
-    path(
-        "import-new/",
-        import_views.import_survey_view,
-        name="import_new",
     ),
 
     # Vista previa de CSV (detecta tipos de columnas, muestra muestra, etc.)
@@ -83,6 +77,13 @@ urlpatterns = [
         "import-job/<int:job_id>/status/",
         import_views.import_job_status,
         name="import_job_status",
+    ),
+
+    # Endpoint para consultar el estado de una tarea de eliminación
+    path(
+        "delete-task/<str:task_id>/status/",
+        crud_views.delete_task_status,
+        name="delete_task_status",
     ),
 
     # Rutas legadas basadas en pk entero: redirigir a public_id
@@ -135,5 +136,10 @@ urlpatterns = [
         "<str:public_id>/export/",
         report_views.export_survey_csv_view,
         name="export",
+    ),
+    path(
+        "list-count/",
+        crud_views.survey_list_count,
+        name="list_count",
     ),
 ]

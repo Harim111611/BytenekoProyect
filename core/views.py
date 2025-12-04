@@ -158,7 +158,7 @@ def dashboard_view(request):
         }
         cache.set(cache_key, context, 300)
 
-    return render(request, 'core/dashboard.html', context)
+    return render(request, 'core/dashboard/dashboard.html', context)
 
 @login_required
 def dashboard_results_view(request):
@@ -307,7 +307,7 @@ def dashboard_results_view(request):
         'top_preguntas': top_questions,
         'periodo': period,
     }
-    return render(request, 'core/results_dashboard.html', context)
+    return render(request, 'core/dashboard/results_dashboard.html', context)
 
 
 @login_required
@@ -415,7 +415,7 @@ def global_results_pdf_view(request):
         'fecha_generacion': datetime.now().strftime('%d/%m/%Y %H:%M'),
     }
 
-    html_string = render_to_string('core/_global_results_pdf.html', context)
+    html_string = render_to_string('core/reports/_global_results_pdf.html', context)
     html = HTML(string=html_string)
     pdf_file = html.write_pdf()
 
@@ -445,7 +445,7 @@ def reports_page_view(request):
         'page_name': 'reports',
         'surveys': surveys,
     }
-    return render(request, 'core/reports_page.html', context)
+    return render(request, 'core/reports/reports_page.html', context)
 
 
 @login_required
@@ -508,7 +508,7 @@ def report_preview_ajax(request, public_id):
 
         return HttpResponse(
             render_to_string(
-                'core/_report_preview_content.html',
+                'core/reports/_report_preview_content.html',
                 {
                     'survey': survey,
                     'analysis_data': data['analysis_data'],
@@ -682,6 +682,6 @@ def report_powerpoint_view(request):
 def settings_view(request):
     return render(
         request,
-        'core/settings.html',
+        'core/dashboard/settings.html',
         {'page_name': 'settings', 'user': request.user}
     )

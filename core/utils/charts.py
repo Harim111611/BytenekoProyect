@@ -37,34 +37,153 @@ class ChartGenerator:
         return base64.b64encode(buf.read()).decode("utf-8")
     
     @staticmethod
-    def generate_heatmap(df):
+    def generate_heatmap(df, dark_mode=False):
         """
         Genera un mapa de calor de correlaciones.
         
         Args:
             df: DataFrame con datos numéricos
+            dark_mode: Si True, genera gráfico optimizado para fondo oscuro
             
         Returns:
             str: Imagen en base64 o None si no hay suficientes datos
         """
-        df_numeric = df.select_dtypes(include=['float64', 'int64'])
+        if df is None or df.empty:
+            return None
+            
+        # Seleccionar columnas numéricas
+        df_numeric = df.select_dtypes(include=['float64', 'int64', 'float32', 'int32'])
+        
+        # Si no hay columnas numéricas, intentar convertir
+        if df_numeric.empty:
+            df_numeric = df.copy()
+            for col in df_numeric.columns:
+                try:
+                    df_numeric[col] = pd.to_numeric(df_numeric[col], errors='coerce')
+                except:
+                    pass
+            df_numeric = df_numeric.select_dtypes(include=['float64', 'int64', 'float32', 'int32'])
+        
+        # Verificar que haya suficientes datos
+        if df_numeric.shape[1] < 2 or df_numeric.shape[0] < 2:
+            return None
+        
+        # Eliminar columnas que solo tienen NaN
+        df_numeric = df_numeric.dropna(axis=1, how='all')
+        
+        # Verificar nuevamente después de limpiar
         if df_numeric.shape[1] < 2 or df_numeric.shape[0] < 2:
             return None
         
         ChartGenerator._configure_pyplot()
-        fig, ax = plt.subplots(figsize=(8, 5))
+        
+        # Calcular correlación
+        corr_matrix = df_numeric.corr()
+        
+        # Verificar que la matriz de correlación no esté vacía
+        if corr_matrix.empty or corr_matrix.shape[0] < 2:
+            return None
+        
+        # Acortar nombres de columnas para mejor visualización
+        def truncate_label(text, max_length=30):
+            """Trunca texto largo y elimina prefijos comunes."""
+            text = str(text)
+            # Eliminar prefijos comunes de preguntas
+            prefixes = ['¿Qué tan ', '¿Cómo ', '¿Cuál ', '¿Por qué ', '¿Dónde ', '¿Cuándo ']
+            for prefix in prefixes:
+                if text.startswith(prefix):
+                    text = text[len(prefix):]
+            
+            # Eliminar sufijos comunes
+            if text.endswith('?'):
+                text = text[:-1]
+            
+            # Truncar si es muy largo
+            if len(text) > max_length:
+                text = text[:max_length-3] + '...'
+            
+            return text
+        
+        # Renombrar columnas y filas
+        short_labels = [truncate_label(col) for col in corr_matrix.columns]
+        corr_matrix.columns = short_labels
+        corr_matrix.index = short_labels
+        
+        # Calcular tamaño dinámico basado en número de preguntas
+        n_questions = corr_matrix.shape[0]
+        fig_width = max(8, min(14, n_questions * 2.5))
+        fig_height = max(6, min(12, n_questions * 2))
+        
+        # Configuración de colores según el tema
+        if dark_mode:
+            bg_color = '#1f2937'
+            text_color = '#e5e7eb'
+            title_color = '#f9fafb'
+            line_color = '#374151'
+            cmap = 'RdYlGn'  # Mantener el mismo esquema de colores
+        else:
+            bg_color = 'white'
+            text_color = '#374151'
+            title_color = '#1f2937'
+            line_color = 'white'
+            cmap = 'RdYlGn'
+        
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height), facecolor=bg_color)
+        ax.set_facecolor(bg_color)
+        
+        # Generar heatmap con mejor formato
         sns.heatmap(
-            df_numeric.corr(),
+            corr_matrix,
             annot=True,
-            cmap='coolwarm',
+            cmap=cmap,
             fmt=".2f",
-            linewidths=.5,
+            linewidths=1,
+            linecolor=line_color,
             vmin=-1,
             vmax=1,
-            ax=ax
+            ax=ax,
+            cbar_kws={
+                'label': 'Coeficiente de Correlación',
+                'shrink': 0.8,
+                'pad': 0.02
+            },
+            square=True,  # Celdas cuadradas
+            annot_kws={'size': 10, 'weight': 'bold'}
         )
+        
+        # Configurar título
+        ax.set_title(
+            'Mapa de Correlaciones entre Variables', 
+            fontsize=14, 
+            weight='bold', 
+            pad=20,
+            color=title_color
+        )
+        
+        # Rotar etiquetas para mejor legibilidad
+        ax.set_xticklabels(
+            ax.get_xticklabels(),
+            rotation=45,
+            ha='right',
+            fontsize=9,
+            color=text_color
+        )
+        ax.set_yticklabels(
+            ax.get_yticklabels(),
+            rotation=0,
+            fontsize=9,
+            color=text_color
+        )
+        
+        # Configurar colorbar para modo oscuro
+        cbar = ax.collections[0].colorbar
+        cbar.ax.yaxis.label.set_color(text_color)
+        cbar.ax.tick_params(colors=text_color)
+        
+        # Mejorar el espaciado
         plt.tight_layout()
-        return ChartGenerator._fig_to_base64(fig)
+        
+        return ChartGenerator._fig_to_base64(fig, dpi=120)
     
     @staticmethod
     def generate_nps_chart(promotores, pasivos, detractores):
@@ -91,7 +210,8 @@ class ChartGenerator:
         if not sizes:
             return None
         
-        fig, ax = plt.subplots(figsize=(5, 3))
+        # Usar figura cuadrada para evitar distorsión de la dona
+        fig, ax = plt.subplots(figsize=(5, 5))
         ax.pie(
             sizes,
             labels=labels,
@@ -101,6 +221,8 @@ class ChartGenerator:
             pctdistance=0.85,
             textprops=dict(color="#333333", fontsize=10, weight='bold')
         )
+        # Asegurar aspecto igual para que el círculo no se aplaste
+        ax.axis('equal')
         
         # Agregar círculo central para efecto dona
         centre_circle = plt.Circle((0, 0), 0.60, fc='white')
@@ -157,7 +279,8 @@ class ChartGenerator:
         # Convertir a hex
         colors_hex = ['#%02x%02x%02x' % c for c in colors]
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        # Figura cuadrada para mantener proporción en dona
+        fig, ax = plt.subplots(figsize=(5.5, 5.5))
         wedges, texts, autotexts = ax.pie(
             counts_f,
             labels=labels_f,
@@ -167,6 +290,8 @@ class ChartGenerator:
             pctdistance=0.75,
             textprops=dict(color="#333333", fontsize=9)
         )
+        # Asegurar aspecto igual para que el círculo no se aplaste
+        ax.axis('equal')
 
         # Agregar círculo central para efecto dona
         centre_circle = plt.Circle((0, 0), 0.60, fc='white')

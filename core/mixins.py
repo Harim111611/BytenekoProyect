@@ -33,7 +33,7 @@ class OwnerRequiredMixin(UserPassesTestMixin):
                     request.META.get('REMOTE_ADDR'),
                     request.user.username,
                 )
-                return render(request, 'surveys/not_found.html', {
+                return render(request, 'surveys/crud/not_found.html', {
                     'survey_id': identifier,
                     'message': 'La encuesta que buscas no existe o ha sido eliminada.'
                 }, status=404)

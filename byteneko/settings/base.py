@@ -193,6 +193,11 @@ LOGGING = {
             'style': '{',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'detailed': {
+            'format': '{asctime} | {name:30} | {levelname:8} | {funcName:20} | {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
     },
     'filters': {
         'require_debug_false': {
@@ -206,7 +211,7 @@ LOGGING = {
         'console': {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'detailed',
         },
         'file_app': {
             'level': 'INFO',
@@ -214,7 +219,7 @@ LOGGING = {
             'filename': BASE_DIR / 'logs' / 'app.log',
             'maxBytes': 1024 * 1024 * 10,  # 10 MB
             'backupCount': 5,
-            'formatter': 'verbose',
+            'formatter': 'detailed',
         },
         'file_error': {
             'level': 'ERROR',
@@ -238,7 +243,15 @@ LOGGING = {
             'filename': BASE_DIR / 'logs' / 'performance.log',
             'maxBytes': 1024 * 1024 * 10,  # 10 MB
             'backupCount': 3,
-            'formatter': 'verbose',
+            'formatter': 'detailed',
+        },
+        'file_surveys': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'surveys.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'detailed',
         },
         'mail_admins': {
             'level': 'ERROR',
@@ -276,7 +289,7 @@ LOGGING = {
             'propagate': False,
         },
         'surveys': {
-            'handlers': ['console', 'file_app', 'file_error'],
+            'handlers': ['console', 'file_surveys', 'file_error'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
@@ -302,3 +315,37 @@ import os
 logs_dir = BASE_DIR / 'logs'
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
+
+
+# ============================================================
+# CELERY CONFIGURATION
+# ============================================================
+
+# Celery broker configuration (Redis or RabbitMQ)
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+
+# Celery worker configuration
+CELERY_WORKER_CONCURRENCY = config('CELERY_WORKER_CONCURRENCY', default=4, cast=int)  # Desarrollo: 4 workers
+CELERY_WORKER_PREFETCH_MULTIPLIER = 4  # Cada worker prefetch 4 tareas
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000  # Reinicia worker después de 1000 tareas (evita memory leaks)
+
+# Task execution
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tareas después de completarlas
+CELERY_TASK_REJECT_ON_WORKER_LOST = True  # Re-encolar tareas si worker se cae
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutos timeout hard
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutos timeout soft
+
+# Serialization
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = TIME_ZONE
+
+# Result backend settings
+CELERY_RESULT_EXPIRES = 3600  # Resultados expiran después de 1 hora
+CELERY_RESULT_PERSISTENT = True  # Persistir resultados en Redis
+
+# Performance optimizations
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_POOL_LIMIT = 10  # Límite de conexiones al broker

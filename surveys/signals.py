@@ -5,6 +5,7 @@ from django.core.cache import cache
 from .models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
 import logging
 import threading
+from datetime import datetime
 
 logger = logging.getLogger('surveys')
 
@@ -58,18 +59,14 @@ def invalidate_pattern(pattern):
         # Intenta usar delete_pattern de django-redis
         if hasattr(cache, 'delete_pattern'):
             cache.delete_pattern(pattern)
-        else:
-            # Fallback para backends sin delete_pattern (silencioso en desarrollo)
-            pass
-        logger.debug(f"Cache invalidated with pattern: {pattern}")
-    except AttributeError:
+    except (AttributeError, Exception):
         # Fallback para backends sin delete_pattern (silencioso en desarrollo)
         pass
 
 
 @receiver(post_save, sender=Survey)
 @receiver(post_delete, sender=Survey)
-def invalidate_survey_cache(sender, instance, **kwargs):
+def invalidate_survey_cache(sender, instance, created=False, **kwargs):
     """
     Invalida caché relacionada cuando una encuesta cambia.
     Cascade: Dashboard → Survey Analysis → Reports
@@ -82,6 +79,8 @@ def invalidate_survey_cache(sender, instance, **kwargs):
         return
     
     if instance.author:
+        action = "creada" if created else "modificada"
+        
         # 1. Dashboard del usuario
         dashboard_key = f"dashboard_data_user_{instance.author.id}"
         cache.delete(dashboard_key)
@@ -104,12 +103,12 @@ def invalidate_survey_cache(sender, instance, **kwargs):
         invalidate_pattern(pdf_pattern)
         invalidate_pattern(pptx_pattern)
         
-        logger.debug(f"Cache invalidated for survey {instance.id} (user: {instance.author.username})")
+        logger.info(f"📊 Encuesta {instance.id} ({action}) - Caché invalidada | Usuario: {instance.author.username}")
 
 
 @receiver(post_save, sender=Question)
 @receiver(post_delete, sender=Question)
-def invalidate_question_cache(sender, instance, **kwargs):
+def invalidate_question_cache(sender, instance, created=False, **kwargs):
     """
     Invalida caché cuando las preguntas cambian.
     Cascade: Survey → Analysis → Reports
@@ -125,6 +124,7 @@ def invalidate_question_cache(sender, instance, **kwargs):
     
     try:
         survey = instance.survey
+        action = "creada" if created else "modificada"
     except (AttributeError, Exception):
         # Si el objeto ya fue eliminado o no tiene survey, ignorar silenciosamente
         return
@@ -141,12 +141,12 @@ def invalidate_question_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    logger.debug(f"Cache invalidated for question changes in survey {survey.id}")
+    logger.debug(f"❓ Pregunta {instance.id} ({action}) en encuesta {survey.id} - Caché invalidada")
 
 
 @receiver(post_save, sender=AnswerOption)
 @receiver(post_delete, sender=AnswerOption)
-def invalidate_option_cache(sender, instance, **kwargs):
+def invalidate_option_cache(sender, instance, created=False, **kwargs):
     """
     Invalida caché cuando las opciones de respuesta cambian.
     Cascade: Question → Survey → Analysis
@@ -160,6 +160,7 @@ def invalidate_option_cache(sender, instance, **kwargs):
         return
     
     survey = instance.question.survey
+    action = "creada" if created else "modificada"
     
     # Invalidar análisis de la encuesta
     analysis_pattern = f"survey_analysis_{survey.id}_*"
@@ -167,12 +168,12 @@ def invalidate_option_cache(sender, instance, **kwargs):
     invalidate_pattern(analysis_pattern)
     invalidate_pattern(results_pattern)
     
-    logger.debug(f"Cache invalidated for answer option changes in survey {survey.id}")
+    logger.debug(f"✅ Opción respuesta {instance.id} ({action}) - Encuesta {survey.id} - Caché actualizada")
 
 
 @receiver(post_save, sender=SurveyResponse)
 @receiver(post_delete, sender=SurveyResponse)
-def invalidate_response_cache(sender, instance, **kwargs):
+def invalidate_response_cache(sender, instance, created=False, **kwargs):
     """
     Invalida caché cuando se agregan/eliminan respuestas.
     Cascade: Survey → Analysis → Stats → Reports
@@ -188,6 +189,7 @@ def invalidate_response_cache(sender, instance, **kwargs):
     
     try:
         survey = instance.survey
+        action = "nueva respuesta" if created else "respuesta eliminada"
     except (AttributeError, Exception):
         # Si el objeto ya fue eliminado o no tiene survey, ignorar silenciosamente
         return
@@ -213,12 +215,12 @@ def invalidate_response_cache(sender, instance, **kwargs):
     invalidate_pattern(pdf_pattern)
     invalidate_pattern(pptx_pattern)
     
-    logger.debug(f"Cache invalidated for response changes in survey {survey.id}")
+    logger.info(f"📝 {action} en encuesta {survey.id} - Caché actualizada")
 
 
 @receiver(post_save, sender=QuestionResponse)
 @receiver(post_delete, sender=QuestionResponse)
-def invalidate_question_response_cache(sender, instance, **kwargs):
+def invalidate_question_response_cache(sender, instance, created=False, **kwargs):
     """
     Invalida caché cuando las respuestas a preguntas específicas cambian.
     Cascade: SurveyResponse → Survey → Analysis
@@ -245,7 +247,7 @@ def invalidate_question_response_cache(sender, instance, **kwargs):
         stats_key = f"survey_stats_{survey.id}"
         cache.delete(stats_key)
         
-        logger.debug(f"Cache invalidated for question response changes in survey {survey.id}")
+        logger.debug(f"📋 Respuesta a pregunta actualizada en encuesta {survey.id}")
     except (AttributeError, SurveyResponse.DoesNotExist, Exception):
         # La respuesta padre ya fue eliminada, ignorar silenciosamente
         pass

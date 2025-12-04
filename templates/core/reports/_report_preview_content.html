@@ -1,0 +1,252 @@
+{% comment %}
+    PREVIEW WEB MEJORADO V4
+    - Animaciones de entrada (fade-in-up)
+    - Texto justificado
+    - Diseño idéntico al PDF
+    - Aspect Ratio bloqueado a A4
+{% endcomment %}
+
+<style>
+    /* ANIMACIONES DE ENTRADA */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-enter {
+        animation: fadeInUp 0.6s ease-out forwards;
+        opacity: 0; /* Inicia invisible */
+    }
+
+    /* Delays para efecto cascada */
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+
+    /* ESTILOS SCOPEADOS (Copia del PDF + Ajustes Web) */
+    .report-preview-wrapper {
+        font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+        color: #4b5563;
+        line-height: 1.6;
+        font-size: 14px;
+        background: white;
+        width: 100%;
+        max-width: 21cm;
+        margin: 10px auto;
+        padding: 1.2cm 1.5cm; /* Márgenes optimizados para máximo espacio útil */
+        box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+        text-align: justify;
+        position: relative;
+        /* Caja fija y scrolleable en preview */
+        height: 500px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    /* Variables CSS simuladas */
+    .report-preview-wrapper {
+        --c-primary: #0d6efd;
+        --c-bg-section: #f8f9fa;
+        --c-border: #e5e7eb;
+    }
+
+    /* Tipografía */
+    .rp-title { font-size: 32px; font-weight: 800; color: var(--c-primary); margin-bottom: 8px; line-height: 1.2; text-align: left; }
+    .rp-h2 { font-size: 20px; border-bottom: 2px solid var(--c-primary); padding-bottom: 8px; margin: 30px 0 15px 0; color: #1f2937; text-transform: uppercase; }
+    .rp-text { margin-bottom: 12px; text-align: justify; hyphens: auto; }
+
+    /* Ficha Técnica */
+    .rp-meta-box { background: var(--c-bg-section); border-left: 4px solid var(--c-primary); padding: 12px; margin: 15px 0; border-radius: 4px; }
+    .rp-meta-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+    .rp-meta-label { font-weight: 700; color: #1f2937; }
+
+    /* KPIs */
+    .rp-kpi-container { display: flex; gap: 15px; margin: 20px 0; }
+    .rp-kpi-card { 
+        flex: 1; background: white; border: 1px solid var(--c-border); 
+        padding: 20px; border-radius: 8px; text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    .rp-kpi-card:hover { transform: translateY(-3px); }
+    .rp-val { display: block; font-size: 36px; font-weight: 800; color: #1f2937; line-height: 1; margin-bottom: 5px; }
+    .rp-lbl { font-size: 11px; text-transform: uppercase; color: #9ca3af; font-weight: 700; letter-spacing: 1px; }
+
+    /* Preguntas */
+    .rp-q-card { 
+        border: 1px solid var(--c-border); border-radius: 8px; 
+        padding: 18px; margin-bottom: 20px; background: white;
+        page-break-inside: avoid; /* Evitar corte en impresión */
+        overflow: hidden; /* Contener contenido */
+    }
+    .rp-insight { background: #eff6ff; color: #1e3a8a; padding: 10px 12px; border-radius: 6px; margin: 12px 0; font-size: 12.5px; border-left: 4px solid #3b82f6; overflow-wrap: anywhere; word-wrap: break-word; line-height: 1.5; }
+    .rp-recommendations { margin: 12px 0; padding: 10px 12px; background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; }
+    .rp-rec-title { color: #15803d; font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .rp-rec-list { margin: 0; padding-left: 18px; color: #166534; font-size: 12px; line-height: 1.6; }
+    .rp-rec-list li { margin-bottom: 3px; }
+    
+    /* Badges mejorados */
+    .rp-badge { background: #e0f2fe; color: #0c4a6e; padding: 4px 10px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; border: 1px solid #bae6fd; }
+    .rp-badge-responses { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+    .rp-q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px; }
+    .rp-q-title { margin: 0; font-size: 15px; color: #1f2937; line-height: 1.4; flex: 1; }
+    .rp-q-title-num { color: #0d6efd; font-weight: 700; }
+    .rp-badges { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+    
+    .rp-chart { width: 100%; max-width: 650px; height: auto; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; margin: 10px auto; display: block; background: #fafafa; }
+    /* Donut charts: enforce square box to avoid squish */
+    .rp-chart-donut { width: 420px; height: 420px; max-width: 100%; margin: 10px auto; display: block; }
+    
+    /* Tablas */
+    .rp-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; table-layout: fixed; }
+    .rp-table th { text-align: left; background: #f1f5f9; padding: 8px; font-weight: 700; color: #334155; overflow-wrap: anywhere; }
+    .rp-table td { border-bottom: 1px solid var(--c-border); padding: 8px; overflow-wrap: anywhere; }
+</style>
+
+<div class="report-preview-wrapper">
+    
+    <div class="animate-enter delay-1">
+        <div style="font-size: 11px; font-weight: 700; color: #9ca3af; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;">
+            Byteneko Analytics
+        </div>
+        <h1 class="rp-title">{{ survey.title }}</h1>
+        <p class="rp-text" style="font-size: 18px; color: #6b7280; font-weight: 300;">Reporte Ejecutivo de Resultados</p>
+
+        <div class="rp-meta-box">
+            <div class="rp-meta-row">
+                <span class="rp-meta-label">Fecha de corte:</span>
+                <span>{% now "d \d\e F, Y" %}</span>
+            </div>
+            <div class="rp-meta-row">
+                <span class="rp-meta-label">Total Respuestas:</span>
+                <span>{{ total_respuestas }}</span>
+            </div>
+            {% if survey.description %}
+            <div class="rp-meta-row" style="margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                <span class="rp-meta-label">Contexto:</span>
+            </div>
+            <div style="font-size: 13px; font-style: italic;">
+                {{ survey.description }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if include_kpis %}
+        <div class="animate-enter delay-2">
+            <h2 class="rp-h2">Panorama General</h2>
+            <p class="rp-text" style="margin-bottom: 15px; font-size: 13px; color: #6b7280; text-align: justify;">
+                Esta encuesta recopiló <strong>{{ total_respuestas }}</strong> respuestas durante el periodo analizado. Los indicadores clave reflejan el estado general de satisfacción y compromiso de la audiencia, permitiendo identificar fortalezas y áreas de oportunidad estratégicas.
+            </p>
+            <div class="rp-kpi-container">
+                <div class="rp-kpi-card">
+                    <span class="rp-val" style="color: #0d6efd;">{{ total_respuestas }}</span>
+                    <span class="rp-lbl">Respuestas</span>
+                </div>
+                <div class="rp-kpi-card">
+                    <span class="rp-val {% if kpi_prom_satisfaccion < 6 %}text-danger{% endif %}">
+                        {{ kpi_prom_satisfaccion|floatformat:1 }}
+                    </span>
+                    <span class="rp-lbl">Satisfacción</span>
+                </div>
+                <div class="rp-kpi-card">
+                    <span class="rp-val {% if nps_score >= 50 %}text-success{% endif %}">
+                        {{ nps_score|default:"--" }}
+                    </span>
+                    <span class="rp-lbl">NPS</span>
+                </div>
+            </div>
+            {% if nps_chart_image %}
+            <div class="rp-q-card" style="margin-top: 15px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #1f2937;">Distribución NPS</h3>
+                <img src="data:image/png;base64,{{ nps_chart_image }}" class="rp-chart rp-chart-donut" alt="Gráfico NPS">
+            </div>
+            {% endif %}
+            {% if heatmap_image %}
+            <div class="rp-q-card" style="margin-top: 15px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #1f2937;">Mapa de Correlaciones</h3>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 10px; text-align: justify;">
+                    Este mapa de calor muestra las relaciones entre variables numéricas de la encuesta. Valores cercanos a +1 indican correlación positiva fuerte, -1 correlación negativa fuerte, y 0 ausencia de relación. Identifica patrones para estrategias segmentadas.
+                </p>
+                <img src="data:image/png;base64,{{ heatmap_image }}" class="rp-chart" alt="Heatmap de correlaciones" style="max-height: 320px;">
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if include_charts %}
+        <div class="animate-enter delay-3">
+            <h2 class="rp-h2">Desglose por Pregunta</h2>
+            
+            {% for item in analysis_data %}
+                <div class="rp-q-card animate-enter" style="animation-delay: 0.{{ forloop.counter|add:3 }}s;">
+                    <div class="rp-q-header">
+                        <h3 class="rp-q-title">
+                            <span class="rp-q-title-num">{{ item.order }}.</span> {{ item.text }}
+                        </h3>
+                        <div class="rp-badges">
+                            {% if item.total_respuestas %}
+                                <span class="rp-badge rp-badge-responses">{{ item.total_respuestas }} resp.</span>
+                            {% endif %}
+                            <span class="rp-badge">{{ item.tipo_display }}</span>
+                        </div>
+                    </div>
+
+                    {% if item.insight %}
+                        <div class="rp-insight">
+                            {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                        </div>
+                    {% endif %}
+
+                    {% if item.recommendations %}
+                        <div class="rp-recommendations">
+                            <span class="rp-rec-title">💡 Recomendaciones:</span>
+                            <ul class="rp-rec-list">
+                                {% for rec in item.recommendations %}
+                                    <li>{{ rec }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if item.total_respuestas > 0 %}
+                        {% if item.chart_image %}
+                            <img src="data:image/png;base64,{{ item.chart_image }}" class="rp-chart{% if item.chart_type == 'donut' %} rp-chart-donut{% endif %}" alt="Gráfico de resultados">
+                        {% endif %}
+
+                        {% if item.options %}
+                            <table class="rp-table">
+                                <thead>
+                                    <tr><th>Opción</th><th class="text-center">Frecuencia</th><th class="text-end">%</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for op in item.options|slice:":6" %}
+                                    <tr>
+                                        <td>{{ op.label }}</td>
+                                        <td class="text-center">{{ op.count }}</td>
+                                        <td class="text-end fw-bold">{{ op.percent|floatformat:1 }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endif %}
+                        
+                        {% if item.type == 'text' %}
+                            <div style="background: #f9fafb; padding: 12px; margin-top: 10px; border-radius: 4px;">
+                                <small class="fw-bold text-muted">Muestra de comentarios:</small>
+                                <ul style="padding-left: 20px; margin-bottom: 0; font-style: italic; font-size: 12px; color: #4b5563;">
+                                    {% for resp in item.samples_texto|slice:":3" %}
+                                        <li>"{{ resp }}"</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted fst-italic text-center py-3">No hay datos disponibles para esta pregunta.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

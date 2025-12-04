@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Ejecutivo - {{ survey.title }}</title>
+    <style>
+        /* ==========================================================================
+           BYTENEKO CORPORATE REPORT THEME - PDF V4 (Full Context)
+           ========================================================================== */
+        
+        @page {
+            size: A4;
+            margin: 1.2cm 1.5cm; /* Márgenes optimizados para máximo uso del espacio */
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 8pt;
+                color: #6b7280;
+            }
+            @bottom-left {
+                content: "Byteneko Analytics Platform • {{ survey.title|truncatechars:40 }}";
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 8pt;
+                color: #9ca3af;
+            }
+        }
+
+        :root {
+            --c-primary: #0d6efd;
+            --c-primary-dark: #0a58ca;
+            --c-primary-light: #e0f2fe;
+            --c-success: #10b981;
+            --c-warning: #f59e0b;
+            --c-danger: #ef4444;
+            --c-dark: #1f2937;
+            --c-text: #4b5563;
+            --c-muted: #9ca3af;
+            --c-border: #e5e7eb;
+            --c-bg-section: #f8f9fa;
+        }
+        .sample-item {
+            margin-bottom: 8px;
+            font-style: italic;
+            font-size: 9.5pt;
+            padding-left: 10px;
+            border-left: 2px solid var(--c-muted);
+            overflow-wrap: anywhere;
+        }
+
+        /* UTILIDADES */
+        .page-break { page-break-before: always; }
+        .badge { 
+            background: var(--c-primary); color: white; 
+            padding: 3px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700; vertical-align: middle;
+        }
+        .text-justify { text-align: justify; }
+    </style>
+</head>
+<body>
+
+    {% include "core/reports/_report_preview_content.html" %}
+
+    <style>
+        /* OVERRIDES PARA PDF (Para que se vea igual al preview pero en formato impresión) */
+        .report-preview-wrapper {
+            height: auto !important;
+            overflow: visible !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            border: none !important;
+        }
+        
+        /* Ocultar animaciones en PDF */
+        .animate-enter {
+            animation: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+        }
+
+        /* Ajustes de salto de página */
+        /* Una pregunta por página y uso máximo del A4 */
+        .rp-q-card {
+            page-break-inside: avoid;
+            break-before: page; /* WeasyPrint: fuerza nueva página antes de cada pregunta */
+            margin-bottom: 0;
+            border: 1px solid #e5e7eb; /* Asegurar borde visible */
+            padding-bottom: 0;
+        }
+        /* Aprovechar el alto de la página para gráficos dentro de cada pregunta */
+        .rp-q-card .rp-chart {
+            max-height: 650px; /* Escalar para llenar verticalmente cuando hay espacio */
+        }
+        /* Compactar secciones dentro de cada pregunta para ganar espacio al gráfico */
+        .rp-q-card .rp-insight { margin: 8px 0; }
+        .rp-q-card .rp-recommendations { margin: 8px 0; }
+
+        .rp-h2 {
+            page-break-after: avoid;
+        }
+        
+        /* Ajustes de fuente para impresión nítida */
+        body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    </style>
+
+</body>
+</html>

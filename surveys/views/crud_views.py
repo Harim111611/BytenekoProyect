@@ -1,5 +1,6 @@
-from django.views.decorators.http import require_POST
+
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
 from django.urls import reverse, reverse_lazy
@@ -11,6 +12,7 @@ from django.core.exceptions import FieldError, ValidationError
 from django.http import JsonResponse
 from django.db import connection
 from django.conf import settings
+from django_ratelimit.decorators import ratelimit
 
 import json
 
@@ -18,6 +20,15 @@ from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey, Question, AnswerOption
 from core.utils.logging_utils import StructuredLogger, log_user_action
 import time
+
+@login_required
+@require_GET
+def survey_list_count(request):
+    """
+    Retorna el número de encuestas del usuario actual (para confirmar borrado).
+    """
+    count = Survey.objects.filter(owner=request.user).count()
+    return JsonResponse({"count": count})
 
 logger = StructuredLogger('surveys')
 
@@ -33,129 +44,79 @@ def legacy_survey_redirect_view(request, pk, legacy_path=None):
     return redirect(base)
 
 
-def _fast_delete_surveys(cursor, survey_ids):
+# Nota: La función _fast_delete_surveys se movió a surveys/tasks.py
+# para ser ejecutada de forma asíncrona con Celery
+
+
+@login_required
+@require_GET
+def delete_task_status(request, task_id):
     """
-    Eliminación verdaderamente rápida usando Subqueries SQL puras.
-    Evita traer IDs a la memoria de Python (round-trips innecesarios).
-    Todo el trabajo se hace en la base de datos.
+    Consultar el estado de una tarea de eliminación Celery.
     """
-    survey_ids = list(survey_ids)
-    if not survey_ids:
-        return
-
-    # Preparamos los placeholders para los IDs de las encuestas
-    placeholders = ','.join(['%s'] * len(survey_ids))
-    params = survey_ids
-
-    start_time = time.time()
-    logger.info(f"[DELETE] 🚀 INICIANDO eliminación optimizada SQL de {len(survey_ids)} encuesta(s): {survey_ids}")
-    # Log de prueba eliminado para evitar ruido en producción
-
-    # Inicializar variables de tiempo para evitar errores si hay excepciones
-    qr_time = sr_time = ao_time = q_time = s_time = 0.0
-    qr_count = sr_count = ao_count = q_count = s_count = 0
-
+    from celery.result import AsyncResult
+    from celery import current_app
+    
+    result = AsyncResult(task_id)
+    
+    response_data = {
+        'task_id': task_id,
+        'status': result.state,
+        'ready': result.ready(),
+    }
+    
+    # Verificar si Celery está disponible (verificación no bloqueante)
     try:
-        # PostgreSQL specific: deshabilitar triggers/constraints temporalmente.
-        # Si esto falla por permisos, seguimos con el borrado estándar (respeta FKs pero más lento)
-        try:
-            cursor.execute("SET session_replication_role = 'replica'")
-        except Exception:
-            pass  # Ignorar si no tenemos permisos, la eliminación funcionará pero validará FKs
-
-        # 1. Eliminar QuestionResponses (tabla grande) vía subconsulta
-        step_start = time.time()
-        cursor.execute(f"""
-            DELETE FROM surveys_questionresponse
-            WHERE survey_response_id IN (
-                SELECT id FROM surveys_surveyresponse 
-                WHERE survey_id IN ({placeholders})
-            )
-        """, params)
-        qr_count = cursor.rowcount
-        qr_time = time.time() - step_start
-        logger.info(f"[DELETE] 📊 Step 1 - QuestionResponse: {qr_count} filas en {qr_time:.2f}s")
-
-        # 2. Eliminar SurveyResponses
-        step_start = time.time()
-        cursor.execute(f"""
-            DELETE FROM surveys_surveyresponse
-            WHERE survey_id IN ({placeholders})
-        """, params)
-        sr_count = cursor.rowcount
-        sr_time = time.time() - step_start
-        logger.info(f"[DELETE] Step 2 - SurveyResponse: {sr_count} filas en {sr_time:.2f}s")
-
-        # 3. Eliminar AnswerOptions (vía Question)
-        step_start = time.time()
-        cursor.execute(f"""
-            DELETE FROM surveys_answeroption
-            WHERE question_id IN (
-                SELECT id FROM surveys_question 
-                WHERE survey_id IN ({placeholders})
-            )
-        """, params)
-        ao_count = cursor.rowcount
-        ao_time = time.time() - step_start
-        logger.info(f"[DELETE] Step 3 - AnswerOption: {ao_count} filas en {ao_time:.2f}s")
-
-        # 4. Eliminar Questions
-        step_start = time.time()
-        cursor.execute(f"""
-            DELETE FROM surveys_question
-            WHERE survey_id IN ({placeholders})
-        """, params)
-        q_count = cursor.rowcount
-        q_time = time.time() - step_start
-        logger.info(f"[DELETE] Step 4 - Question: {q_count} filas en {q_time:.2f}s")
-
-        # 5. Eliminar Surveys
-        step_start = time.time()
-        cursor.execute(f"""
-            DELETE FROM surveys_survey
-            WHERE id IN ({placeholders})
-        """, params)
-        s_count = cursor.rowcount
-        s_time = time.time() - step_start
-        logger.info(f"[DELETE] Step 5 - Survey: {s_count} filas en {s_time:.2f}s")
-
+        # Intentar ping a los workers (más confiable que active() en Windows)
+        inspect = current_app.control.inspect(timeout=1.0)
+        ping_result = inspect.ping()
+        
+        if ping_result:
+            # Hay al menos un worker respondiendo
+            response_data['celery_available'] = True
+        else:
+            # No respondieron workers, pero puede ser timeout
+            # No bloqueamos la UI, solo advertimos
+            response_data['celery_available'] = False
+            # Solo mostrar error si la tarea está realmente pendiente por mucho tiempo
+            if result.state == 'PENDING':
+                response_data['warning'] = 'No se detectaron workers activos. Verifica que Celery esté corriendo.'
     except Exception as e:
-        # Loguear y relanzar
-        logger.error(f"[DELETE] ERROR durante eliminación: {e}", exc_info=True)
-        import traceback
-        traceback.print_exc()
-        raise
-
-    finally:
-        # Restaurar integridad referencial
-        try:
-            cursor.execute("SET session_replication_role = 'origin'")
-        except Exception:
+        logger.warning(f"[DELETE_TASK_STATUS] Error verificando workers: {e}")
+        # No bloqueamos, asumimos que el worker puede estar corriendo
+        response_data['celery_available'] = True  # Asumir disponible para no bloquear UI
+    
+    if result.ready():
+        if result.successful():
+            response_data['result'] = result.result
+            # La tarea devuelve 'deleted', no 'deleted_count'
+            response_data['deleted_count'] = result.result.get('deleted', 0) if isinstance(result.result, dict) else 0
+        else:
+            response_data['error'] = str(result.info)
+    else:
+        # Tarea aún en progreso o pendiente
+        if result.state == 'PENDING':
+            # La tarea está pendiente - puede ser normal si acaba de enviarse
+            # Ya agregamos una advertencia arriba si no detectamos workers
             pass
-
-    total_duration = time.time() - start_time
-    logger.info(f"[DELETE] ✅ Eliminación completa: {len(survey_ids)} encuesta(s) en {total_duration:.2f}s")
-    logger.info(
-        f"[DELETE] Desglose: QR={qr_time:.2f}s ({qr_count} filas), "
-        f"SR={sr_time:.2f}s ({sr_count} filas), "
-        f"AO={ao_time:.2f}s ({ao_count} filas), "
-        f"Q={q_time:.2f}s ({q_count} filas), "
-        f"S={s_time:.2f}s ({s_count} filas)"
-    )
+        elif hasattr(result.info, 'get'):
+            response_data['progress'] = result.info.get('progress', 0)
+    
+    return JsonResponse(response_data)
 
 
 # --- Bulk delete surveys ---
 @login_required
 @require_POST
+@ratelimit(key="user", rate="50/h", method="POST", block=True)
 def bulk_delete_surveys_view(request):
     """
-    Eliminación bulk priorizando primero las encuestas pequeñas
-    (menos respuestas) y usando un borrado SQL ultra-rápido cuando es posible.
-
-    Compatible con:
-    - Peticiones normales (POST de formulario): redirige con mensajes.
-    - Peticiones AJAX (fetch con X-Requested-With=XMLHttpRequest): responde JSON.
+    Eliminación masiva usando Celery para procesamiento en background.
+    TODO EL BORRADO SE HACE EN CELERY - EL SERVIDOR RESPONDE EN < 200ms.
+    Crea una tarea asíncrona y retorna el job_id para polling.
     """
+    from surveys.tasks import delete_surveys_task
+    
     survey_ids = request.POST.getlist('survey_ids')
 
     if not survey_ids:
@@ -167,7 +128,7 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'No se seleccionaron encuestas para eliminar.')
         return redirect('surveys:list')
 
-    # Normalizamos los IDs
+    # Normalizar IDs
     try:
         clean_ids = [int(sid) for sid in survey_ids]
     except ValueError:
@@ -179,7 +140,7 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'IDs de encuestas inválidos.')
         return redirect('surveys:list')
 
-    # Solo encuestas del usuario actual (seguridad reforzada)
+    # Verificar permisos (solo validación, no borrado)
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
     if not base_qs.exists():
         logger.warning(f"[BULK_DELETE][PERMISSION_DENIED] user_id={request.user.id} ids={clean_ids}")
@@ -191,68 +152,54 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'No tienes permisos para eliminar las encuestas seleccionadas.')
         return redirect('surveys:list')
 
-    # ---------------------------------------
-    # Priorizar por tamaño (número de respuestas)
-    # ---------------------------------------
+    # 🚀 Intentar lanzar tarea CELERY (trabajo pesado en background)
+    task_result = None
     try:
-        # Ajusta 'responses' si tu related_name es distinto
-        qs_ordered = base_qs.annotate(
-            num_respuestas=Count('responses')
-        ).order_by('num_respuestas', 'id')
-        using_annotation = True
-    except FieldError:
-        qs_ordered = base_qs.order_by('id')
-        using_annotation = False
-
-    ordered_ids = list(qs_ordered.values_list('id', flat=True))
-
-    deleted_count = 0
-    used_fast_path = False
-
-    # Intento 1: ruta rápida SQL
-    try:
-        with connection.cursor() as cursor:
-            _fast_delete_surveys(cursor, ordered_ids)
-        deleted_count = len(ordered_ids)
-        used_fast_path = True
+        task_result = delete_surveys_task.delay(clean_ids, request.user.id)
         logger.info(
-            f'[BULK_DELETE][SQL_FAST] Eliminadas {deleted_count} encuestas para user_id={request.user.id}. ordered_by_size={using_annotation} IDs={ordered_ids}'
+            f'[BULK_DELETE][CELERY] Tarea lanzada task_id={task_result.id} user_id={request.user.id} count={len(clean_ids)}'
         )
     except Exception as e:
-        # Fallback: ORM
-        logger.error(
-            f'[BULK_DELETE][SQL_FAST][ERROR] user_id={request.user.id} ids={clean_ids} error={e}',
-            exc_info=True
-        )
-        deleted_count, _ = base_qs.delete()
-        logger.info(
-            f'[BULK_DELETE][ORM_FALLBACK] Eliminadas {deleted_count} encuestas para user_id={request.user.id}. IDs={clean_ids}'
-        )
+        logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback a borrado síncrono: {e}")
+    
+    # Si Celery no está disponible, borrar de forma síncrona para no dejar la UI inconsistente
+    if task_result is None:
+        try:
+            from django.db import transaction
+            with transaction.atomic():
+                deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'deleted': deleted_count,
+                    'message': f'Se eliminaron {deleted_count} encuesta(s).',
+                })
+            messages.success(request, f'Se eliminaron {deleted_count} encuesta(s).')
+            return redirect('surveys:list')
+        except Exception as e:
+            logger.error(f"[BULK_DELETE][SYNC_ERROR] Error en borrado síncrono: {e}")
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se pudo eliminar encuestas. Inténtalo de nuevo.',
+                }, status=500)
+            messages.error(request, 'No se pudo eliminar encuestas. Inténtalo de nuevo.')
+            return redirect('surveys:list')
 
-    # Respuesta AJAX (la que usa tu JS de selección múltiple)
+    # Respuesta AJAX (< 200ms)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse({
             'success': True,
-            'deleted': deleted_count,
-            'deleted_ids': ordered_ids,
-            'ordered_by_size': using_annotation,
-            'used_fast_path': used_fast_path,
+            'task_id': task_result.id,
+            'total_surveys': len(clean_ids),
+            'message': f'Procesando eliminación de {len(clean_ids)} encuesta(s)...'
         })
 
-    # Respuesta normal (form POST)
-    if used_fast_path:
-        messages.success(
-            request,
-            f'Se eliminaron {deleted_count} encuestas. '
-            'Las encuestas más pequeñas se eliminaron primero y las más grandes pueden haber tardado un poco más.'
-        )
-    else:
-        messages.warning(
-            request,
-            f'Se eliminaron {deleted_count} encuestas usando el método estándar. '
-            'Si notas que tarda demasiado con encuestas muy grandes, revisa los logs para más detalles.'
-        )
-
+    # Respuesta normal (< 200ms)
+    messages.success(
+        request,
+        f'Procesando eliminación de {len(clean_ids)} encuesta(s). Esto puede tardar unos momentos.'
+    )
     return redirect('surveys:list')
 
 
@@ -260,7 +207,7 @@ def bulk_delete_surveys_view(request):
 class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     """List of surveys for the current user."""
     model = Survey
-    template_name = 'surveys/list.html'
+    template_name = 'surveys/crud/list.html'
     context_object_name = 'surveys'
     paginate_by = 12
 
@@ -291,7 +238,7 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
 class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     """Survey detail view (creator only)."""
     model = Survey
-    template_name = 'surveys/detail.html'
+    template_name = 'surveys/crud/detail.html'
     context_object_name = 'survey'
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
@@ -314,12 +261,14 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             base_url = base_url.rstrip('/')
         else:
             base_url = self.request.build_absolute_uri('/').rstrip('/')
-            host = self.request.get_host().split(':')[0]
-            port = self.request.get_port() or '80'
-            lan_ip = getattr(settings, 'LOCAL_LAN_IP', '')
-            if host in ('127.0.0.1', 'localhost') and lan_ip:
-                scheme = 'http'
-                base_url = f"{scheme}://{lan_ip}:{port}"
+            # Nota: Deshabilitamos la conversión automática de 127.0.0.1 a LAN_IP
+            # para permitir desarrollo local. Si quieres usar LAN_IP, configura PUBLIC_BASE_URL.
+            # host = self.request.get_host().split(':')[0]
+            # port = self.request.get_port() or '80'
+            # lan_ip = getattr(settings, 'LOCAL_LAN_IP', '')
+            # if host in ('127.0.0.1', 'localhost') and lan_ip:
+            #     scheme = 'http'
+            #     base_url = f"{scheme}://{lan_ip}:{port}"
         respond_path = reverse('surveys:respond', args=[survey.public_id])
         context['respond_absolute_url'] = f"{base_url}{respond_path}"
         return context
@@ -329,7 +278,7 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
 class SurveyCreateView(LoginRequiredMixin, CreateView):
     """View to create a new survey."""
     model = Survey
-    template_name = 'surveys/survey_create.html'
+    template_name = 'surveys/forms/survey_create.html'
     fields = ['title', 'description', 'category']  # Removido 'status', siempre será draft
     success_url = reverse_lazy('surveys:list')
 
@@ -452,7 +401,7 @@ class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
     """View to update a survey (creator only)."""
     model = Survey
     fields = ['title', 'description', 'status']
-    template_name = 'surveys/form.html'
+    template_name = 'surveys/forms/form.html'
     success_url = reverse_lazy('surveys:list')
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
@@ -482,23 +431,41 @@ class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
 
 
 
+# Modifica SurveyDeleteView en surveys/views/crud_views.py
+
 class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
-    """View to delete a survey (creator only)."""
+    """
+    Vista para eliminar una encuesta individual (solo el creador).
+    """
     model = Survey
-    template_name = 'surveys/confirm_delete.html'
+    template_name = 'surveys/crud/confirm_delete.html'
     success_url = reverse_lazy('surveys:list')
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
 
     def delete(self, request, *args, **kwargs):
+        """
+        Sobrescribe delete para usar Celery y soportar AJAX.
+        """
+        from surveys.tasks import delete_surveys_task
+        
         self.object = self.get_object()
-        sid = self.object.id
-        logger.info(
-            "[DEBUG_DELETE_VIEW] Entrando a delete() para survey_id=%s user_id=%s",
-            sid,
-            request.user.id,
-        )
-        response = super().delete(request, *args, **kwargs)
-        messages.success(request, f"La encuesta {sid} se eliminó correctamente.")
-        logger.info("[DELETE][VIEW] Survey %s deleted via DeleteView", sid)
-        return response
+        survey_id = self.object.id
+        survey_title = self.object.title
+        
+        logger.info(f"[DELETE] Iniciando borrado asíncrono survey_id={survey_id}")
+        
+        # 🚀 LANZAR TAREA CELERY
+        task_result = delete_surveys_task.delay([survey_id], request.user.id)
+        
+        # --- NUEVO: RESPUESTA JSON PARA AJAX ---
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'task_id': task_result.id,
+                'message': f"Eliminando '{survey_title}'..."
+            })
+        
+        # Fallback para peticiones normales (no recomendada para grandes volúmenes)
+        messages.success(request, f"Procesando eliminación de '{survey_title}'...")
+        return redirect(self.success_url)

@@ -122,7 +122,8 @@ class SurveyAdmin(admin.ModelAdmin):
     def delete_model(self, request, obj):
         """Eliminación ultra-rápida usando SQL crudo, igual que en las vistas."""
         from django.db import transaction, connection
-        from surveys.views.crud_views import _fast_delete_surveys
+        # _fast_delete_surveys was moved/removed; use helper from tasks for single deletions
+        from surveys.tasks import perform_delete_surveys
         from surveys.signals import DisableSignals
         from django.core.cache import cache
         survey_id = obj.id
@@ -130,8 +131,9 @@ class SurveyAdmin(admin.ModelAdmin):
         with DisableSignals():
             try:
                 with transaction.atomic():
-                    with connection.cursor() as cursor:
-                        _fast_delete_surveys(cursor, [survey_id])
+                    # Use perform_delete_surveys helper to remove the survey for its author
+                    # Pass the survey's author (or author id) so helper validates ownership
+                    perform_delete_surveys([survey_id], obj.author.id if obj.author else request.user.id)
             except Exception as e:
                 import logging
                 logger = logging.getLogger('surveys')
@@ -147,8 +149,7 @@ class SurveyAdmin(admin.ModelAdmin):
 
     def delete_queryset(self, request, queryset):
         """Eliminación ultra-rápida masiva desde el admin usando SQL crudo."""
-        from django.db import transaction, connection
-        from surveys.views.crud_views import _fast_delete_surveys
+        from django.db import transaction
         from surveys.signals import DisableSignals
         from django.core.cache import cache
         survey_ids = list(queryset.values_list('id', flat=True))
@@ -156,8 +157,9 @@ class SurveyAdmin(admin.ModelAdmin):
         with DisableSignals():
             try:
                 with transaction.atomic():
-                    with connection.cursor() as cursor:
-                        _fast_delete_surveys(cursor, survey_ids)
+                    # Perform an unconditional ORM delete for the given survey ids.
+                    # We avoid relying on the removed _fast_delete_surveys helper here.
+                    Survey.objects.filter(id__in=survey_ids).delete()
             except Exception as e:
                 import logging
                 logger = logging.getLogger('surveys')

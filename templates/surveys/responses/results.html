@@ -1,0 +1,1345 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{% block page_styles %}
+<style>
+    /* Asegurar padding en acordeón de detalles */
+    #questionsAccordion .accordion-body {
+        padding: 1.5rem !important;
+    }
+    
+    #questionsAccordion .row {
+        --bs-gutter-x: 1.5rem;
+        --bs-gutter-y: 1.5rem;
+    }
+    
+    /* Contenedor de gráficas de preguntas */
+    .chart-container-q {
+        width: 100%;
+        position: relative; /* Necesario para Chart.js */
+        height: 250px;  /* Evitar conflictos de aspecto en móviles */
+        overflow: hidden; /* Corta cualquier desbordamiento */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .chart-container-q canvas {
+        max-width: 100%;
+    }
+    
+    /* Suavizar transición del acordeón */
+    /* .accordion-collapse {
+        transition: height 0.2s ease-out !important;
+    } */
+    
+    .accordion-body {
+        will-change: auto;
+        overflow: hidden; /* Evitar desbordamientos durante la animación */
+    }
+    
+    /* Icon box para KPIs */
+    .kpi-icon-box {
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+        background-color: var(--bs-tertiary-bg);
+    }
+    .insight-icon-box { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+
+    /* Mejorar formato de texto en insights */
+    .insight-card .card-text {
+        text-align: justify;
+        hyphens: auto;
+        word-spacing: -0.05em;
+        line-height: 1.6;
+    }
+    
+    .insight-card .card-text small {
+        display: block;
+        text-align: justify;
+    }
+
+    /* Barra de filtros */
+    .filter-bar {
+        background-color: var(--card-bg);
+        border: 1px solid var(--card-border-color);
+        border-radius: 1rem;
+        padding: 1rem 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Mejorar hallazgos del segmento */
+    .hallazgo-card {
+        transition: all 0.3s ease;
+        border: none;
+        background: linear-gradient(135deg, var(--card-bg) 0%, var(--bs-body-bg) 100%);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .hallazgo-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(180deg, #4e73df 0%, #1cc88a 100%);
+    }
+    
+    .hallazgo-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.15) !important;
+    }
+    
+    .hallazgo-card .card-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--bs-emphasis-color);
+        margin-bottom: 0.75rem;
+        line-height: 1.4;
+    }
+    
+    .hallazgo-card .insight-preview {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: var(--bs-secondary-color);
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .hallazgo-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+    }
+
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="container-xl p-4 p-md-5">
+
+    <div class="mb-4">
+        <nav aria-label="breadcrumb" class="mb-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}" class="text-decoration-none">Mis Encuestas</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ survey.title }}</li>
+            </ol>
+        </nav>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h2 fw-bold mb-1 text-body-emphasis">Resultados Analíticos</h1>
+                <p class="text-muted mb-0">Explora los datos y segmenta tu audiencia.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'surveys:export' survey.public_id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-download me-1"></i> Exportar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-bar shadow-sm">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Desde</label>
+                <input
+                    type="date"
+                    name="start"
+                    class="form-control bg-body-tertiary border-0"
+                    value="{{ filter_start|default:'' }}"
+                >
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Hasta</label>
+                <input
+                    type="date"
+                    name="end"
+                    class="form-control bg-body-tertiary border-0"
+                    value="{{ filter_end|default:'' }}"
+                >
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted text-uppercase">Filtrar por Perfil o Respuesta
+                    <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Cómo filtrar y segmentar" data-bs-content="Elige una pregunta (ej. 'Departamento', 'Edad', 'Producto'), y en 'Valor' escribe lo que quieres buscar. Por ejemplo: 'Marketing' en Departamento o '5' en una escala. Verás el análisis solo para ese grupo.">
+                        <i class="bi bi-question-circle"></i>
+                    </a>
+                </label>
+                <select name="segment_col" id="segmentSelect" class="form-select bg-body-tertiary border-0">
+                    <option value="">-- Sin segmentar --</option>
+                    {% for p in preguntas_filtro %}
+                            <option
+                                value="{{ p.id }}"
+                                data-type="{{ p.type }}"
+                                data-question-id="{{ p.id }}"
+                                data-is-demographic="{{ p.is_demographic|yesno:'1,0' }}"
+                                data-demo-type="{{ p.demographic_type|default:'' }}"
+                                {% if filter_col|default:'' == p.id|stringformat:"s" %}
+                                    selected
+                                {% endif %}
+                            >
+                            {{ p.text|truncatechars:40 }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted text-uppercase">Valor</label>
+                <input
+                    type="text"
+                    name="segment_val"
+                    id="segmentValInput"
+                    class="form-control bg-body-tertiary border-0"
+                    placeholder="Ej. Marketing"
+                    value="{{ filter_val|default:'' }}"
+                >
+
+                <div id="demographicContext" class="mt-2 d-none">
+                    <label class="form-label small fw-bold text-muted">Filtro demográfico</label>
+                    <select id="demographicSelect" class="form-select bg-body-tertiary border-0">
+                        <option value="">-- Selecciona --</option>
+                        <option value="age_18_24">Edad: 18-24</option>
+                        <option value="age_25_34">Edad: 25-34</option>
+                        <option value="age_35_44">Edad: 35-44</option>
+                        <option value="age_45_64">Edad: 45-64</option>
+                        <option value="age_65_plus">Edad: 65+</option>
+                        <option value="gender_male">Género: Hombre</option>
+                        <option value="gender_female">Género: Mujer</option>
+                        <option value="gender_other">Género: Otro</option>
+                        <option value="location_country">Ubicación: País</option>
+                        <option value="occupation">Ocupación</option>
+                        <option value="custom">Otro (especificar)</option>
+                    </select>
+                    <input type="hidden" name="segment_demo" id="segmentDemoInput" value="">
+                    <input type="text" id="segmentDemoCustom" class="form-control bg-body-tertiary border-0 mt-2 d-none" placeholder="Especifica valor demográfico">
+                </div>
+            </div>
+
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-primary w-100" title="Aplicar Filtros">
+                    <i class="bi bi-funnel-fill"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if ignored_questions %}
+    <div class="alert alert-warning border-0 shadow-sm py-3 px-4 mb-4 alert-dismissible fade show" role="alert">
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        <div class="d-flex">
+            <div class="me-3">
+                <div class="kpi-icon-box text-warning bg-warning-subtle">
+                    <i class="bi bi-shield-check fs-5"></i>
+                </div>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-2 text-warning-emphasis">
+                    Campos omitidos automáticamente
+                </h6>
+                <p class="mb-2 small text-muted">
+                    Detectamos preguntas que piden nombres, IDs, correos o fechas personales, así que no las graficamos para evitar análisis irrelevante y proteger la privacidad.
+                </p>
+                <ul class="list-unstyled mb-0 small">
+                    {% for ignored in ignored_questions %}
+                        <li class="mb-1">
+                            <i class="bi bi-dash text-warning"></i>
+                            <strong>{{ ignored.text }}</strong>
+                            <span class="text-muted">({{ ignored.reason }})</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if total_respuestas == 0 %}
+        <div class="card border-0 shadow-sm py-5 bg-body-tertiary">
+            <div class="card-body text-center">
+                <i class="bi bi-search fs-1 text-muted mb-3"></i>
+                <h3 class="fw-bold text-body-emphasis">No se encontraron resultados</h3>
+                <p class="text-muted">Intenta ajustar los filtros o comparte tu survey para recibir datos.</p>
+                <a href="{% url 'surveys:results' survey.public_id %}" class="btn btn-outline-secondary mt-2">Limpiar Filtros</a>
+            </div>
+        </div>
+    {% else %}
+
+        <div class="row g-4 mb-5">
+            <div class="col-md-3 col-6">
+                <div class="card kpi-card-results h-100 py-3 hover-shadow">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <div class="kpi-icon-box text-primary"><i class="bi bi-people-fill fs-4"></i></div>
+                        <div>
+                            <div class="small text-uppercase fw-bold opacity-75">Encuestas Recibidas</div>
+                            <div class="h3 fw-bold mb-0 text-body-emphasis">{{ total_respuestas }}</div>
+                            <div class="small text-muted mt-1">personas respondieron</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow position-relative">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">
+                            Lealtad (NPS)
+                            {% if nps_data.insight %}
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-1" data-bs-toggle="modal" data-bs-target="#npsModal">
+                                <i class="bi bi-info-circle text-primary"></i>
+                            </button>
+                            {% else %}
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" 
+                               title="Mide si tus clientes te recomendarían. De -100 (criticarían) a +100 (recomendarían mucho). Valores altos = más leales."></i>
+                            {% endif %}
+                        </div>
+                        <div class="h3 fw-bold mb-0 {% if nps_score > 50 %}text-success{% elif nps_score > 0 %}text-primary{% elif nps_score < 0 %}text-danger{% else %}text-muted{% endif %}">
+                            {{ nps_score|default:"--" }}
+                        </div>
+                        <div class="small text-muted mt-1">
+                            {% if nps_score >= 70 %}Excelente{% elif nps_score >= 50 %}Muy bueno{% elif nps_score >= 30 %}Bueno{% elif nps_score >= 0 %}Regular{% elif nps_score %}Crítico{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div class="col-md-3 col-6">
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">
+                            Satisfacción Promedio
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" 
+                               title="Promedio de todas las calificaciones en escala 0-10 que dieron los encuestados. Valores más altos = mayor satisfacción general."></i>
+                        </div>
+                        <div class="h3 fw-bold mb-0 text-body-emphasis">
+                            {{ metrics.promedio_satisfaccion|default:"--" }}
+                        </div>
+                        <div class="small text-muted mt-1">de 10 puntos</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                {% if data_quality %}
+                <div class="card kpi-card-results h-100 py-3 text-center hover-shadow">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">
+                            Completitud de Respuestas
+                            <i class="bi bi-info-circle"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               title="Porcentaje promedio de preguntas que completaron tus encuestados (no sobre si las respondieron bien o mal). Valores altos = menos preguntas saltadas."></i>
+                        </div>
+                        <div class="h3 fw-bold mb-0 text-body-emphasis">
+                            {{ data_quality.avg_completeness_pct|default:"--"|floatformat:1 }}%
+                        </div>
+                        <div class="small text-muted mt-1">
+                            {{ data_quality.questions_analyzed }} preguntas · {{ data_quality.total_responses }} respuestas
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if nps_data.insight %}
+        <div class="modal fade" id="npsModal" tabindex="-1" aria-labelledby="npsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-primary bg-gradient text-white border-0">
+                        <h5 class="modal-title fw-bold" id="npsModalLabel">
+                            <i class="bi bi-lightbulb-fill me-2"></i>¿Qué significa tu NPS?
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="d-flex align-items-start mb-4">
+                            <div class="flex-shrink-0">
+                                <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                                    <i class="bi bi-graph-up-arrow fs-2 text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-4">
+                                <h6 class="fw-bold text-primary mb-2">Tu Puntuación: {{ nps_score }}</h6>
+                                <div class="text-muted">
+                                    {% autoescape off %}{{ nps_data.insight }}{% endautoescape %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if nps_data.promotores is not None %}
+                        <div class="row g-3 mt-3">
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-success bg-opacity-10 rounded">
+                                    <div class="text-success fw-bold">
+                                        <i class="bi bi-hand-thumbs-up-fill"></i> Promotores
+                                    </div>
+                                    <div class="h4 fw-bold text-success mb-0 mt-2">{{ nps_data.pct_promotores|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.promotores }} personas</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-soft-blue rounded">
+                                    <div class="text-soft-blue fw-bold">
+                                        <i class="bi bi-dash-circle-fill"></i> Pasivos
+                                    </div>
+                                    <div class="h4 fw-bold text-soft-blue mb-0 mt-2">{{ nps_data.pct_pasivos|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.pasivos }} personas</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center p-3 bg-danger bg-opacity-10 rounded">
+                                    <div class="text-danger fw-bold">
+                                        <i class="bi bi-hand-thumbs-down-fill"></i> Detractores
+                                    </div>
+                                    <div class="h4 fw-bold text-danger mb-0 mt-2">{{ nps_data.pct_detractores|floatformat:0 }}%</div>
+                                    <small class="text-muted">{{ nps_data.detractores }} personas</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer border-0 bg-light">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                            <i class="bi bi-check-circle me-1"></i>Entendido
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if analysis_data %}
+        <div class="mb-5">
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <div>
+                    <h4 class="fw-bold mb-1 text-body-emphasis">
+                        <i class="bi bi-stars text-primary me-2"></i>
+                        Hallazgos Clave
+                    </h4>
+                    <p class="text-muted small mb-0">Los 3 aspectos más importantes detectados en tus respuestas. Cada uno indica si es una fortaleza (Excelente/Bueno) o un área de mejora (Regular/Crítico).</p>
+                </div>
+                {% if has_filters %}
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+                    <i class="bi bi-funnel-fill me-1"></i>
+                    Segmentado
+                </span>
+                {% endif %}
+            </div>
+            <div class="row g-4">
+                {% for item in top_insights %}
+                    <div class="col-lg-4 col-md-6">
+                        <div class="card hallazgo-card h-100 shadow-sm">
+                            <div class="card-body p-4 d-flex flex-column">
+                                <div class="d-flex align-items-start gap-3 mb-3">
+                                    <div class="flex-shrink-0">
+                                        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                                            <i class="bi bi-{% if item.type == 'scale' or item.type == 'number' %}graph-up{% elif item.type == 'single' %}pie-chart-fill{% elif item.type == 'multi' %}ui-checks{% else %}chat-quote{% endif %} fs-5 text-primary"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="card-title mb-1">{{ item.text|truncatechars:50 }}</h6>
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <span class="hallazgo-badge">
+                                                <i class="bi bi-file-earmark-text"></i>
+                                                {{ forloop.counter }} de {{ top_insights|length }}
+                                            </span>
+                                            {% if item.state %}
+                                            <span class="badge {% if item.state == 'CRITICO' %}bg-danger{% elif item.state == 'REGULAR' %}bg-warning{% elif item.state == 'BUENO' %}bg-info{% else %}bg-success{% endif %} text-white" data-bs-toggle="tooltip" data-bs-placement="top"
+                                               title="{% if item.state == 'CRITICO' %}Crítico: Requiere atención urgente{% elif item.state == 'REGULAR' %}Regular: Oportunidad clara de mejora{% elif item.state == 'BUENO' %}Bueno: Funciona bien, sigue monitoreando{% else %}Excelente: Desempeño óptimo{% endif %}">
+                                                {{ item.state|lower }}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="insight-preview flex-grow-1">
+                                    {% if item.insight %}
+                                        {% autoescape off %}{{ item.insight|striptags|truncatechars:200 }}{% endautoescape %}
+                                    {% else %}
+                                        <span class="text-muted fst-italic">Análisis detallado disponible al expandir.</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mt-3 pt-3 border-top">
+                                    <a href="#q_{{ item.id }}" class="btn btn-sm btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2 smooth-scroll">
+                                        <i class="bi bi-arrow-down-circle"></i>
+                                        Ver análisis completo
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if data_quality and data_quality.questions_with_most_missing %}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="kpi-icon-box text-warning me-2">
+                        <i class="bi bi-clipboard-data fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0 fw-bold text-body-emphasis">Preguntas que más se saltan</h5>
+                        <p class="mb-0 small text-muted">
+                            Si varias personas dejan vacías las mismas preguntas, puede significar que son confusas, poco claras o no relevantes. Revísalas para mejorar el formulario.
+                        </p>
+                    </div>
+                </div>
+                <ul class="list-unstyled mb-0 small">
+                    {% for q in data_quality.questions_with_most_missing %}
+                        <li class="mb-1">
+                            <i class="bi bi-dash text-warning"></i>
+                            <strong>{{ q.text }}</strong>
+                            <span class="text-muted ms-1">
+                                · {{ q.completeness_pct|floatformat:1 }}% contestada
+                                ({{ q.missing }} vacías de {{ data_quality.total_responses }})
+                            </span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row g-4 mb-5">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-transparent py-3">
+                        <h6 class="m-0 fw-bold text-primary">
+                            Evolución Diaria
+                            <i class="bi bi-info-circle" data-bs-toggle="tooltip" data-bs-placement="top"
+                               title="Muestra cómo evolucionan tus respuestas día a día. Línea azul = número de respuestas por día. Línea verde = satisfacción promedio de ese día (si aplica)."></i>
+                        </h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <div style="height: 300px;">
+                            <canvas id="trendLineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold text-primary">
+                            Mapa de Correlaciones
+                        </h6>
+                        <button class="btn btn-sm btn-outline-info" type="button" 
+                                data-bs-toggle="popover" 
+                                data-bs-placement="left"
+                                data-bs-trigger="focus"
+                                data-bs-html="true"
+                                data-bs-content="<div class='text-start'><strong>¿Qué es esto?</strong><p class='mb-2 mt-2 small'>Muestra si las respuestas de una pregunta se relacionan con otra:</p><ul class='small mb-2'><li><strong class='text-success'>Verde (0.8-1.0):</strong> Cuando una sube, la otra también</li><li><strong class='text-warning'>Amarillo (0.2-0.7):</strong> Relación débil</li><li><strong class='text-danger'>Rojo (-1.0 a 0.2):</strong> Cuando una sube, la otra baja</li></ul><small class='text-muted'><strong>1.00</strong> en diagonal = cada pregunta consigo misma</small></div>"
+                                title="Guía de Lectura">
+                            <i class="bi bi-question-circle"></i> ¿Cómo leer?
+                        </button>
+                    </div>
+                    <div class="card-body p-4 d-flex align-items-center justify-content-center">
+                        {% if heatmap_image %}
+                            <div class="w-100 text-center">
+                                <img
+                                    src="data:image/png;base64,{{ heatmap_image }}"
+                                    class="img-fluid rounded shadow-sm mb-2 heatmap-light-mode"
+                                    style="max-height: 220px; cursor:pointer;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#globalImageModal"
+                                    data-image-src="data:image/png;base64,{{ heatmap_image }}"
+                                    alt="Heatmap de correlaciones"
+                                >
+                                {% if heatmap_image_dark %}
+                                <img
+                                    src="data:image/png;base64,{{ heatmap_image_dark }}"
+                                    class="img-fluid rounded shadow-sm mb-2 heatmap-dark-mode d-none"
+                                    style="max-height: 220px; cursor:pointer;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#globalImageModal"
+                                    data-image-src="data:image/png;base64,{{ heatmap_image_dark }}"
+                                    alt="Heatmap de correlaciones"
+                                >
+                                {% endif %}
+                                <div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm mt-2 heatmap-zoom-btn" data-bs-toggle="modal" data-bs-target="#globalImageModal">
+                                        <i class="bi bi-arrows-fullscreen me-1"></i>Ver en grande
+                                    </button>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-3">
+                                <i class="bi bi-diagram-3 fs-1 text-muted opacity-50 d-block mb-3"></i>
+                                <p class="text-muted mb-2">
+                                    <strong>Correlaciones no disponibles</strong>
+                                </p>
+                                <small class="text-muted">
+                                    Para ver el mapa de correlaciones necesitas:<br>
+                                    • Mínimo <strong>2 preguntas numéricas</strong> (tipo escala 1-10)<br>
+                                    • Al menos <strong>2 respuestas</strong> completadas
+                                </small>
+                            </div>
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <h4 class="fw-bold mb-4 mt-5 pb-2 border-bottom border-secondary-subtle text-body-emphasis">
+            Detalle por Pregunta
+            <span class="ms-2">
+                <a tabindex="0" class="text-primary small fw-normal" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo interpretar esta sección?" data-bs-content="Cada bloque muestra el análisis de una pregunta de tu encuesta. Observa el promedio, la distribución de respuestas y los comentarios destacados. Los colores y etiquetas te indican si el resultado es positivo, regular o crítico. Usa los íconos de información para obtener detalles sobre cada métrica.">
+                    <i class="bi bi-question-circle"></i> ¿Cómo interpretar?
+                </a>
+            </span>
+        </h4>
+        <div class="accordion" id="questionsAccordion">
+            {% for item in analysis_data %}
+                <div class="accordion-item mb-4 shadow-sm" id="q_{{ item.id }}">
+                    <h2 class="accordion-header">
+                        <button
+                            class="accordion-button {% if not forloop.first %}collapsed{% endif %}"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapse{{ item.id }}"
+                        >
+                            <span class="fw-bold me-2 opacity-50">{{ item.order }}.</span>
+                            {{ item.text }}
+                        </button>
+                    </h2>
+                    <div
+                        id="collapse{{ item.id }}"
+                        class="accordion-collapse collapse {% if forloop.first %}show{% endif %}"
+                        data-bs-parent="#questionsAccordion"
+                    >
+                        <div class="accordion-body p-4">
+                            <div class="row g-4">
+                                <div class="col-md-8 border-end border-secondary-subtle">
+                                    {% if item.type == 'text' %}
+                                        {% if item.samples_texto %}
+                                            <div class="mb-3">
+                                                <h6 class="text-muted small text-uppercase mb-3">
+                                                    <i class="bi bi-chat-left-quote me-1"></i>
+                                                    Muestra de Comentarios Recientes ({{ item.total_respuestas }} total)
+                                                </h6>
+                                                <ul class="list-group list-group-flush">
+                                                    {% for texto in item.samples_texto %}
+                                                        <li class="list-group-item border-0 px-0 py-2 bg-transparent">
+                                                            <i class="bi bi-quote text-primary me-2"></i>
+                                                            <span class="text-body">{{ texto }}</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                {% if item.total_respuestas > 5 %}
+                                                    <p class="text-muted small mt-2 mb-0">
+                                                        <i class="bi bi-info-circle me-1"></i>
+                                                        Mostrando 5 de {{ item.total_respuestas }} respuestas
+                                                    </p>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted text-center py-4">
+                                                <i class="bi bi-chat-left-text fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin respuestas de texto aún
+                                            </p>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if item.type != 'text' %}
+                                            {# Always create canvas for non-text questions - JavaScript will handle rendering #}
+                                            <div class="chart-container-q">
+                                                <canvas id="chart_q_{{ item.id }}"></canvas>
+                                            </div>
+                                            {# Fallback message if no data - will be replaced by JS #}
+                                            <div id="chart_placeholder_{{ item.id }}" class="text-muted text-center py-4 d-none">
+                                                <i class="bi bi-bar-chart fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin datos suficientes para graficar
+                                            </div>
+                                        {% elif item.chart_image %}
+                                            <div class="text-center">
+                                                <img src="data:image/png;base64,{{ item.chart_image }}" class="img-fluid rounded shadow-sm" alt="Gráfica">
+                                            </div>
+                                        {% else %}
+                                            <p class="text-muted text-center py-4">
+                                                <i class="bi bi-bar-chart fs-3 d-block mb-2 opacity-50"></i>
+                                                Sin datos suficientes para graficar
+                                            </p>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-4 ps-md-4">
+                                    {% if item.insight %}
+                                        <div class="card border-0 shadow-sm mb-3">
+                                            <div class="card-body p-3">
+                                                <div class="d-flex align-items-start gap-3">
+                                                    <div class="flex-shrink-0">
+                                                        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                            <i class="bi bi-lightbulb-fill text-primary fs-5"></i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="text-primary fw-bold mb-2">
+                                                            <i class="bi bi-graph-up-arrow me-1"></i>Análisis Automático
+                                                        </h6>
+                                                        <div class="text-body-secondary small">
+                                                            {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                                                        </div>
+                                                    </div>
+                                                    <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="button" tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus" data-bs-placement="left" title="¿Qué significa este análisis?" data-bs-content="Esta interpretación automática te ayuda a entender rápidamente si el resultado es positivo, regular o crítico según el tipo de pregunta. Los porcentajes y comparaciones están calculados automáticamente para facilitar la lectura de los datos.">
+                                                        <i class="bi bi-info-circle"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if item.type == 'text' and item.top_words %}
+                                        <div class="card border-0 bg-body-tertiary">
+                                            <div class="card-body p-3">
+                                                <h6 class="card-title text-uppercase small fw-bold mb-2">
+                                                    <i class="bi bi-tag me-1"></i>Palabras Clave
+                                                </h6>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    {% for word in item.top_words %}
+                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                            {{ word.palabra }} ({{ word.frecuencia }})
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if item.type == 'text' and item.top_bigrams %}
+                                        <div class="card border-0 bg-body-tertiary mt-3">
+                                            <div class="card-body p-3">
+                                                <h6 class="card-title text-uppercase small fw-bold mb-2">
+                                                    <i class="bi bi-chat-dots me-1"></i>Frases Frecuentes
+                                                </h6>
+                                                <ul class="list-unstyled mb-0 small">
+                                                    {% for bigram in item.top_bigrams %}
+                                                        <li class="mb-1">
+                                                            <i class="bi bi-arrow-right-short text-primary"></i>
+                                                            <strong>{{ bigram.frase }}</strong>
+                                                            <span class="text-muted">({{ bigram.frecuencia }}x)</span>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script>
+// Inicializar tooltips y modales de Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    // Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function(el) { new bootstrap.Tooltip(el); });
+    
+    // Modal global para imágenes
+    var globalEl = document.getElementById('globalImageModal');
+    if (globalEl) {
+        globalEl.addEventListener('show.bs.modal', function(event) {
+            var trigger = event.relatedTarget;
+            if (trigger) {
+                var imgSrc = trigger.getAttribute('data-image-src');
+                var imgEl = document.getElementById('globalModalImage');
+                if (imgEl) imgEl.src = imgSrc || '';
+            }
+        });
+    }
+});
+</script>
+
+{% if total_respuestas > 0 %}
+<script>
+(function() {
+    'use strict';
+    
+    // Datos del servidor
+    var analysisData = {{ analysis_data_json|default:"[]"|safe }};
+    var trendData = {{ trend_data|default:"null"|safe }};
+    // Fix: Wrap in quotes to ensure string comparison works correctly
+    var hasDateFields = "{{ has_date_fields|default:'true'|lower }}" === "true";
+
+    console.log('DEBUG: has_date_fields raw:', "{{ has_date_fields }}");
+    console.log('DEBUG: hasDateFields JS:', hasDateFields);
+    
+    // Colores para gráficas
+    var COLORS = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69', '#224abe', '#169b6b'];
+    
+    // Detectar tema
+    var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    var gridColor = isDark ? 'rgba(255,255,255,0.1)' : '#e9ecef';
+    var textColor = isDark ? '#adb5bd' : '#495057';
+    
+    // Almacenar instancias de gráficas
+    var charts = {};
+    
+    // Función simple para crear gráfica
+    function createChart(canvasId, config) {
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            console.warn('Canvas no encontrado:', canvasId);
+            return null;
+        }
+        
+        // Verificar si ya existe
+        if (charts[canvasId]) {
+            return charts[canvasId];
+        }
+        
+        try {
+            var chart = new Chart(canvas, config);
+            charts[canvasId] = chart;
+            console.log('Gráfica creada:', canvasId);
+            return chart;
+        } catch (e) {
+            console.error('Error creando gráfica:', canvasId, e);
+            return null;
+        }
+    }
+    
+    // Crear gráfica de tendencia
+    function initTrendChart() {
+        // First check: if no date fields in CSV, don't show chart even if data exists
+        if (!hasDateFields) {
+            console.log('Sin datos de fechas en el CSV');
+            var container = document.getElementById('trendLineChart');
+            if (container && container.parentElement) {
+                container.parentElement.innerHTML = '<p class="text-muted text-center py-5"><i class="bi bi-calendar-event fs-2 d-block mb-2 opacity-50"></i>Esta gráfica solo aparece si tu CSV contiene una columna de fecha (ej: "Fecha de respuesta", "Fecha", "Timestamp").</p>';
+            }
+            return;
+        }
+        
+        // Second check: if has date fields but no trend data
+        if (!trendData || !trendData.labels || trendData.labels.length === 0) {
+            console.log('Sin datos de tendencia');
+            var container = document.getElementById('trendLineChart');
+            if (container && container.parentElement) {
+                container.parentElement.innerHTML = '<p class="text-muted text-center py-5"><i class="bi bi-graph-up fs-2 d-block mb-2 opacity-50"></i>No hay datos suficientes para mostrar la evolución. Asegúrate de tener respuestas en diferentes fechas.</p>';
+            }
+            return;
+        }
+        
+        var hasSatisfactionSeries = trendData &&
+            Array.isArray(trendData.satisfaction) &&
+            trendData.satisfaction.length === trendData.labels.length;
+
+        var datasets = [{
+            label: 'Respuestas por día',
+            data: trendData.data,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            yAxisID: 'y'
+        }];
+
+        if (hasSatisfactionSeries) {
+            datasets.push({
+                label: 'Satisfacción promedio por día',
+                data: trendData.satisfaction,
+                borderColor: '#198754',
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                fill: false,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                yAxisID: 'y1'
+            });
+        }
+
+        createChart('trendLineChart', {
+            type: 'line',
+            data: {
+                labels: trendData.labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { legend: { display: datasets.length > 1 } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: textColor } },
+                    y: {
+                        grid: { color: gridColor },
+                        ticks: { color: textColor, precision: 0 },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        position: 'right',
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Crear gráfica para una pregunta
+    function createQuestionChart(item) {
+        if (!item || item.type === 'text') return;
+        
+        var canvasId = 'chart_q_' + item.id;
+        var canvas = document.getElementById(canvasId);
+        
+        if (!canvas) {
+            console.warn('Canvas no encontrado para pregunta:', item.id);
+            return;
+        }
+        
+        // Ya existe?
+        if (charts[canvasId]) return;
+        
+        // Sin datos?
+        if (!item.chart_labels || !item.chart_data || item.chart_labels.length === 0) {
+            console.log('Sin datos para pregunta:', item.id);
+            canvas.parentElement.innerHTML = '<p class="text-muted text-center py-4"><i class="bi bi-bar-chart-line fs-3 d-block mb-2"></i>Sin datos para graficar</p>';
+            return;
+        }
+        
+        // Solo preguntas multi usan dona, el resto usa barras
+        var chartType = (item.type === 'multi') ? 'doughnut' : 'bar';
+        
+        // Generar colores
+        var bgColors = chartType === 'doughnut' 
+            ? item.chart_labels.map(function(_, i) { return COLORS[i % COLORS.length]; })
+            : item.chart_labels.map(function(_, i) { return COLORS[i % COLORS.length]; });
+        
+        var numericData = item.chart_data.map(function(value) { return Number(value) || 0; });
+        var maxValue = Math.max.apply(null, numericData);
+        if (!isFinite(maxValue) || maxValue <= 0) {
+            maxValue = 1;
+        }
+
+        function computeNiceScale(maxVal) {
+            if (!isFinite(maxVal) || maxVal <= 0) {
+                return { step: 1, max: 5 };
+            }
+            // Calcular step basado en magnitud
+            var magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+            var normalized = maxVal / magnitude;
+            var step;
+            if (normalized <= 1.5) {
+                step = 0.2 * magnitude;
+            } else if (normalized <= 3) {
+                step = 0.5 * magnitude;
+            } else if (normalized <= 6) {
+                step = 1 * magnitude;
+            } else {
+                step = 2 * magnitude;
+            }
+            // Máximo = siguiente múltiplo de step después de maxVal
+            var niceMax = Math.ceil(maxVal / step) * step;
+            // Asegurar que step sea entero si es >= 1
+            step = step >= 1 ? Math.round(step) : step;
+            return { step: Math.max(step, 1), max: niceMax };
+        }
+
+        var niceScale = computeNiceScale(maxValue);
+        var config = {
+            type: chartType,
+            data: {
+                labels: item.chart_labels,
+                datasets: [{
+                    label: 'Respuestas',
+                    data: item.chart_data,
+                    backgroundColor: bgColors,
+                    borderColor: isDark ? '#212529' : '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                layout: { padding: 0 },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        };
+        
+        if (chartType === 'bar') {
+            // Barras con aspect ratio para llenar sin espacios
+            config.options.maintainAspectRatio = false;
+            config.options.aspectRatio = 2.5;
+            config.data.datasets[0].barPercentage = 0.9;
+            config.data.datasets[0].categoryPercentage = 0.9;
+            
+            // Calcular max ajustado: solo 5% más que el valor máximo
+            var adjustedMax = Math.ceil(maxValue * 1.05);
+            
+            config.options.scales = {
+                x: { grid: { display: false }, ticks: { color: textColor, padding: 2 } },
+                y: {
+                    grid: { color: gridColor },
+                    ticks: {
+                        color: textColor,
+                        precision: 0,
+                        padding: 2,
+                        callback: function(value) {
+                            return value.toLocaleString('es-MX');
+                        }
+                    },
+                    beginAtZero: true,
+                    max: adjustedMax
+                }
+            };
+        } else {
+            // Doughnut chart - usa aspect ratio natural
+            config.options.maintainAspectRatio = false;
+            config.options.aspectRatio = 1.8;
+            config.options.cutout = '45%';
+            config.options.plugins.legend = {
+                display: true,
+                position: 'bottom',
+                labels: { 
+                    color: textColor, 
+                    padding: 4, 
+                    font: { size: 9 },
+                    boxWidth: 8,
+                    usePointStyle: true
+                }
+            };
+        }
+        
+        createChart(canvasId, config);
+    }
+    
+    // Inicializar cuando DOM esté listo
+    function init() {
+        console.log('Inicializando gráficas...');
+        console.log('Datos de análisis:', analysisData);
+        console.log('Datos de tendencia:', trendData);
+        
+        // 1. Crear gráfica de tendencia
+        initTrendChart();
+        
+        // 2. Crear TODAS las gráficas por adelantado para que aparezcan al instante
+        if (analysisData && analysisData.length > 0) {
+            analysisData.forEach(function(item) {
+                createQuestionChart(item);
+            });
+        }
+    }
+    
+    // Esperar a que Chart.js esté cargado
+    if (typeof Chart !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    } else {
+        console.error('Chart.js no está cargado!');
+    }
+})();
+</script>
+
+<script>
+    // Actualizar placeholder del campo de segmentación según el tipo de pregunta
+    document.addEventListener('DOMContentLoaded', function() {
+        const segmentSelect = document.getElementById('segmentSelect');
+        const segmentValInput = document.getElementById('segmentValInput');
+        const demographicContext = document.getElementById('demographicContext');
+        const demographicSelect = document.getElementById('demographicSelect');
+        const segmentDemoInput = document.getElementById('segmentDemoInput');
+        const segmentDemoCustom = document.getElementById('segmentDemoCustom');
+
+        if (!segmentSelect || !segmentValInput) return;
+
+        // Función mejorada para actualizar UI según tipo de pregunta
+        function updateSegmentUI(selectedOption) {
+            if (!selectedOption || !selectedOption.value) {
+                if (demographicContext) demographicContext.classList.add('d-none');
+                if (segmentValInput) {
+                    segmentValInput.classList.remove('d-none');
+                    segmentValInput.disabled = true;
+                    segmentValInput.placeholder = 'Selecciona una pregunta primero';
+                    segmentValInput.value = '';
+                }
+                return;
+            }
+
+            const tipo = selectedOption.dataset.type;
+            const isDemographic = selectedOption.dataset.isDemographic === '1' || 
+                                  selectedOption.dataset.isDemographic === 'true';
+            const demoType = selectedOption.dataset.demoType || '';
+
+            // Si es pregunta demográfica
+            if (isDemographic) {
+                if (demographicContext) {
+                    demographicContext.classList.remove('d-none');
+                    // Filtrar opciones según demoType si es necesario
+                    if (demoType && demographicSelect) {
+                        const prefix = demoType.split('_')[0];
+                        const options = demographicSelect.querySelectorAll('option');
+                        options.forEach(opt => {
+                            if (opt.value === '' || opt.value.startsWith(prefix)) {
+                                opt.style.display = '';
+                            } else {
+                                opt.style.display = 'none';
+                            }
+                        });
+                    }
+                }
+                if (segmentValInput) {
+                    segmentValInput.classList.add('d-none');
+                    segmentValInput.disabled = true;
+                    segmentValInput.value = '';
+                }
+                if (demographicSelect) demographicSelect.value = '';
+                if (segmentDemoInput) segmentDemoInput.value = '';
+                if (segmentDemoCustom) {
+                    segmentDemoCustom.value = '';
+                    segmentDemoCustom.classList.add('d-none');
+                }
+                return;
+            }
+
+            // No es demográfica: mostrar input libre
+            if (demographicContext) demographicContext.classList.add('d-none');
+            if (segmentValInput) {
+                segmentValInput.classList.remove('d-none');
+                segmentValInput.disabled = false;
+            }
+
+            // Actualizar placeholder y tipo según tipo de pregunta
+            if (tipo === 'text') {
+                segmentValInput.placeholder = 'Texto a buscar (Ej. "excelente", "mejor")';
+                segmentValInput.type = 'text';
+            } else if (tipo === 'single' || tipo === 'multi') {
+                segmentValInput.placeholder = 'Opción exacta (Ej. "Marketing", "Ventas")';
+                segmentValInput.type = 'text';
+            } else if (tipo === 'scale' || tipo === 'number') {
+                segmentValInput.placeholder = 'Valor numérico (Ej. 5, 7.5)';
+                segmentValInput.type = 'number';
+                segmentValInput.step = tipo === 'scale' ? '1' : 'any';
+                segmentValInput.min = tipo === 'scale' ? '0' : '';
+            } else {
+                segmentValInput.placeholder = 'Valor a filtrar';
+                segmentValInput.type = 'text';
+            }
+        }
+
+        segmentSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            updateSegmentUI(selectedOption);
+        });
+
+        // Trigger inicial si ya hay una pregunta seleccionada
+        if (segmentSelect.value) {
+            segmentSelect.dispatchEvent(new Event('change'));
+        } else {
+            segmentValInput.disabled = true;
+            segmentValInput.placeholder = 'Selecciona una pregunta primero';
+        }
+
+        // Manejo mejorado del selector demográfico
+        if (demographicSelect) {
+            demographicSelect.addEventListener('change', function() {
+                const val = this.value;
+                if (segmentDemoInput) segmentDemoInput.value = val || '';
+
+                if (val === 'custom') {
+                    if (segmentDemoCustom) {
+                        segmentDemoCustom.classList.remove('d-none');
+                        segmentDemoCustom.required = true;
+                        segmentDemoCustom.focus();
+                    }
+                } else {
+                    if (segmentDemoCustom) {
+                        segmentDemoCustom.classList.add('d-none');
+                        segmentDemoCustom.value = '';
+                        segmentDemoCustom.required = false;
+                    }
+                }
+            });
+        }
+
+        // Sincronizar campo custom con input oculto
+        if (segmentDemoCustom) {
+            segmentDemoCustom.addEventListener('input', function() {
+                if (segmentDemoInput) segmentDemoInput.value = this.value;
+            });
+        }
+
+        // Validación del formulario antes de enviar
+        const filterForm = document.querySelector('.filter-bar form');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(e) {
+                const selectedOption = segmentSelect.options[segmentSelect.selectedIndex];
+                const isDemographic = selectedOption && (
+                    selectedOption.dataset.isDemographic === '1' || 
+                    selectedOption.dataset.isDemographic === 'true'
+                );
+
+                if (segmentSelect.value && !isDemographic) {
+                    if (!segmentValInput.value.trim()) {
+                        e.preventDefault();
+                        segmentValInput.focus();
+                        alert('Por favor ingresa un valor para filtrar.');
+                        return false;
+                    }
+                } else if (isDemographic) {
+                    if (!segmentDemoInput.value) {
+                        e.preventDefault();
+                        if (demographicSelect) demographicSelect.focus();
+                        alert('Por favor selecciona un filtro demográfico.');
+                        return false;
+                    }
+                }
+            });
+        }
+
+        // Inicializar UI con valores existentes
+        if (segmentSelect.value) {
+            const selectedOption = segmentSelect.options[segmentSelect.selectedIndex];
+            updateSegmentUI(selectedOption);
+            
+            // Restaurar valor demográfico si existe
+            {% if filter_demo %}
+            if (demographicSelect) {
+                demographicSelect.value = '{{ filter_demo }}';
+                if (segmentDemoInput) segmentDemoInput.value = '{{ filter_demo }}';
+                if (demographicSelect.value === 'custom' && segmentDemoCustom) {
+                    segmentDemoCustom.classList.remove('d-none');
+                    segmentDemoCustom.value = '{{ filter_demo }}';
+                }
+            }
+            {% endif %}
+        } else {
+            updateSegmentUI(null);
+        }
+    });
+</script>
+
+<script>
+    // Smooth scroll y auto-apertura para hallazgos
+    document.addEventListener('DOMContentLoaded', function() {
+        const smoothScrollLinks = document.querySelectorAll('a.smooth-scroll[href^="#"]');
+        
+        smoothScrollLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                
+                if (targetElement) {
+                    // Scroll suave al elemento
+                    targetElement.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                    
+                    // Abrir el acordeón automáticamente
+                    setTimeout(() => {
+                        const collapseElement = targetElement.querySelector('.accordion-collapse');
+                        if (collapseElement && !collapseElement.classList.contains('show')) {
+                            const bsCollapse = new bootstrap.Collapse(collapseElement, {
+                                toggle: true
+                            });
+                        }
+                        
+                        // Efecto visual de destaque
+                        targetElement.style.transition = 'all 0.3s ease';
+                        targetElement.style.transform = 'scale(1.02)';
+                        targetElement.style.boxShadow = '0 8px 24px rgba(13, 110, 253, 0.2)';
+                        
+                        setTimeout(() => {
+                            targetElement.style.transform = '';
+                            targetElement.style.boxShadow = '';
+                        }, 1500);
+                    }, 600);
+                }
+            });
+        });
+    });
+</script>
+
+<script>
+    // Inicializar popovers para la ayuda de correlaciones
+    document.addEventListener('DOMContentLoaded', function() {
+        const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+        const popoverList = [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl, {
+            container: 'body',
+            customClass: 'correlation-help-popover'
+        }));
+    });
+</script>
+
+<script>
+    // Detectar cambio de tema y actualizar heatmap
+    document.addEventListener('DOMContentLoaded', function() {
+        const heatmapLight = document.querySelector('.heatmap-light-mode');
+        const heatmapDark = document.querySelector('.heatmap-dark-mode');
+        const zoomBtn = document.querySelector('.heatmap-zoom-btn');
+        
+        if (!heatmapLight || !heatmapDark) return;
+        
+        function updateHeatmapForTheme() {
+            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            
+            if (isDark) {
+                heatmapLight.classList.add('d-none');
+                heatmapDark.classList.remove('d-none');
+                // Actualizar el botón de zoom con la imagen correcta
+                if (zoomBtn) {
+                    zoomBtn.setAttribute('data-image-src', heatmapDark.getAttribute('data-image-src'));
+                }
+            } else {
+                heatmapLight.classList.remove('d-none');
+                heatmapDark.classList.add('d-none');
+                // Actualizar el botón de zoom con la imagen correcta
+                if (zoomBtn) {
+                    zoomBtn.setAttribute('data-image-src', heatmapLight.getAttribute('data-image-src'));
+                }
+            }
+        }
+        
+        // Verificar tema inicial
+        updateHeatmapForTheme();
+        
+        // Observar cambios en el atributo data-bs-theme
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+                    updateHeatmapForTheme();
+                }
+            });
+        });
+        
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-bs-theme']
+        });
+    });
+</script>
+
+{% endif %}
+{% endblock %}

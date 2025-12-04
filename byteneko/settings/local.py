@@ -7,7 +7,7 @@ from decouple import config
 
 DEBUG = True
 
-LOCAL_LAN_IP = config('LAN_IP', default='192.168.100.2')
+LOCAL_LAN_IP = config('LAN_IP', default='172.16.0.2')
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', LOCAL_LAN_IP]
 
@@ -41,7 +41,10 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8001',
     'http://127.0.0.1:8080',  # HTTP puerto 8080 (alternativo)
     'http://localhost:8080',
+    'http://127.0.0.1:8010',  # HTTP puerto 8010 (desarrollo actual)
+    'http://localhost:8010',
     f'http://{LOCAL_LAN_IP}:8000',
+    f'http://{LOCAL_LAN_IP}:8010',  # LAN IP en puerto 8010
 ]
 
 # 2. OPTIMIZACIÓN DE ARCHIVOS ESTÁTICOS
@@ -65,25 +68,18 @@ DATABASES = {
     }
 }
 
-# 4. CACHÉ DE PLANTILLAS (CORREGIDO)
-# Esto hace que navegar por el menú sea instantáneo.
-# NOTA: Si cambias un HTML, tendrás que reiniciar el servidor para ver el cambio.
+# 4. CONFIGURACIÓN DE PLANTILLAS
+# Uso simple sin cached loader en desarrollo para que los cambios sean visibles
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': False,  # ⚠️ IMPORTANTE: Debe ser False cuando usamos 'loaders'
+        'APP_DIRS': True,  # Permite encontrar templates en app_name/templates/
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-            ],
-            'loaders': [
-                ('django.template.loaders.cached.Loader', [
-                    'django.template.loaders.filesystem.Loader',
-                    'django.template.loaders.app_directories.Loader',
-                ]),
             ],
         },
     },
@@ -201,13 +197,28 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+# ============================================================
+# PARIDAD DE PRODUCCIÓN PARA IMPORTACIÓN
+# ============================================================
+# Usar COPY para insertar QuestionResponse en Postgres (máximo rendimiento)
+SURVEY_IMPORT_USE_COPY_QR = True
+
+# Chunk size grande para reducir overhead por lote
+SURVEY_IMPORT_CHUNK_SIZE = 5000
+
+# Flag de trazabilidad de cpp_csv ya se registra en import_views
 # ... aquí van tus otras configuraciones de local.py ...
 # por ejemplo: DATABASES, LOGGING, etc.
 
 # ============================================================
-# CELERY (Modo síncrono para desarrollo)
+# CELERY (Modo asíncrono con worker real)
 # ============================================================
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
-CELERY_BROKER_URL = 'memory://'
-CELERY_RESULT_BACKEND = 'cache+memory://'
+# Comentado para usar worker real en background
+# Descomenta si quieres volver a modo síncrono (sin necesidad de worker)
+# CELERY_TASK_ALWAYS_EAGER = True
+# CELERY_TASK_EAGER_PROPAGATES = True
+# CELERY_BROKER_URL = 'memory://'
+# CELERY_RESULT_BACKEND = 'cache+memory://'
+
+# Para desarrollo con worker real (usa las configuraciones de base.py)
+# Redis debe estar corriendo y también el worker de Celery

@@ -1,6 +1,22 @@
 """Dynamic settings loader for ByteNeko."""
 
 import os
+from pathlib import Path
+
+# Load .env file BEFORE checking DJANGO_ENV
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+if env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+    except ImportError:
+        # If python-dotenv is not installed, manually parse .env
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip())
 
 
 def _get_env() -> str:

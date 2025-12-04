@@ -2,14 +2,18 @@
 
 import logging
 import re
+import string
 import time
 import unicodedata
+import math
 from collections import Counter, defaultdict
+import statistics
 
 from django.core.cache import cache
 from django.db import connection
 
 from core.utils.logging_utils import log_performance
+from core.utils.charts import ChartGenerator  # Importación necesaria para gráficos
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +30,168 @@ STOP_WORDS = {
     'the', 'and', 'this', 'that', 'with', 'from', 'have', 'been', 'were', 'will', 'would', 'there', 'their',
     'which', 'about', 'more', 'some', 'than', 'into', 'your', 'just', 'them', 'they', 'very', 'much', 'many',
     'here', 'only', 'even', 'what', 'when', 'where', 'while', 'also', 'back', 'down', 'over', 'such', 'most',
-    'other', 'really', 'still', 'well', 'mucho', 'algo', 'algun', 'ningun', 'ninguna', 'asi', 'aunque', 'desde'
+    'other', 'really', 'still', 'well', 'mucho', 'algo', 'algun', 'ningun', 'ninguna', 'asi', 'aunque', 'desde',
+    # Términos técnicos de logs y user agents
+    'mozilla', 'chrome', 'safari', 'edge', 'firefox', 'windows', 'linux', 'android', 'iphone', 'macos',
+    # Errores de datos
+    'null', 'none', 'nan', 'undefined', 'empty'
+}
+
+class ContextAutomaton:
+    """
+    Automata para determinar el contexto y sentimiento de una pregunta/respuesta.
+    Simula un análisis de lenguaje para categorizar 'bueno' o 'malo' según el dominio.
+    
+    ESTADOS Y SU SIGNIFICADO (para usuarios NO técnicos):
+    =====================================================
+    Los resultados numéricos se categorizan en 4 estados de criticidad:
+    
+    - EXCELENTE: Resultados óptimos. El indicador está en niveles altos/positivos.
+      → Acción: Mantén la consistencia y monitorea.
+    
+    - BUENO: Resultados sólidos. El indicador funciona bien pero tiene margen de mejora.
+      → Acción: Refuerza lo que está funcionando.
+    
+    - REGULAR: Resultados mediocres. Hay espacio significativo para mejorar.
+      → Acción: Investiga causas raíz e implementa cambios.
+    
+    - CRÍTICO: Resultados pobres o problemas detectados. Requiere atención inmediata.
+      → Acción: Prioriza esta área para intervención urgente.
+    
+    Estos estados se usan para ordenar los "top_insights" en el dashboard:
+    los problemas más críticos (CRÍTICO y REGULAR) se muestran primero para
+    que el usuario identifique rápidamente qué necesita atender.
+    """
+    CONTEXTS = {
+        'TIEMPO': ['tiempo', 'demora', 'espera', 'tardanza', 'rapidez', 'velocidad', 'minutos', 'horas', 'lento', 'rapido'],
+        'ATENCION': ['atencion', 'amabilidad', 'trato', 'personal', 'staff', 'empleado', 'soporte', 'ayuda'],
+        'CALIDAD': ['calidad', 'limpieza', 'estado', 'funcionamiento', 'sabor', 'confort', 'comodidad'],
+        'PRECIO': ['precio', 'costo', 'valor', 'pagar', 'caro', 'barato', 'economico'],
+        'PROCESO': ['proceso', 'tramite', 'facilidad', 'dificultad', 'uso', 'app', 'web', 'sistema']
+    }
+
+    NEGATIVE_INDICATORS = ['mal', 'pesimo', 'lento', 'caro', 'sucio', 'dificil', 'error', 'fallo', 'problema', 'queja']
+    POSITIVE_INDICATORS = ['bien', 'excelente', 'rapido', 'barato', 'limpio', 'facil', 'perfecto', 'bueno', 'gran']
+
+    @classmethod
+    def detect_context(cls, text):
+        norm = normalize_text(text)
+        for ctx, keywords in cls.CONTEXTS.items():
+            if any(k in norm for k in keywords):
+                return ctx
+        return 'GENERAL'
+
+    @classmethod
+    def analyze_numeric_result(cls, context, avg, scale_cap, question_text):
+        """Determina si un resultado numérico es bueno o malo según el contexto.
+        
+        Esta función es la clave para determinar el estado (EXCELENTE, BUENO, REGULAR, CRÍTICO).
+        
+        Lógica de polaridad:
+        - Para la mayoría de preguntas: "Más es Mejor" (ej. Satisfacción, Rapidez)
+          → Una puntuación alta = EXCELENTE
+        - Para algunas áreas: "Menos es Mejor" (ej. Tiempo de espera, Costo)
+          → Una puntuación baja = EXCELENTE
+        
+        El resultado final se normaliza a 0-10 y se categoriza según:
+        - 8-10: EXCELENTE
+        - 6-8: BUENO
+        - 4-6: REGULAR
+        - 0-4: CRÍTICO
+        """
+        norm_text = normalize_text(question_text)
+        
+        # Determinar polaridad de la métrica (¿Más es mejor o peor?)
+        # Por defecto: Más es Mejor (Satisfacción)
+        lower_is_better = False
+        
+        if context == 'TIEMPO':
+            if not any(k in norm_text for k in ['satisfaccion', 'calificacion', 'rapidez', 'velocidad']):
+                lower_is_better = True # "Tiempo de espera" -> Menos es mejor
+        elif context == 'PRECIO':
+             if 'caro' in norm_text or 'costo' in norm_text:
+                 lower_is_better = True
+        elif context == 'PROCESO':
+             if 'dificultad' in norm_text or 'esfuerzo' in norm_text or 'errores' in norm_text:
+                 lower_is_better = True
+
+        # Normalizar a 0-10
+        score = (avg / scale_cap) * 10
+        
+        if lower_is_better:
+            # Invertir score para análisis unificado (0=Malo, 10=Bueno)
+            # Si score real es 10 (muy alto tiempo), performance es 0.
+            # Si score real es 0 (muy bajo tiempo), performance es 10.
+            performance = 10 - score
+        else:
+            performance = score
+            
+        if performance >= 8: return 'EXCELENTE', lower_is_better
+        if performance >= 6: return 'BUENO', lower_is_better
+        if performance >= 4: return 'REGULAR', lower_is_better
+        return 'CRITICO', lower_is_better
+
+    @classmethod
+    def generate_recommendations(cls, context, state, lower_is_better):
+        """Genera recomendaciones basadas en estados del autómata."""
+        recs = []
+        if state in ['CRITICO', 'REGULAR']:
+            if context == 'TIEMPO':
+                recs.append("Realiza un estudio de tiempos y movimientos para identificar cuellos de botella.")
+                recs.append("Considera aumentar el personal en horas pico para reducir la espera.")
+            elif context == 'ATENCION':
+                recs.append("Implementa programas de capacitación en servicio al cliente para el personal.")
+                recs.append("Revisa los protocolos de atención y resolución de conflictos.")
+            elif context == 'CALIDAD':
+                recs.append("Audita los estándares de calidad y mantenimiento de las instalaciones/productos.")
+                recs.append("Establece controles de calidad más rigurosos antes de la entrega.")
+            elif context == 'PRECIO':
+                recs.append("Evalúa la percepción de valor vs precio; comunica mejor los beneficios.")
+                recs.append("Considera ofertas o paquetes para mejorar la competitividad.")
+            elif context == 'PROCESO':
+                recs.append("Simplifica los pasos necesarios para completar la acción.")
+                recs.append("Mejora la usabilidad de las herramientas o interfaces.")
+            else:
+                recs.append("Investiga las causas raíz de la baja satisfacción en este punto.")
+                recs.append("Contacta a los usuarios insatisfechos para entender sus necesidades.")
+        else:
+            recs.append("Mantén las buenas prácticas actuales y monitorea la consistencia.")
+            recs.append("Identifica qué factores están generando éxito para replicarlos.")
+            
+        return recs
+
+# --- DICCIONARIOS DE SENTIMIENTO ---
+POSITIVE_WORDS = {
+    'bien', 'bueno', 'buena', 'excelente', 'genial', 'mejor', 'gran', 'perfecto', 
+    'correcto', 'fácil', 'facil', 'rápido', 'rapido', 'útil', 'util', 'feliz', 
+    'contento', 'satisfecho', 'gracias', 'eficaz', 'eficiente', 'amable', 
+    'profesional', 'encanta', 'gusta', 'increíble', 'maravilloso', 'agradable', 
+    'limpio', 'claridad', 'ayuda', 'solución', 'calidad', 'si', 'yes', 'ok'
+}
+
+NEGATIVE_WORDS = {
+    'mal', 'malo', 'mala', 'pésimo', 'pesimo', 'peor', 'horrible', 'lento', 
+    'difícil', 'dificil', 'complicado', 'error', 'fallo', 'problema', 'deficiente', 
+    'inútil', 'inutil', 'caro', 'costoso', 'tarde', 'demora', 'espera', 'nunca', 
+    'jamás', 'triste', 'enojado', 'sucio', 'desordenado', 'grosero', 'lenta', 
+    'ruido', 'caos', 'falla', 'nadie', 'falta', 'no', 'queja', 'bugs', 'lenta'
 }
 
 AGE_KEYWORDS = [
-    'edad', 'age', 'anos', 'years old', 'years-old', 'cuantos anos', 'cuantos years', 'age range', 'rango de edad'
+    'edad', 'age', 'anos', 'years', 'cuantos anos', 'how old', 
+    'rango edad', 'age range', 'grupo edad', 'age group', 'fecha nacimiento',
+    'years old', 'years-old', 'cuantos years'
 ]
-AGE_OPTION_HINTS = ['anos', 'edad', 'years']
-AGE_RANGE_REGEX = re.compile(r'\b\d{1,2}\s*(?:-|a|to|–)\s*\d{1,2}\b')
+
+def normalize_text(text):
+    """Normalización agresiva para análisis semántico."""
+    if not text: return ''
+    text_str = str(text)
+    text_str = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', text_str)
+    text_str = re.sub(r'[_\-\.\[\]\(\)\{\}:]', ' ', text_str)
+    text_str = text_str.replace('¿', '').replace('?', '').replace('¡', '').replace('!', '')
+    normalized = unicodedata.normalize('NFKD', text_str).encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'\s+', ' ', normalized).strip().lower()
 
 
 class SurveyAnalysisService:
@@ -44,841 +202,680 @@ class SurveyAnalysisService:
     def get_analysis_data(survey, responses_queryset, include_charts=True, cache_key=None, use_base_filter=True):
         """Return enriched analysis for a survey using raw SQL and lightweight post-processing."""
 
-        timings = {}
+        # --- 0. INICIALIZACIÓN ---
+        nps_data = {'score': None, 'promoters': 0, 'passives': 0, 'detractors': 0, 'chart_image': None}
+        satisfaction_avg = 0
+        heatmap_image = None
+        heatmap_image_dark = None
+        skipped_questions = []
+        filtered_questions = []
+        cardinality_info = {}
+        analysis_data = []
 
         questions = list(survey.questions.prefetch_related('options').order_by('order'))
+        questions_map = {q.id: q for q in questions}
 
-        date_keywords = ['fecha', 'date', 'created', 'creado', 'timestamp', 'hora', 'time', 'nacimiento', 'birth']
+        # --- 1. DEFINICIÓN DE PALABRAS CLAVE ---
+        date_keywords = ['fecha', 'date', 'created', 'creado', 'timestamp', 'time']
+        
         identifier_keywords = [
-            'nombre', 'name', 'apellido', 'last name', 'first name', 'full name',
-            'correo', 'email', 'mail', 'e-mail',
-            'telefono', 'tel', 'phone', 'celular', 'mobile', 'whatsapp',
-            'id', 'identificacion', 'identification', 'documento', 'dni', 'curp', 'rfc', 'cedula', 'passport', 'folio',
-            'numero de cliente', 'customer id'
+            'nombre', 'name', 'apellido', 'lastname', 'surname', 'fullname', 'full name',
+            'correo', 'email', 'mail', 'e-mail', 'direccion', 'address',
+            'telefono', 'tel', 'phone', 'celular', 'mobile', 'movil', 'whatsapp',
+            'id', 'identificacion', 'identification', 'documento', 'dni', 'curp', 'rfc', 'cedula', 
+            'passport', 'pasaporte', 'ssn', 'matricula', 'legajo',
+            'ip', 'ip_address', 'ip address', 'direccion ip', 'mac address',
+            'user_agent', 'user agent', 'browser', 'navegador', 'dispositivo', 'device',
+            'uuid', 'guid', 'token', 'session', 'cookie', 
+            'user', 'usuario', 'login', 'username', 'user name',
+            'reserva', 'booking', 'ticket', 'folio', 'transaction', 'transaccion',
+            'latitud', 'latitude', 'longitud', 'longitude', 'geo'
         ]
 
-        def normalize_text(text):
-            if not text:
-                return ''
-            normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
-            return normalized.lower()
+        metadata_keywords = [
+            'survey', 'encuesta', 'title', 'titulo', 'status', 'estado', 
+            'network', 'red', 'referer', 'source', 'origen', 'channel', 'canal',
+            'campaign', 'campana', 'medium', 'medio',
+            'submit', 'enviado', 'completed', 'completado', 'time taken', 'tiempo tomado',
+            'language', 'idioma'
+        ]
+
+        demographic_keywords = [
+            'genero', 'gender', 'sexo', 'sex', 
+            'pais', 'country', 'ciudad', 'city', 'region', 'provincia',
+            'educacion', 'puesto', 'cargo', 'role', 'departamento', 'area', 'sucursal',
+            'industria', 'sector'
+        ]
+
+        comment_force_keywords = [
+            'comentario', 'sugerencia', 'opinion', 'feedback', 'razon', 'motivo', 
+            'por que', 'porque', 'observacion', 'detalle', 'explica'
+        ]
+
+        negative_metrics_keywords = ['tiempo', 'espera', 'demora', 'tardanza', 'errores', 'fallos', 'quejas', 'costo']
+        demographic_numeric_keywords = ['antiguedad', 'hijos', 'personas', 'veces', 'cantidad', 'ingresos', 'salario']
+        demographic_code_keywords = ['codigo', 'code', 'zip', 'postal', 'id', 'area', 'zona', 'sucursal']
 
         def contains_keyword(normalized_text, keyword):
             keyword = keyword.lower()
-            if ' ' in keyword:
-                return keyword in normalized_text
+            if ' ' in keyword: return keyword in normalized_text
             return re.search(r'\b' + re.escape(keyword) + r'\b', normalized_text) is not None
 
-        skipped_questions = []
-        filtered_questions = []
+        # --- 2. PRECÁLCULO DE CARDINALIDAD ---
+        for question in questions:
+            qid = question.id
+            if question.type in {'text', 'single'}:
+                with connection.cursor() as cursor:
+                    if question.type == 'text':
+                        cursor.execute("SELECT COUNT(text_value), COUNT(DISTINCT text_value), AVG(LENGTH(text_value)) FROM surveys_questionresponse WHERE question_id = %s AND text_value <> ''", [qid])
+                        row = cursor.fetchone()
+                    else:
+                        cursor.execute("SELECT COUNT(*), COUNT(DISTINCT COALESCE(ao.text, qr.text_value)), AVG(LENGTH(COALESCE(ao.text, qr.text_value))) FROM surveys_questionresponse qr LEFT JOIN surveys_answeroption ao ON qr.selected_option_id = ao.id WHERE qr.question_id = %s", [qid])
+                        row = cursor.fetchone()
+                    
+                    n = row[0] or 0
+                    unique = row[1] or 0
+                    avg_len = row[2] or 0
+                    ratio = (unique / n) if n > 0 else 0
+                    
+                    cardinality_info[qid] = {'n': n, 'unique': unique, 'ratio': ratio, 'avg_len': avg_len}
 
+        # --- 3. CLASIFICACIÓN Y FILTRADO ---
         for question in questions:
             normalized_text = normalize_text(question.text or '')
-
             skip_reason = None
+            
             if any(contains_keyword(normalized_text, kw) for kw in date_keywords):
                 skip_reason = 'Campo temporal/fecha'
             elif any(contains_keyword(normalized_text, kw) for kw in identifier_keywords):
-                skip_reason = 'Dato personal o identificador'
+                is_comment_by_name = any(contains_keyword(normalized_text, kw) for kw in comment_force_keywords)
+                if not is_comment_by_name and question.type in {'text', 'number'}: 
+                    skip_reason = 'Dato personal / Usuario'
+            elif any(contains_keyword(normalized_text, kw) for kw in metadata_keywords):
+                skip_reason = 'Metadato de encuesta'
+            
+            # --- Detección de Edad ---
+            is_age = False
+            if question.type in {'number', 'scale', 'single', 'text'}:
+                if any(contains_keyword(normalized_text, kw) for kw in AGE_KEYWORDS): is_age = True
+            setattr(question, 'is_age_demographic', is_age)
 
-            is_age_question = False
-            if question.type in {'number', 'scale', 'single'}:
-                if any(contains_keyword(normalized_text, kw) for kw in AGE_KEYWORDS):
-                    is_age_question = True
-                elif question.type == 'single':
-                    option_texts = [normalize_text(opt.text or '') for opt in question.options.all()]
-                    joined_options = ' '.join(option_texts)
-                    if any(hint in joined_options for hint in AGE_OPTION_HINTS) or AGE_RANGE_REGEX.search(joined_options):
-                        is_age_question = True
-            setattr(question, 'is_age_demographic', is_age_question)
+            is_demo = False
+            is_forced_comment = any(contains_keyword(normalized_text, kw) for kw in comment_force_keywords)
+            
+            if not is_age and not is_forced_comment and question.type in {'single', 'text', 'multi'}:
+                 if any(contains_keyword(normalized_text, kw) for kw in demographic_keywords): is_demo = True
+            setattr(question, 'is_general_demographic', is_demo)
+
+            intent = 'satisfaction'
+            if question.type in {'number', 'scale'} and not is_age:
+                if any(k in normalized_text for k in demographic_code_keywords): intent = 'demographic_categorical_numeric'
+                elif any(k in normalized_text for k in demographic_numeric_keywords): intent = 'demographic_numeric'
+                elif any(k in normalized_text for k in negative_metrics_keywords): intent = 'negative_metric'
+            setattr(question, 'numeric_intent', intent)
+
+            # Heurística Anti-ID vs Comentario
+            if not skip_reason and question.type in {'text', 'single'} and not is_demo:
+                info = cardinality_info.get(question.id, {})
+                n = info.get('n', 0)
+                ratio = info.get('ratio', 0)
+                avg_len = info.get('avg_len', 0)
+                
+                if n > 50 and ratio > 0.9:
+                    if avg_len < 15 and not is_forced_comment:
+                        skip_reason = 'Alta cardinalidad (posible ID)'
+            
+            # Fuerza análisis de texto si es Single pero parece comentario
+            if not skip_reason and question.type == 'single':
+                info = cardinality_info.get(question.id, {})
+                unique = info.get('unique', 0)
+                avg_len = info.get('avg_len', 0)
+                
+                if (unique > 20 or avg_len > 30 or is_forced_comment) and not is_demo and not is_age:
+                    setattr(question, 'force_text_analysis', True)
 
             if skip_reason:
                 skipped_questions.append({'id': question.id, 'text': question.text, 'reason': skip_reason})
                 continue
-
             filtered_questions.append(question)
 
         if not filtered_questions:
-            empty_result = {
-                'analysis_data': [],
-                'nps_data': {'score': None, 'promoters': 0, 'passives': 0, 'detractors': 0, 'chart_image': None},
-                'heatmap_image': None,
-                'kpi_prom_satisfaccion': 0,
-                'ignored_questions': skipped_questions,
-            }
-            if cache_key:
-                cache.set(cache_key, empty_result, CACHE_TIMEOUT_ANALYSIS)
-            return empty_result
+            return _build_empty_response(filtered_questions, skipped_questions, nps_data)
 
-        start_count = time.time()
+        # --- 3. GENERACIÓN DE FILTROS SQL ---
+        base_where_sql = ""
+        base_params = []
         if use_base_filter:
-            response_ids = None
+            subset_query = responses_queryset.values('id').query
+            compiler = subset_query.get_compiler(using=responses_queryset.db)
+            sql, params = compiler.as_sql()
+            base_where_sql = f" AND survey_response_id IN ({sql})"
+            base_params = list(params)
             response_count = responses_queryset.count()
         else:
             response_ids = list(responses_queryset.values_list('id', flat=True)[:50000])
+            if response_ids:
+                placeholders = ','.join(['%s'] * len(response_ids))
+                base_where_sql = f" AND survey_response_id IN ({placeholders})"
+                base_params = response_ids
             response_count = len(response_ids)
-        timings['count_responses'] = round((time.time() - start_count) * 1000)
 
         if response_count == 0:
-            analysis_data = [_create_empty_question_item(q, idx) for idx, q in enumerate(filtered_questions, 1)]
-            empty_result = {
-                'analysis_data': analysis_data,
-                'nps_data': {'score': None, 'promoters': 0, 'passives': 0, 'detractors': 0, 'chart_image': None},
-                'heatmap_image': None,
-                'kpi_prom_satisfaccion': 0,
-                'ignored_questions': skipped_questions,
-            }
-            if cache_key:
-                cache.set(cache_key, empty_result, CACHE_TIMEOUT_ANALYSIS)
-            return empty_result
+            return _build_empty_response(filtered_questions, skipped_questions, nps_data)
 
+        # --- 4. EJECUCIÓN DE CONSULTAS ---
         numeric_question_ids = [q.id for q in filtered_questions if q.type in {'scale', 'number'}]
-        choice_question_ids = [q.id for q in filtered_questions if q.type == 'single' or getattr(q, 'is_age_demographic', False)]
-        multi_question_ids = [q.id for q in filtered_questions if q.type == 'multi']
-        text_question_ids = [q.id for q in filtered_questions if q.type == 'text']
+        forced_text_ids = [q.id for q in filtered_questions if getattr(q, 'force_text_analysis', False)]
+        
+        choice_question_ids = [
+            q.id for q in filtered_questions 
+            if (q.type == 'single' or getattr(q, 'is_age_demographic', False) or getattr(q, 'is_general_demographic', False) or getattr(q, 'numeric_intent', '') == 'demographic_categorical_numeric')
+            and q.id not in forced_text_ids
+        ]
+        
+        text_question_ids = [q.id for q in filtered_questions if q.type == 'text' or q.id in forced_text_ids]
 
         numeric_stats = {}
         numeric_distributions = defaultdict(list)
         choice_distributions = defaultdict(list)
-        multi_distributions = defaultdict(list)
-        multi_combinations = defaultdict(Counter)
         text_counts = {}
         text_samples = defaultdict(list)
         text_responses_all = defaultdict(list)
-        age_question_info = {}
 
-        sql_start = time.time()
         with connection.cursor() as cursor:
-            if numeric_question_ids:
-                ids = ','.join(map(str, numeric_question_ids))
-                cursor.execute(
-                    f"""
-                    SELECT question_id,
-                           COUNT(*) as cnt,
-                           AVG(numeric_value) as avg_val,
-                           MIN(numeric_value) as min_val,
-                           MAX(numeric_value) as max_val
-                    FROM surveys_questionresponse
-                    WHERE question_id IN ({ids})
-                      AND numeric_value IS NOT NULL
-                    GROUP BY question_id
-                    """
-                )
-                for question_id, count, avg_val, min_val, max_val in cursor.fetchall():
-                    numeric_stats[question_id] = {
-                        'question_id': question_id,
-                        'count': count,
-                        'avg': float(avg_val) if avg_val is not None else 0,
-                        'min_val': float(min_val) if min_val is not None else 0,
-                        'max_val': float(max_val) if max_val is not None else 0,
-                    }
-            timings['q1_numeric_stats'] = round((time.time() - sql_start) * 1000)
+            # 4.1 Numéricos
+            valid_numeric_ids = [qid for qid in numeric_question_ids if qid not in choice_question_ids]
+            if valid_numeric_ids:
+                ids = ','.join(map(str, valid_numeric_ids))
+                where = f"question_id IN ({ids}) AND numeric_value IS NOT NULL {base_where_sql}"
+                
+                cursor.execute(f"SELECT question_id, COUNT(*), AVG(numeric_value), MAX(numeric_value), MIN(numeric_value) FROM surveys_questionresponse WHERE {where} GROUP BY question_id", base_params)
+                for row in cursor.fetchall():
+                    numeric_stats[row[0]] = {'count': row[1], 'avg': float(row[2]), 'max': float(row[3]), 'min': float(row[4])}
+                
+                cursor.execute(f"SELECT question_id, numeric_value, COUNT(*) FROM surveys_questionresponse WHERE {where} GROUP BY question_id, numeric_value", base_params)
+                for row in cursor.fetchall():
+                    numeric_distributions[row[0]].append({'value': float(row[1]), 'count': row[2]})
 
-            start = time.time()
-            if numeric_question_ids:
-                ids = ','.join(map(str, numeric_question_ids))
-                cursor.execute(
-                    f"""
-                    SELECT question_id, numeric_value, COUNT(*) as cnt
-                    FROM surveys_questionresponse
-                    WHERE question_id IN ({ids})
-                      AND numeric_value IS NOT NULL
-                    GROUP BY question_id, numeric_value
-                    ORDER BY question_id, numeric_value
-                    """
-                )
-                for question_id, numeric_value, count in cursor.fetchall():
-                    numeric_distributions[question_id].append({'value': float(numeric_value), 'count': count})
-            timings['q2_numeric_dist'] = round((time.time() - start) * 1000)
-
-            start = time.time()
+            # 4.2 Opciones / Categóricos
             if choice_question_ids:
                 ids = ','.join(map(str, choice_question_ids))
-                cursor.execute(
-                    f"""
-                    SELECT qr.question_id, ao.text, COUNT(*) as cnt
-                    FROM surveys_questionresponse qr
-                    JOIN surveys_answeroption ao ON qr.selected_option_id = ao.id
-                    WHERE qr.question_id IN ({ids})
-                      AND qr.selected_option_id IS NOT NULL
+                cursor.execute(f"""
+                    SELECT qr.question_id, ao.text, COUNT(*) 
+                    FROM surveys_questionresponse qr 
+                    JOIN surveys_answeroption ao ON qr.selected_option_id = ao.id 
+                    WHERE qr.question_id IN ({ids}) {base_where_sql.replace('survey_response_id', 'qr.survey_response_id')}
                     GROUP BY qr.question_id, ao.text
-                    ORDER BY qr.question_id, cnt DESC
-                    """
-                )
-                for question_id, option_text, count in cursor.fetchall():
-                    choice_distributions[question_id].append({'option': option_text, 'count': count})
-            timings['q3_choice_dist'] = round((time.time() - start) * 1000)
+                """, base_params)
+                for row in cursor.fetchall():
+                    choice_distributions[row[0]].append({'option': row[1], 'count': row[2]})
 
-            start = time.time()
-            if multi_question_ids:
-                ids = ','.join(map(str, multi_question_ids))
-                cursor.execute(
-                    f"""
-                    SELECT qr.question_id, ao.text, COUNT(*) as cnt
-                    FROM surveys_questionresponse qr
-                    JOIN surveys_answeroption ao ON qr.selected_option_id = ao.id
-                    WHERE qr.question_id IN ({ids})
-                      AND qr.selected_option_id IS NOT NULL
-                    GROUP BY qr.question_id, ao.text
-                    ORDER BY qr.question_id, cnt DESC
-                    """
-                )
-                for question_id, option_text, count in cursor.fetchall():
-                    multi_distributions[question_id].append({'option': option_text, 'count': count})
-                    multi_combinations[question_id][option_text] += count
+                # Numérico como categoría
+                cursor.execute(f"""
+                    SELECT question_id, numeric_value, COUNT(*) 
+                    FROM surveys_questionresponse 
+                    WHERE question_id IN ({ids}) AND numeric_value IS NOT NULL {base_where_sql}
+                    GROUP BY question_id, numeric_value
+                """, base_params)
+                for row in cursor.fetchall():
+                    choice_distributions[row[0]].append({'option': str(int(row[1])), 'count': row[2]})
 
-                cursor.execute(
-                    f"""
-                    SELECT question_id, text_value
-                    FROM surveys_questionresponse
-                    WHERE question_id IN ({ids})
-                      AND text_value IS NOT NULL
-                      AND text_value != ''
-                      AND selected_option_id IS NULL
-                    """
-                )
-                raw_text_responses = defaultdict(list)
-                for question_id, text_value in cursor.fetchall():
-                    raw_text_responses[question_id].append(text_value)
+                # Texto Demográfico
+                text_demo_ids = [
+                    q.id for q in filtered_questions 
+                    if (getattr(q, 'is_general_demographic', False) or getattr(q, 'is_age_demographic', False)) 
+                    and q.type == 'text'
+                ]
+                if text_demo_ids:
+                    ids_txt = ','.join(map(str, text_demo_ids))
+                    cursor.execute(f"""
+                        SELECT question_id, text_value, COUNT(*) 
+                        FROM surveys_questionresponse 
+                        WHERE question_id IN ({ids_txt}) AND text_value <> '' {base_where_sql}
+                        GROUP BY question_id, text_value
+                    """, base_params)
+                    for row in cursor.fetchall():
+                        choice_distributions[row[0]].append({'option': row[1], 'count': row[2]})
 
-                for question_id, responses in raw_text_responses.items():
-                    option_counts = defaultdict(int)
-                    for response in responses:
-                        options = [opt.strip() for opt in re.split(r'[;,]', response) if opt.strip()]
-                        if options:
-                            combo = ', '.join(sorted(options))
-                            multi_combinations[question_id][combo] += 1
-                        for option in options:
-                            option_counts[option] += 1
-
-                    for option, count in option_counts.items():
-                        multi_distributions[question_id].append({'option': option, 'count': count})
-            timings['q4_multi_dist'] = round((time.time() - start) * 1000)
-
-            start = time.time()
+            # 4.3 Texto Libre
             if text_question_ids:
                 ids = ','.join(map(str, text_question_ids))
-                cursor.execute(
-                    f"""
-                    SELECT question_id, text_value
-                    FROM surveys_questionresponse
-                    WHERE question_id IN ({ids})
-                      AND text_value IS NOT NULL
-                      AND text_value != ''
-                    """
-                )
-                for question_id, text_value in cursor.fetchall():
-                    text_responses_all[question_id].append(text_value)
-                    if len(text_samples[question_id]) < 5:
-                        text_samples[question_id].append(text_value)
+                where = f"question_id IN ({ids}) AND text_value <> '' {base_where_sql}"
+                cursor.execute(f"SELECT question_id, text_value FROM surveys_questionresponse WHERE {where}", base_params)
+                for row in cursor.fetchall():
+                    is_demo = getattr(questions_map.get(row[0]), 'is_general_demographic', False)
+                    is_age = getattr(questions_map.get(row[0]), 'is_age_demographic', False)
+                    if not is_demo and not is_age:
+                        text_responses_all[row[0]].append(row[1])
+                
+                # Forzados
+                forced_ids = [str(qid) for qid in forced_text_ids]
+                if forced_ids:
+                    ids_forced = ','.join(forced_ids)
+                    cursor.execute(f"""
+                        SELECT qr.question_id, ao.text 
+                        FROM surveys_questionresponse qr 
+                        JOIN surveys_answeroption ao ON qr.selected_option_id = ao.id 
+                        WHERE qr.question_id IN ({ids_forced}) {base_where_sql.replace('survey_response_id', 'qr.survey_response_id')}
+                    """, base_params)
+                    for row in cursor.fetchall():
+                        text_responses_all[row[0]].append(row[1])
+                
+                for qid in text_question_ids:
+                    responses = text_responses_all.get(qid, [])
+                    text_counts[qid] = len(responses)
+                    text_samples[qid] = responses[:5]
 
-                for question_id, responses in text_responses_all.items():
-                    text_counts[question_id] = len(responses)
-            timings['q5_text_analysis'] = round((time.time() - start) * 1000)
-
-        timings['total_sql'] = round((time.time() - sql_start) * 1000)
-        logger.warning("TIMING DEBUG: %s", timings)
-
-        for question in filtered_questions:
-            if getattr(question, 'is_age_demographic', False):
-                dist = numeric_distributions.get(question.id, [])
-                if not dist:
-                    continue
-
-                counts_by_age = {}
-                for entry in dist:
-                    age_value = int(round(entry['value']))
-                    if age_value < 0 or age_value > 120:
-                        continue
-                    counts_by_age[age_value] = counts_by_age.get(age_value, 0) + entry['count']
-
-                if not counts_by_age:
-                    continue
-
-                unique_age_count = len(counts_by_age)
-                min_age = min(counts_by_age)
-                max_age = max(counts_by_age)
-                total_responses_age = sum(counts_by_age.values())
-
-                cumulative = 0
-                median_age = None
-                halfway = total_responses_age / 2
-                for age in sorted(counts_by_age):
-                    cumulative += counts_by_age[age]
-                    if cumulative >= halfway:
-                        median_age = age
-                        break
-
-                if unique_age_count <= 8 or (max_age - min_age) <= 6:
-                    chart_distribution = [
-                        {'option': f"{age}", 'count': counts_by_age[age]} for age in sorted(counts_by_age)
-                    ]
-                else:
-                    standard_bins = [
-                        (0, 17, 'Menores de 18'),
-                        (18, 24, '18-24'),
-                        (25, 34, '25-34'),
-                        (35, 44, '35-44'),
-                        (45, 54, '45-54'),
-                        (55, 64, '55-64'),
-                        (65, 120, '65+'),
-                    ]
-                    chart_distribution = []
-                    for lower, upper, label in standard_bins:
-                        count = sum(counts_by_age.get(age, 0) for age in range(lower, upper + 1))
-                        if count > 0:
-                            if lower == upper:
-                                label = f"{lower}"
-                            chart_distribution.append({'option': label, 'count': count})
-                    if not chart_distribution:
-                        chart_distribution = [
-                            {'option': f"{age}", 'count': count} for age, count in sorted(counts_by_age.items())
-                        ]
-
-                choice_distributions[question.id] = chart_distribution
-
-                age_question_info[question.id] = {
-                    'counts_by_age': counts_by_age,
-                    'unique_ages': unique_age_count,
-                    'total': total_responses_age,
-                    'avg': numeric_stats.get(question.id, {}).get('avg'),
-                    'min': min_age,
-                    'max': max_age,
-                    'median': median_age,
-                    'chart_distribution': chart_distribution,
-                }
-
-        scale_question_ids = [q.id for q in filtered_questions if q.type == 'scale']
-        satisfaction_avg = 0
-        if scale_question_ids:
-            total_sum = 0
-            total_count = 0
-            for question_id in scale_question_ids:
-                stats = numeric_stats.get(question_id)
-                if not stats:
-                    continue
-                total_sum += (stats['avg'] or 0) * (stats['count'] or 0)
-                total_count += stats['count'] or 0
-            if total_count > 0:
-                satisfaction_avg = total_sum / total_count
-
-        nps_data = {'score': None, 'promoters': 0, 'passives': 0, 'detractors': 0, 'chart_image': None}
-        if scale_question_ids:
-            nps_qid = scale_question_ids[0]
-            dist = numeric_distributions.get(nps_qid)
-            if dist:
-                promoters = sum(entry['count'] for entry in dist if entry['value'] >= 9)
-                passives = sum(entry['count'] for entry in dist if 7 <= entry['value'] < 9)
-                detractors = sum(entry['count'] for entry in dist if entry['value'] < 7)
-                total = promoters + passives + detractors
+        # --- 5. CÁLCULO DE INSIGHTS ---
+        
+        scale_qs = [q for q in filtered_questions if q.type == 'scale']
+        if scale_qs:
+            vals = [numeric_stats[q.id]['avg'] for q in scale_qs if q.id in numeric_stats]
+            if vals: satisfaction_avg = sum(vals) / len(vals)
+            
+            nps_q = next((q for q in scale_qs if 'recomenda' in normalize_text(q.text)), None)
+            if nps_q and nps_q.id in numeric_distributions:
+                dist = numeric_distributions[nps_q.id]
+                promoters = sum(d['count'] for d in dist if d['value'] >= 9)
+                detractors = sum(d['count'] for d in dist if d['value'] <= 6)
+                total = sum(d['count'] for d in dist)
                 if total > 0:
-                    nps_score = round(((promoters - detractors) / total) * 100, 1)
-                    nps_data = {
-                        'score': nps_score,
-                        'promoters': round((promoters / total) * 100, 1),
-                        'passives': round((passives / total) * 100, 1),
-                        'detractors': round((detractors / total) * 100, 1),
-                        'chart_image': None,
-                    }
-
-        analysis_data = []
+                    nps_data['score'] = round(((promoters - detractors) / total) * 100, 1)
+                    nps_data['promoters'] = round((promoters/total)*100, 1)
+                    nps_data['detractors'] = round((detractors/total)*100, 1)
+                    nps_data['passives'] = 100 - nps_data['promoters'] - nps_data['detractors']
+                    if include_charts:
+                         nps_data['chart_image'] = ChartGenerator.generate_nps_chart(nps_data['promoters'], nps_data['passives'], nps_data['detractors'])
 
         for idx, question in enumerate(filtered_questions, 1):
             item = _create_empty_question_item(question, idx)
-            question_id = question.id
-            is_age_question = getattr(question, 'is_age_demographic', False)
-
-            if is_age_question:
-                age_info = age_question_info.get(question_id, {})
-                dist = age_info.get('chart_distribution', [])
-                item['tipo_display'] = 'Perfil demográfico'
-                if dist:
-                    labels = [entry['option'] for entry in dist]
-                    data = [entry['count'] for entry in dist]
-                    total = age_info.get('total', sum(data)) or 0
-
-                    item['chart_labels'] = labels
-                    item['chart_data'] = data
-                    item['total_respuestas'] = total
-                    item['opciones'] = [
-                        {
-                            'opcion': labels[pos],
-                            'frecuencia': data[pos],
-                            'porcentaje': round((data[pos] / total) * 100, 1) if total > 0 else 0,
-                        }
-                        for pos in range(len(labels))
+            qid = question.id
+            
+            # --- CASO ESPECIAL: TEXTO (Forzado o Nativo) ---
+            is_forced_text = getattr(question, 'force_text_analysis', False)
+            if (question.type == 'text' or is_forced_text) and not getattr(question, 'is_age_demographic', False):
+                item['type'] = 'text'
+                item['tipo_display'] = 'Respuestas de Texto'
+                count = text_counts.get(qid, 0)
+                item['total_respuestas'] = count
+                item['samples_texto'] = text_samples.get(qid, [])
+                
+                if count > 0:
+                    texts = text_responses_all.get(qid, [])
+                    all_text = ' '.join([str(t).lower() for t in texts])
+                    clean = re.sub(r'[^\w\s]', ' ', all_text)
+                    words = [w for w in clean.split() if len(w) > 3 and w not in STOP_WORDS]
+                    
+                    intro_templates = [
+                        "Analizamos <strong>{count} comentarios</strong>.",
+                        "Se registraron <strong>{count} opiniones</strong>.",
+                        "Total de respuestas textuales: <strong>{count}</strong>.",
                     ]
-                    item['top_options'] = item['opciones'][:5]
-
-                    ranked = sorted(dist, key=lambda entry: entry['count'], reverse=True)
-                    top_entry = ranked[0]
-                    top_label = top_entry['option']
-                    top_pct = round((top_entry['count'] / total) * 100, 1) if total > 0 else 0
-                    top_per_10 = max(1, round(top_pct / 10)) if top_pct > 0 else 0
-
-                    insight_parts = []
-                    if top_pct > 0:
-                        insight_parts.append(
-                            f"👥 <strong>Perfil de edad:</strong> El grupo más numeroso es <strong>{top_label}</strong> "
-                            f"({top_pct}% • {top_per_10} de cada 10 personas)."
-                        )
-                    else:
-                        insight_parts.append(
-                            f"👥 <strong>Perfil de edad:</strong> El grupo más numeroso es <strong>{top_label}</strong>."
-                        )
-
-                    if len(ranked) > 1 and total > 0:
-                        second_entry = ranked[1]
-                        second_pct = round((second_entry['count'] / total) * 100, 1)
-                        if second_pct > 0:
-                            insight_parts.append(
-                                f"Le sigue <strong>{second_entry['option']}</strong> con {second_pct}% del total."
-                            )
-
-                    unique_groups = len(labels)
-                    if unique_groups >= 5:
-                        insight_parts.append(
-                            f"Hay <strong>{unique_groups}</strong> grupos de edad representados, mostrando una audiencia diversa."
-                        )
-                    elif unique_groups <= 2:
-                        insight_parts.append(
-                            f"La audiencia es bastante homogénea en edad: solo <strong>{unique_groups}</strong> grupo(s) distintos."
-                        )
-
-                    min_age = age_info.get('min')
-                    max_age = age_info.get('max')
-                    if min_age is not None and max_age is not None and max_age > min_age:
-                        insight_parts.append(
-                            f"El rango de edades va de <strong>{int(min_age)}</strong> a <strong>{int(max_age)}</strong> años."
-                        )
-
-                    avg_age = age_info.get('avg')
-                    median_age = age_info.get('median')
-                    stats_bits = []
-                    if avg_age is not None:
-                        stats_bits.append(f"promedio <strong>{avg_age:.1f}</strong>")
-                    if median_age is not None:
-                        stats_bits.append(f"mediana <strong>{int(round(median_age))}</strong>")
-                    if stats_bits:
-                        insight_parts.append("Datos clave: " + ", ".join(stats_bits) + " años.")
-
+                    tpl_idx = qid % len(intro_templates)
+                    insight_parts = [intro_templates[tpl_idx].format(count=count)]
+                    
+                    if words:
+                        common = Counter(words).most_common(3)
+                        top_words = ", ".join([f"'{w[0]}'" for w in common])
+                        keyword_templates = [
+                            "Palabras clave: <strong>{kw}</strong>. Temas principales identificados.",
+                            "Términos frecuentes: <strong>{kw}</strong>. Indican focos de conversación.",
+                            "Más repetidos: <strong>{kw}</strong>. Revelan prioridades de la audiencia.",
+                        ]
+                        kw_idx = qid % len(keyword_templates)
+                        insight_parts.append(keyword_templates[kw_idx].format(kw=top_words))
+                        
+                        pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
+                        neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)
+                        total_sent = pos_count + neg_count
+                        
+                        if total_sent > 0:
+                            score = (pos_count - neg_count) / total_sent
+                            if score > 0.2: sentiment, icon = "Positivo", "😊"
+                            elif score < -0.2: sentiment, icon = "Negativo", "😟"
+                            else: sentiment, icon = "Neutral", "😐"
+                            sent_templates = [
+                                "<br>{icon} <strong>Sentimiento: {sent}</strong>. Refleja tono general.",
+                                "<br>{icon} <strong>{sent}</strong>. Predomina este matiz emocional.",
+                                "<br>{icon} <strong>Análisis: {sent}</strong>. Contexto afectivo detectado.",
+                            ]
+                            sent_idx = qid % len(sent_templates)
+                            insight_parts.append(sent_templates[sent_idx].format(icon=icon, sent=sentiment))
+                    
                     item['insight'] = " ".join(insight_parts)
+                    item['recommendations'] = ["Analiza los temas recurrentes para detectar problemas ocultos.", "Categoriza los comentarios por sentimiento para priorizar acciones."]
                 else:
-                    item['insight'] = 'No hay suficientes datos de edad aún.'
-
+                    item['insight'] = "Aún no hemos recibido respuestas de texto para esta pregunta."
                 analysis_data.append(item)
                 continue
 
-            if question.type in {'number', 'scale'} and question_id in numeric_stats:
-                stats = numeric_stats[question_id]
-                val_avg = stats['avg'] or 0
-                val_min = stats['min_val'] or 0
-                val_max = stats['max_val'] or 10
+            # --- 1. DEMOGRAFÍA (CATEGÓRICA/EDAD) ---
+            is_cat_num = getattr(question, 'numeric_intent', '') == 'demographic_categorical_numeric'
+            is_demo = getattr(question, 'is_general_demographic', False)
+            is_age = getattr(question, 'is_age_demographic', False)
 
-                item['total_respuestas'] = stats['count'] or 0
-                item['avg'] = val_avg
-                item['estadisticas'] = {
-                    'minimo': val_min,
-                    'maximo': val_max,
-                    'promedio': round(val_avg, 2),
-                    'mediana': round(val_avg, 2),
-                }
+            if is_cat_num or is_demo or is_age:
+                item['tipo_display'] = 'Perfil Demográfico'
+                if is_age: item['tipo_display'] += ' (Edad)'
+                
+                if is_age and qid in numeric_distributions:
+                    dist = numeric_distributions[qid]
+                    raw_age = {int(d['value']): d['count'] for d in dist}
+                    choice_distributions[qid] = [{'option': str(k), 'count': v} for k, v in sorted(raw_age.items())]
 
-                scale_cap = 5 if val_max <= 5 else (10 if val_max <= 10 else int(val_max))
-                item['scale_cap'] = scale_cap
-
-                if scale_cap == 5:
-                    item['tipo_display'] = 'Escala 1-5'
-                elif scale_cap > 10:
-                    item['tipo_display'] = 'Valor Numérico'
-
-                normalized = (val_avg / scale_cap) * 10 if scale_cap > 0 else 0
-
-                if normalized >= 8.5:
-                    sentiment = 'Excelente'
-                    recommendation = 'Resultados sobresalientes que demuestran un alto nivel de satisfacción.'
-                    visual_metaphor = 'Piensa en esto como si <strong>9 de cada 10</strong> personas estuvieran muy contentas.'
-                elif normalized >= 7:
-                    sentiment = 'Bueno'
-                    recommendation = 'Resultados positivos, aunque hay oportunidades de mejora.'
-                    visual_metaphor = 'Es como si <strong>7 de cada 10</strong> personas estuvieran satisfechas.'
-                elif normalized >= 5:
-                    sentiment = 'Regular'
-                    recommendation = 'Nivel aceptable, pero requiere atención para mejorar la experiencia.'
-                    visual_metaphor = 'Equivale a que <strong>la mitad</strong> esté conforme y <strong>la otra mitad</strong> no tanto.'
-                else:
-                    sentiment = 'Crítico'
-                    recommendation = 'Resultados preocupantes que necesitan acción inmediata.'
-                    visual_metaphor = 'Se parece a que <strong>7 de cada 10</strong> personas estuvieran insatisfechas.'
-
-                high_thr = max(1, int(round(scale_cap * 0.8)))
-                mid_thr = max(1, int(round(scale_cap * 0.6)))
-
-                dist_data = numeric_distributions.get(question_id, [])
-                total_responses = sum(entry['count'] for entry in dist_data)
-                distribution_text = 'No hay suficientes respuestas todavía.'
-                context_msg = ''
-                mode_text = ''
-
-                if total_responses > 0:
-                    high_count = sum(entry['count'] for entry in dist_data if int(entry['value']) >= high_thr)
-                    mid_count = sum(entry['count'] for entry in dist_data if mid_thr <= int(entry['value']) < high_thr)
-                    low_count = sum(entry['count'] for entry in dist_data if int(entry['value']) < mid_thr)
-
-                    high_pct = round((high_count / total_responses) * 100)
-                    mid_pct = round((mid_count / total_responses) * 100)
-                    low_pct = round((low_count / total_responses) * 100)
-
-                    distribution_parts = []
-                    if high_pct > 0:
-                        high_per_10 = max(1, round(high_pct / 10))
-                        if high_per_10 >= 8:
-                            distribution_parts.append('<strong>Casi todos</strong> dieron calificaciones altas')
-                        elif high_per_10 >= 5:
-                            distribution_parts.append('<strong>Más de la mitad</strong> calificó con valores altos')
-                        else:
-                            distribution_parts.append('<strong>Algunos</strong> dieron calificaciones altas')
-
-                    if mid_pct > 0:
-                        if mid_pct >= 30:
-                            distribution_parts.append('<strong>Una buena parte</strong> se quedó en el medio')
-                        else:
-                            distribution_parts.append('<strong>Unos pocos</strong> calificaron regular')
-
-                    if low_pct > 0:
-                        low_per_10 = max(1, round(low_pct / 10))
-                        if low_per_10 >= 5:
-                            distribution_parts.append('<strong>Muchos</strong> dieron calificaciones bajas')
-                        elif low_per_10 >= 3:
-                            distribution_parts.append('<strong>Algunos</strong> no quedaron satisfechos')
-                        else:
-                            distribution_parts.append('<strong>Pocos</strong> calificaron bajo')
-
-                    if distribution_parts:
-                        distribution_text = ', '.join(distribution_parts) + '.'
+                if qid in choice_distributions:
+                    raw_dist = choice_distributions[qid]
+                    grouped = defaultdict(int)
+                    for d in raw_dist: grouped[d['option']] += d['count']
+                    sorted_dist = sorted([{'option': k, 'count': v} for k, v in grouped.items()], key=lambda x: x['count'], reverse=True)
+                    
+                    item['total_respuestas'] = sum(d['count'] for d in sorted_dist)
+                    top_15 = sorted_dist[:15]
+                    item['chart_labels'] = [d['option'] for d in top_15]
+                    item['chart_data'] = [d['count'] for d in top_15]
+                    
+                    if sorted_dist:
+                        top = sorted_dist[0]
+                        pct = round((top['count'] / item['total_respuestas']) * 100, 1)
+                        # Variedad determinista por qid
+                        demo_templates = [
+                            "📊 <strong>Segmento dominante:</strong> {pct}% pertenece a <strong>{opt}</strong>. Este dato clave ayuda a perfilar la audiencia.",
+                            "📊 <strong>Perfil principal:</strong> La categoría <strong>{opt}</strong> representa {pct}% de respuestas. Útil para estrategias segmentadas.",
+                            "📊 <strong>Composición:</strong> <strong>{opt}</strong> agrupa {pct}% del total. Identifica el núcleo demográfico para acciones dirigidas.",
+                        ]
+                        tpl_idx = qid % len(demo_templates)
+                        item['insight'] = demo_templates[tpl_idx].format(opt=top['option'], pct=pct)
+                        item['recommendations'] = ["Personaliza comunicación según segmento dominante.", "Adapta la oferta de valor a las características del grupo mayoritario."]
+                        
+                        # Generar gráfico para PDF/PPTX
+                        # Generar gráfico para PDF/PPTX
+                        if include_charts:
+                            if len(sorted_dist) <= 5:
+                                item['chart_image'] = ChartGenerator.generate_pie_chart(item['chart_labels'], item['chart_data'], "Distribución (Top 5)")
+                                item['chart_type'] = 'donut'
+                            else:
+                                item['chart_image'] = ChartGenerator.generate_horizontal_bar_chart(item['chart_labels'][:10], item['chart_data'][:10], "Top 10 Categorías")
                     else:
-                        distribution_text = 'La distribución está bastante equilibrada.'
+                        item['insight'] = "No tenemos suficientes datos demográficos para mostrar un patrón claro."
+                analysis_data.append(item)
+                continue
 
-                    if high_pct >= 70:
-                        context_msg = ' <strong>En resumen:</strong> La gran mayoría está feliz con esto.'
-                    elif low_pct >= 40:
-                        context_msg = ' <strong>En resumen:</strong> Hay bastante gente descontenta, esto necesita mejoras urgentes.'
-                    elif abs(high_pct - low_pct) < 15:
-                        context_msg = ' <strong>En resumen:</strong> Las opiniones están divididas, unos contentos y otros no.'
+            # --- 2. NUMÉRICO PURO ---
+            if qid in numeric_stats:
+                stats = numeric_stats[qid]
+                avg = stats['avg']
+                scale_cap = 10 if stats['max'] > 5 else 5
+                item['avg'] = avg
+                item['scale_cap'] = scale_cap
+                item['total_respuestas'] = stats['count']
+                
+                if qid in numeric_distributions:
+                    dist = sorted(numeric_distributions[qid], key=lambda x: x['value'])
+                    item['chart_labels'] = [str(int(d['value'])) for d in dist]
+                    item['chart_data'] = [d['count'] for d in dist]
+                    
+                    if include_charts:
+                        item['chart_image'] = ChartGenerator.generate_vertical_bar_chart(item['chart_labels'], item['chart_data'], "Distribución de Respuestas")
 
-                    most_common = max(dist_data, key=lambda entry: entry['count']) if dist_data else None
-                    if most_common:
-                        most_common_val = int(most_common['value'])
-                        most_common_pct = round((most_common['count'] / total_responses) * 100)
-                        if most_common_pct >= 30:
-                            mode_text = (
-                                f"<br><br><strong>La calificación más repetida es {most_common_val}</strong>"
-                                f" (la eligieron {most_common_pct} de cada 100 personas)."
-                            )
-
-                item['insight'] = (
-                    f"<strong>{sentiment}</strong>: El promedio es <strong>{val_avg:.1f}</strong> sobre {scale_cap}. "
-                    f"{visual_metaphor}"
-                    f"<br><br>{distribution_text}{context_msg}{mode_text}"
-                    f"<br><br><em>{recommendation}</em>"
+                # --- NUEVA LÓGICA CON AUTÓMATA DE CONTEXTO ---
+                # 1. Detectar contexto
+                context = ContextAutomaton.detect_context(question.text)
+                
+                # 2. Analizar resultado (Estado y Polaridad)
+                state, lower_is_better = ContextAutomaton.analyze_numeric_result(context, avg, scale_cap, question.text)
+                
+                # Guardar para orden de insights
+                item['state'] = state
+                item['context'] = context
+                
+                # 3. Generar Recomendaciones
+                recs = ContextAutomaton.generate_recommendations(context, state, lower_is_better)
+                item['recommendations'] = recs
+                
+                # 4. Construir Insight y Display (texto más rico y extenso)
+                item['tipo_display'] = f"Métrica: {context.title()}"
+                
+                # Iconos y Mood
+                if state == 'EXCELENTE': icon, mood = "🌟", "Excelente"
+                elif state == 'BUENO': icon, mood = "✅", "Bueno"
+                elif state == 'REGULAR': icon, mood = "⚠️", "Regular"
+                else: icon, mood = "🛑", "Crítico"
+                
+                # Determinar artículo según género del contexto
+                ctx_lower = context.lower()
+                article = "la" if context in ['ATENCION', 'CALIDAD'] else "el"
+                
+                # Templates dinámicos según si "Menos es Mejor" (Tiempo/Precio) o "Más es Mejor" (Calidad/Satisfacción)
+                if lower_is_better:
+                    # Contexto negativo (ej. Tiempo de espera): Bajo es bueno
+                    insight_templates = [
+                        "{icon} <strong>{mood}</strong>: Promedio {avg:.1f}. {ctx_title} bajo control. Mantén la eficiencia.",
+                        "{icon} <strong>Desempeño {mood}</strong> ({avg:.1f}). {art} {ctx} está en niveles óptimos.",
+                        "{icon} <strong>Estado: {mood}</strong>. Valor {avg:.1f}. Gestión de {ctx} efectiva."
+                    ] if state in ['EXCELENTE', 'BUENO'] else [
+                        "{icon} <strong>{mood}</strong>: Promedio {avg:.1f}. {art} {ctx} es alto. Requiere atención inmediata.",
+                        "{icon} <strong>Alerta {mood}</strong> ({avg:.1f}). Optimiza procesos para reducir este valor.",
+                        "{icon} <strong>Estado: {mood}</strong>. Valor {avg:.1f}. Detectamos fricción en {ctx}."
+                    ]
+                else:
+                    # Contexto positivo (ej. Satisfacción): Alto es bueno
+                    insight_templates = [
+                        "{icon} <strong>{mood}</strong>: {avg:.1f}/{cap}. Alta percepción de {ctx}. ¡Sigue así!",
+                        "{icon} <strong>Nivel {mood}</strong> ({avg:.1f}). Los usuarios valoran positivamente {art} {ctx}.",
+                        "{icon} <strong>Valoración: {mood}</strong>. Puntuación {avg:.1f}. Fortaleza clave en {ctx}."
+                    ] if state in ['EXCELENTE', 'BUENO'] else [
+                        "{icon} <strong>{mood}</strong>: {avg:.1f}/{cap}. Baja percepción de {ctx}. Prioriza mejoras.",
+                        "{icon} <strong>Nivel {mood}</strong> ({avg:.1f}). {art_title} {ctx} requiere intervención estratégica.",
+                        "{icon} <strong>Valoración: {mood}</strong>. Puntuación {avg:.1f}. Punto de dolor detectado en {ctx}."
+                    ]
+                
+                tpl_idx = qid % len(insight_templates)
+                base_insight = insight_templates[tpl_idx].format(
+                    icon=icon, 
+                    mood=mood, 
+                    avg=avg, 
+                    cap=scale_cap, 
+                    ctx=ctx_lower,
+                    ctx_title=context.title(),
+                    art=article,
+                    art_title=article.title()
                 )
 
-                if question_id in numeric_distributions:
-                    dist = numeric_distributions[question_id]
-                    item['chart_labels'] = [str(int(entry['value'])) for entry in dist]
-                    item['chart_data'] = [entry['count'] for entry in dist]
-
-            elif question.type == 'single' and question_id in choice_distributions:
-                dist = choice_distributions[question_id][:15]
-                total = sum(entry['count'] for entry in dist)
-
-                item['total_respuestas'] = total
-                labels = [entry['option'] or 'Sin respuesta' for entry in dist]
-                data = [entry['count'] for entry in dist]
-
-                item['chart_labels'] = labels
-                item['chart_data'] = data
-                item['opciones'] = [
-                    {
-                        'opcion': labels[pos],
-                        'frecuencia': data[pos],
-                        'porcentaje': round((data[pos] / total) * 100, 1) if total > 0 else 0,
-                    }
-                    for pos in range(len(labels))
-                ]
-                item['top_options'] = item['opciones'][:5]
-
-                if labels and data and total > 0:
-                    top_val = data[0]
-                    top_label = labels[0]
-                    top_pct = round((top_val / total) * 100, 1)
-                    top_per_10 = round(top_pct / 10)
-
-                    insight = ''
-                    context_details = []
-
-                    if len(labels) > 1:
-                        second_val = data[1]
-                        second_label = labels[1]
-                        second_pct = round((second_val / total) * 100, 1)
-                        second_per_10 = round(second_pct / 10)
-                        diff = top_pct - second_pct
-
-                        if top_pct > 50:
-                            insight = (
-                                f"<strong>'{top_label}'</strong> domina: <strong>más de la mitad</strong> de las personas la eligió ({top_pct}%)."
-                            )
-                            context_details.append(
-                                f"Si tuvieras un grupo de 10 personas, <strong>{top_per_10 if top_per_10 <= 10 else 'casi todas'}</strong> elegirían esta opción."
-                            )
-                        elif diff < 5:
-                            insight = f"Empate: <strong>'{top_label}'</strong> y <strong>'{second_label}'</strong> están prácticamente igual."
-                            context_details.append(
-                                f"En un grupo de 10 personas, <strong>{top_per_10}</strong> elegirían '{top_label}' y <strong>{second_per_10}</strong> elegirían '{second_label}'."
-                            )
-                        elif diff > 20:
-                            insight = f"<strong>'{top_label}'</strong> es la clara ganadora con {top_pct}%."
-                            context_details.append(
-                                f"Le saca ventaja a <strong>'{second_label}'</strong> ({second_pct}%) por {diff:.0f} puntos. "
-                                f"En un grupo de 10 personas, <strong>{top_per_10}</strong> elegirían la primera y solo <strong>{second_per_10}</strong> la segunda."
-                            )
-                        else:
-                            insight = f"<strong>'{top_label}'</strong> es la favorita con {top_pct}%."
-                            context_details.append(
-                                f"Le sigue <strong>'{second_label}'</strong> con {second_pct}%. De cada 10 personas, "
-                                f"<strong>{top_per_10}</strong> prefieren la primera y <strong>{second_per_10}</strong> la segunda."
-                            )
-
-                        if len(labels) > 2:
-                            third_label = labels[2]
-                            third_pct = round((data[2] / total) * 100, 1)
-                            third_per_10 = round(third_pct / 10)
-                            if third_pct >= 10:
-                                context_details.append(
-                                    f"En tercer lugar, <strong>'{third_label}'</strong> alcanza el {third_pct}% (<strong>{third_per_10} de cada 10</strong>)."
-                                )
-
-                        top_three_total = sum(round((data[pos] / total) * 100, 1) for pos in range(min(3, len(data))))
-                        if top_three_total >= 80 and len(labels) > 3:
-                            context_details.append(
-                                f"<strong>8 de cada 10</strong> personas eligieron una de estas 3 opciones principales. El resto se distribuye entre otras {len(labels) - 3} opciones."
-                            )
-                        elif len(labels) >= 5:
-                            context_details.append(
-                                f"Las respuestas están repartidas entre {len(labels)} opciones, mostrando diversidad de opiniones."
-                            )
+                # Añadir análisis complementario según distribución y conteo para alargar el texto de forma útil
+                extras = []
+                try:
+                    if qid in numeric_distributions:
+                        dist_sorted = sorted(numeric_distributions[qid], key=lambda x: x['value'])
+                        counts_only = [d['count'] for d in dist_sorted]
+                        total = sum(counts_only) or 1
+                        high_tail = sum(c for v, c in [(d['value'], d['count']) for d in dist_sorted] if v >= (scale_cap*0.7))
+                        low_tail = sum(c for v, c in [(d['value'], d['count']) for d in dist_sorted] if v <= (scale_cap*0.3))
+                        pct_high = round((high_tail/total)*100, 1)
+                        pct_low = round((low_tail/total)*100, 1)
+                        extras.append(f"Distribución: {pct_high}% en valores altos y {pct_low}% en valores bajos, indicando {'polarización' if pct_high>35 and pct_low>20 else 'dispersión moderada'}. ")
+                    # Comentario según estado del autómata
+                    if state in ['CRITICO','REGULAR']:
+                        extras.append(f"Se observan señales de fricción en {article} {ctx_lower}. Prioriza acciones tácticas inmediatas mientras defines mejoras estructurales.")
                     else:
-                        insight = f"<strong>Todos</strong> eligieron <strong>'{top_label}'</strong> ({top_pct}%)."
-                        context_details.append('Unanimidad total: todas las personas dieron la misma respuesta.')
+                        extras.append(f"El indicador de {article} {ctx_lower} muestra solidez. Mantén vigilancia periódica para sostener el desempeño.")
+                    # Añadir una nota de benchmarking ligera sin repetir
+                    extras.append("Comparar estos resultados por segmento (edad, sucursal, canal) puede revelar variaciones relevantes para focalizar esfuerzos.")
+                except Exception:
+                    pass
 
-                    full_insight = insight
-                    if context_details:
-                        full_insight += '<br><br>' + ' '.join(context_details)
-                    item['insight'] = full_insight
+                item['insight'] = base_insight + " " + " ".join(extras)
+                
+                analysis_data.append(item)
+                continue
 
-            elif question.type == 'multi' and question_id in multi_distributions:
-                dist = multi_distributions[question_id][:15]
-                total = sum(entry['count'] for entry in dist)
-
-                item['total_respuestas'] = total
-                labels = [entry['option'] or 'Sin respuesta' for entry in dist]
-                data = [entry['count'] for entry in dist]
-
-                item['chart_labels'] = labels
-                item['chart_data'] = data
-                item['opciones'] = [
-                    {
-                        'opcion': labels[pos],
-                        'frecuencia': data[pos],
-                        'porcentaje': round((data[pos] / total) * 100, 1) if total > 0 else 0,
-                    }
-                    for pos in range(len(labels))
-                ]
-                item['top_options'] = item['opciones'][:5]
-
-                if labels and data and total > 0:
-                    top_label = labels[0]
-                    top_pct = round((data[0] / total) * 100, 1)
-                    top_per_10 = round(top_pct / 10)
-
-                    insight_parts = [
-                        f"<strong>'{top_label}'</strong> es la opción más popular: la eligieron <strong>{top_per_10} de cada 10</strong> personas ({top_pct}%)."
+            # --- 4. SELECCIÓN SIMPLE (No demo) ---
+            if qid in choice_distributions:
+                item['tipo_display'] = 'Selección'
+                dist = choice_distributions[qid][:10]
+                item['chart_labels'] = [d['option'] for d in dist]
+                item['chart_data'] = [d['count'] for d in dist]
+                if dist:
+                    top = dist[0]
+                    total = sum(d['count'] for d in dist)
+                    item['total_respuestas'] = total
+                    pct = round((top['count']/total)*100, 1) if total else 0
+                    # Insight con variedad de redacción según fuerza de preferencia
+                    strong = pct >= 30
+                    moderate = 15 <= pct < 30
+                    templates_strong = [
+                        "<strong>{opt}</strong> lidera con <strong>{pct}%</strong>. Predomina; refuerza disponibilidad y comunicación.",
+                        "Opción ganadora: <strong>{opt}</strong> ({pct}%). Mantén ventaja con consistencia en calidad y acceso.",
+                        "<strong>{opt}</strong> concentra <strong>{pct}%</strong>. Refuerza esta preferencia con propuestas dirigidas.",
                     ]
+                    templates_moderate = [
+                        "<strong>{opt}</strong> encabeza con <strong>{pct}%</strong>. Clara pero competitiva; segmenta mensajes por perfil.",
+                        "Categoría líder: <strong>{opt}</strong> ({pct}%). Optimiza propuesta y diferénciate de alternativas cercanas.",
+                        "<strong>{opt}</strong> acumula <strong>{pct}%</strong>. Preferencia moderada; monitorea cambios y ajusta estrategia.",
+                    ]
+                    templates_weak = [
+                        "<strong>{opt}</strong> lidera con <strong>{pct}%</strong>. Preferencias distribuidas; explora microsegmentos.",
+                        "<strong>{opt}</strong> apenas supera al resto ({pct}%). Prueba mejoras incrementales y ofertas dirigidas.",
+                        "Elección: <strong>{opt}</strong> ({pct}%). Contexto fragmentado; considera personalización por nicho.",
+                    ]
+                    base = (templates_strong if strong else templates_moderate if moderate else templates_weak)
+                    tpl_idx = qid % len(base)
+                    lead = base[tpl_idx].format(opt=dist[0]['option'], pct=pct)
+                    # Texto complementario para extender análisis sin repetición
+                    spread = max(item['chart_data']) - min(item['chart_data']) if item['chart_data'] else 0
+                    variety_note = "Preferencias relativamente equilibradas, sugiere ofertas moduladas por perfil." if pct < 30 else "Dominancia clara; cuida la saturación y disponibilidad." 
+                    tail = "Revisar categorías con menor participación puede revelar oportunidades. "
+                    tail += variety_note
+                    # Añadir una observación de tendencia si existen 10 opciones
+                    if len(dist) >= 5:
+                        tail += f" Observación: la brecha entre líder y rezagado es de {spread} respuestas, útil para planificar promociones."
+                    item['insight'] = f"{lead} {tail}"
+                    
+                    if pct < 20:
+                        item['recommendations'] = ["Segmenta ofertas por perfil; preferencias muy distribuidas.", "Investiga por qué no hay un líder claro."]
+                    elif pct > 40:
+                        item['recommendations'] = ["Refuerza disponibilidad de la opción líder.", "Asegura el stock o capacidad para la opción más demandada."]
+                    else:
+                        item['recommendations'] = ["Monitorea la tendencia de las opciones secundarias.", "Considera promociones para balancear la demanda."]
+                    
+                    if include_charts:
+                         if len(item['chart_labels']) <= 5:
+                             item['chart_image'] = ChartGenerator.generate_pie_chart(item['chart_labels'], item['chart_data'], "Preferencias (Top 5)")
+                             item['chart_type'] = 'donut'
+                         else:
+                             item['chart_image'] = ChartGenerator.generate_horizontal_bar_chart(item['chart_labels'], item['chart_data'], "Ranking de Opciones")
 
-                    if len(labels) > 1:
-                        second_label = labels[1]
-                        second_pct = round((data[1] / total) * 100, 1)
-                        second_per_10 = round(second_pct / 10)
-                        snippet = (
-                            f"También destacan <strong>'{second_label}'</strong> ({second_per_10} de cada 10, {second_pct}%)"
-                        )
-                        if len(labels) > 2:
-                            third_label = labels[2]
-                            third_pct = round((data[2] / total) * 100, 1)
-                            third_per_10 = round(third_pct / 10)
-                            snippet += f" y <strong>'{third_label}'</strong> ({third_per_10} de cada 10, {third_pct}%)."
-                        else:
-                            snippet += '.'
-                        insight_parts.append(snippet)
+                analysis_data.append(item)
 
-                    if len(labels) >= 5:
-                        insight_parts.append(
-                            f"<br><br>Las personas eligieron entre {len(labels)} opciones diferentes. Hay mucha variedad de gustos."
-                        )
-                    elif len(labels) <= 2:
-                        insight_parts.append(
-                            f"<br><br>Solo hay {len(labels)} opciones y la gente se concentra en ellas."
-                        )
+        # Heatmaps
+        try:
+            from core.services.analysis_service import DataFrameBuilder
+            df = DataFrameBuilder.build_responses_dataframe(survey, responses_queryset)
+            if not df.empty:
+                heatmap_image = ChartGenerator.generate_heatmap(df, dark_mode=False)
+                heatmap_image_dark = ChartGenerator.generate_heatmap(df, dark_mode=True)
+        except Exception: pass
 
-                    combo_found = False
-                    if question_id in multi_combinations:
-                        top_combos = multi_combinations[question_id].most_common(5)
-                        real_combos = [(combo, count) for combo, count in top_combos if ',' in combo and count > 1]
-                        if real_combos:
-                            top_combo, top_combo_count = real_combos[0]
-                            combo_per_10 = round((top_combo_count / total) * 10) if total > 0 else 0
-                            insight_parts.append(
-                                f"<br><br><strong>Combinación más común:</strong> <strong>{combo_per_10} de cada 10</strong> personas ({top_combo_count} en total) "
-                                f"eligieron exactamente estas opciones juntas: <em>'{top_combo}'</em>."
-                            )
-                            combo_found = True
-                            if len(real_combos) > 1:
-                                insight_parts.append(
-                                    f" También se encontraron otras {len(real_combos) - 1} combinaciones populares."
-                                )
-                    if not combo_found:
-                        insight_parts.append('<br><br>La mayoría elige opciones individuales en lugar de combinarlas.')
+        # --- Resumen de calidad de datos (completitud de preguntas) ---
+        # IMPORTANTE PARA USUARIOS NO TÉCNICOS:
+        # "Calidad de datos" / "Completitud de respuestas" mide qué porcentaje de preguntas
+        # fueron respondidas por los encuestados. NO mide si las respondieron bien o mal.
+        # 
+        # Por ejemplo:
+        # - Si tenemos 10 preguntas y alguien responde 8, su completitud es 80%.
+        # - Si el promedio de todas las respuestas es 90%, significa que en promedio
+        #   los encuestados completaron el 90% del formulario.
+        # 
+        # Utilidad: Si ves que una pregunta tiene baja completitud (ej. 40%), puede
+        # indicar que es confusa, no relevante, o técnicamente problemática.
+        # 
+        data_quality = None
+        try:
+            total_responses = response_count  # ya calculado más arriba
+            questions_quality = []
 
-                    item['insight'] = ' '.join(insight_parts)
+            if total_responses > 0:
+                for item in analysis_data:
+                    q_total = item.get('total_respuestas') or 0
+                    missing = max(total_responses - q_total, 0)
+                    # completeness_pct: porcentaje de respuestas que sí contestaron esta pregunta
+                    completeness_pct = round((q_total / total_responses) * 100, 1) if total_responses else 0.0
 
-            elif question.type == 'text':
-                count = text_counts.get(question_id, 0)
-                item['total_respuestas'] = count
-                item['samples_texto'] = text_samples.get(question_id, [])
+                    questions_quality.append({
+                        'id': item.get('id'),
+                        'text': item.get('text'),
+                        'type': item.get('type'),
+                        'answered': q_total,
+                        'missing': missing,
+                        'completeness_pct': completeness_pct,
+                    })
 
-                if count > 0:
-                    insight_parts = [f"Se recibieron <strong>{count} respuestas</strong> escritas a mano."]
+                if questions_quality:
+                    # avg_completeness_pct: promedio de completitud de todas las preguntas
+                    # (cuántas preguntas, en promedio, fueron contestadas)
+                    avg_completeness = sum(q['completeness_pct'] for q in questions_quality) / len(questions_quality)
+                else:
+                    avg_completeness = 0.0
 
-                    texts = text_responses_all.get(question_id, [])
-                    if texts:
-                        all_text = ' '.join(texts).lower()
-                        words = re.findall(r'\w+', all_text)
-                        filtered_words = [word for word in words if len(word) > 3 and word not in STOP_WORDS]
+                top_missing = sorted(questions_quality, key=lambda q: q['completeness_pct'])[:5]
 
-                        if filtered_words:
-                            top_words_counts = Counter(filtered_words).most_common(10)
-                            item['top_words'] = [
-                                {'palabra': word, 'frecuencia': count_word} for word, count_word in top_words_counts
-                            ]
-
-                            if len(filtered_words) > 1:
-                                bigrams = zip(filtered_words, filtered_words[1:])
-                                bigram_counts = Counter(bigrams).most_common(5)
-                                item['top_bigrams'] = [
-                                    {'frase': f"{first} {second}", 'frecuencia': count_pair}
-                                    for (first, second), count_pair in bigram_counts
-                                ]
-
-                            if top_words_counts:
-                                top_word, top_count = top_words_counts[0]
-
-                                if count >= 10:
-                                    per_10 = round((top_count / count) * 10)
-                                    if per_10 >= 7:
-                                        freq_description = f"<strong>Casi todas las respuestas</strong> ({per_10} de cada 10)"
-                                    elif per_10 >= 4:
-                                        freq_description = f"<strong>Muchas respuestas</strong> ({per_10} de cada 10)"
-                                    else:
-                                        freq_description = f"<strong>Algunas respuestas</strong> ({per_10} de cada 10)"
-                                else:
-                                    freq_description = f"<strong>{top_count} respuestas</strong>"
-
-                                insight_parts.append(
-                                    f"<br><br><strong>Palabra clave principal:</strong> '{top_word}'. {freq_description} mencionan esta palabra."
-                                )
-
-                                if len(top_words_counts) >= 3:
-                                    other_words = ', '.join([f"'{word}'" for word, _ in top_words_counts[1:4]])
-                                    insight_parts.append(f" Otras palabras importantes: {other_words}.")
-
-                                positive_words = {
-                                    'bien', 'bueno', 'excelente', 'genial', 'perfecto', 'feliz', 'satisfecho',
-                                    'good', 'great', 'excellent', 'amazing', 'happy'
-                                }
-                                negative_words = {
-                                    'mal', 'malo', 'terrible', 'pesimo', 'error', 'problema', 'fallo',
-                                    'bad', 'poor', 'awful', 'problem', 'issue', 'complaint'
-                                }
-
-                                positive_count = sum(1 for word in filtered_words if word in positive_words)
-                                negative_count = sum(1 for word in filtered_words if word in negative_words)
-
-                                if positive_count > negative_count * 1.5:
-                                    insight_parts.append(
-                                        f"<br><br><strong>Tono general: Positivo.</strong> La gente usó {positive_count} palabras alegres vs solo {negative_count} negativas."
-                                    )
-                                elif negative_count > positive_count * 1.5:
-                                    insight_parts.append(
-                                        f"<br><br><strong>Tono general: Negativo.</strong> Hay {negative_count} palabras de queja vs solo {positive_count} positivas. Algo no está gustando."
-                                    )
-                                else:
-                                    insight_parts.append(
-                                        f"<br><br><strong>Tono general: Mixto.</strong> Hay opiniones tanto positivas como negativas mezcladas."
-                                    )
-
-                            avg_length = sum(len(text.split()) for text in texts) / len(texts)
-                            if avg_length > 20:
-                                insight_parts.append(
-                                    f"<br><br>Las respuestas son <strong>largas y detalladas</strong> (promedio: {int(avg_length)} palabras cada una). La gente se tomó tiempo para explicar."
-                                )
-                            elif avg_length < 5:
-                                insight_parts.append(
-                                    f"<br><br>Las respuestas son <strong>cortas</strong> (promedio: {int(avg_length)} palabras). Respuestas rápidas."
-                                )
-
-                    item['insight'] = ''.join(insight_parts)
-
-            analysis_data.append(item)
+                data_quality = {
+                    'total_responses': total_responses,
+                    'questions_analyzed': len(questions_quality),
+                    'avg_completeness_pct': round(avg_completeness, 1),
+                    'questions_with_most_missing': top_missing,
+                    'ignored_questions': [
+                        {'id': q.id, 'text': q.text}
+                        for q in skipped_questions
+                    ],
+                }
+        except Exception as e:
+            logger.warning("Error computing data_quality: %s", e, exc_info=True)
+            data_quality = None
 
         final_data = {
             'analysis_data': analysis_data,
             'nps_data': nps_data,
-            'heatmap_image': None,
+            'heatmap_image': heatmap_image,
+            'heatmap_image_dark': heatmap_image_dark,
             'kpi_prom_satisfaccion': satisfaction_avg,
             'ignored_questions': skipped_questions,
+            'data_quality': data_quality,
         }
-
+        
         if cache_key:
             cache.set(cache_key, final_data, CACHE_TIMEOUT_ANALYSIS)
-
+            
         return final_data
 
+def _build_empty_response(filtered, skipped, nps_data):
+    return {
+        'analysis_data': [_create_empty_question_item(q, idx) for idx, q in enumerate(filtered, 1)],
+        'nps_data': nps_data,
+        'heatmap_image': None,
+        'kpi_prom_satisfaccion': 0,
+        'ignored_questions': skipped,
+        'data_quality': None,
+    }
 
 def _create_empty_question_item(question, order):
-    """Return an empty analysis structure for a question."""
     return {
         'id': question.id,
         'order': order,
         'text': question.text,
         'type': question.type,
         'tipo_display': question.get_type_display(),
-        'insight': '',
+        'insight': 'Esperando datos para analizar...',
+        'recommendations': [],  # New field for recommendations
         'chart_image': None,
         'chart_data': [],
         'chart_labels': [],
+        'chart_type': None,  # Initialize chart_type to prevent template errors
         'total_respuestas': 0,
         'estadisticas': None,
         'opciones': [],
+        'options': [],  # Initialize options for template access
         'samples_texto': [],
         'top_options': [],
         'avg': None,
         'scale_cap': None,
     }
-
-
-# Legacy imports for compatibility
-from core.services.analysis_service import (
-    QuestionAnalyzer,
-    NPSCalculator,
-    DataFrameBuilder,
-)

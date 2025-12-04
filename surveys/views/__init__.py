@@ -23,7 +23,8 @@ from .crud_views import (
 
 # Re-export function-based views from import_views
 from .import_views import (
-    import_survey_view,
+    import_survey_csv_async,
+    import_job_status,
     import_multiple_surveys_view,
     import_csv_preview_view,
     import_responses_view,
@@ -49,14 +50,15 @@ __all__ = [
     'report_views',
     'respond_views',
     # CRUD views
-    'EncuestaListView',
-    'EncuestaDetailView',
-    'EncuestaCreateView',
-    'EncuestaUpdateView',
-    'EncuestaDeleteView',
+    'SurveyListView',
+    'SurveyDetailView',
+    'SurveyCreateView',
+    'SurveyUpdateView',
+    'SurveyDeleteView',
     'bulk_delete_surveys_view',
     # Import views
-    'import_survey_view',
+    'import_survey_csv_async',
+    'import_job_status',
     'import_multiple_surveys_view',
     'import_csv_preview_view',
     'import_responses_view',
@@ -64,8 +66,9 @@ __all__ = [
     'survey_results_view',
     'export_survey_csv_view',
     'survey_thanks_view',
-    'cambiar_estado_encuesta',
+    'change_survey_status',
     'debug_analysis_view',
+    'survey_analysis_ajax',
     # Respond views
     'respond_survey_view',
 ]

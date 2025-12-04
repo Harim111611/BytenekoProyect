@@ -29,7 +29,7 @@ def respond_survey_view(request, public_id):
         )
     except Http404:
         logger.warning(f"Intento de acceso a encuesta inexistente: ID {public_id} desde IP {request.META.get('REMOTE_ADDR')}")
-        return render(request, 'surveys/not_found.html', {
+        return render(request, 'surveys/crud/not_found.html', {
             'survey_id': public_id,
             'message': 'La encuesta que intentas responder no existe o ha sido eliminada.'
         }, status=404)
@@ -128,4 +128,4 @@ def respond_survey_view(request, public_id):
             logger.exception(f"Error inesperado al guardar respuesta de encuesta {public_id}: {e}")
             messages.error(request, "Ocurrió un error al guardar su respuesta. Por favor intente nuevamente.")
 
-    return render(request, 'surveys/fill.html', {'survey': survey})
+    return render(request, 'surveys/responses/fill.html', {'survey': survey})

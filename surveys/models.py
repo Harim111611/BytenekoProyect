@@ -242,6 +242,20 @@ class ImportJob(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
     survey = models.ForeignKey(Survey, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Encuesta")
     csv_file = models.CharField(max_length=512, verbose_name="Ruta archivo CSV")
+    original_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Nombre original del archivo",
+        help_text="Nombre del archivo CSV subido por el usuario"
+    )
+    survey_title = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Título personalizado de la encuesta",
+        help_text="Si está vacío, usa el nombre del archivo"
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

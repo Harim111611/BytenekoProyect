@@ -1,0 +1,129 @@
+{% extends 'app_base.html' %}
+{% load static %}
+
+{% block page_styles %}
+<style>
+    /* Estilos específicos para los botones de tema */
+    .theme-option {
+        cursor: pointer;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 15px;
+        transition: all 0.2s;
+        background-color: var(--bs-tertiary-bg); /* Fondo dinámico suave */
+        color: var(--bs-body-color);
+    }
+    .theme-option:hover { border-color: var(--bs-primary); }
+    .theme-option.active {
+        border-color: var(--bs-primary);
+        background-color: rgba(13, 110, 253, 0.1); /* Primary muy suave */
+    }
+    .theme-icon { font-size: 2rem; margin-bottom: 10px; color: var(--bs-secondary); }
+    .theme-option.active .theme-icon { color: var(--bs-primary); }
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="container-xl p-4 p-md-5">
+
+    <div class="mb-5">
+        <h6 class="text-uppercase text-muted small fw-bold ls-1 mb-1">Preferencias</h6>
+        <h1 class="h2 fw-bold mb-0 text-body-emphasis">Configuración</h1>
+        <p class="text-muted mt-1">Personaliza tu experiencia en Byteneko.</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <div class="card settings-card mb-4">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis"><i class="bi bi-palette me-2 text-primary"></i>Apariencia</h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-4">Elige cómo se ve la aplicación.</p>
+
+                    <div class="row g-3 text-center">
+                        <div class="col-md-4">
+                            <div class="theme-option" onclick="setTheme('light')" id="theme-opt-light">
+                                <i class="bi bi-sun-fill theme-icon"></i>
+                                <h6 class="fw-bold mb-0">Claro</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="theme-option" onclick="setTheme('dark')" id="theme-opt-dark">
+                                <i class="bi bi-moon-stars-fill theme-icon"></i>
+                                <h6 class="fw-bold mb-0">Oscuro</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="theme-option" onclick="setTheme('auto-time')" id="theme-opt-auto-time">
+                                <i class="bi bi-clock-fill theme-icon"></i>
+                                <h6 class="fw-bold mb-0">Por hora</h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card settings-card">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis"><i class="bi bi-person-circle me-2 text-primary"></i>Cuenta</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px; font-size: 1.5rem;">
+                            {{ user.username|slice:":1"|upper }}
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-0 text-body-emphasis">{{ user.username }}</h6>
+                            <small class="text-muted">Sesión activa</small>
+                        </div>
+                        <div class="ms-auto">
+                            <form method="post" action="{% url 'logout' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Cerrar Sesión
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script>
+    function setTheme(theme) {
+        if (theme === 'auto-time') {
+            localStorage.setItem('theme', 'auto-time');
+        } else {
+            localStorage.setItem('theme', theme);
+        }
+        function themeByTime(date){
+            const h = (date || new Date()).getHours();
+            return (h >= 19 || h < 6) ? 'dark' : 'light';
+        }
+        const applyTheme = (theme === 'auto-time') ? themeByTime() : theme;
+        document.documentElement.setAttribute('data-bs-theme', applyTheme);
+        updateActiveOption(theme);
+    }
+
+    function updateActiveOption(selectedTheme) {
+        document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
+        const currentStored = localStorage.getItem('theme') || 'light';
+        const activeId = currentStored === 'auto-time' ? 'theme-opt-auto-time' : 'theme-opt-' + currentStored;
+        const activeEl = document.getElementById(activeId);
+        if(activeEl) activeEl.classList.add('active');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        updateActiveOption(currentTheme);
+    });
+</script>
+{% endblock %}

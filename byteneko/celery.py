@@ -19,6 +19,10 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Auto-discover tasks in all installed apps
 app.autodiscover_tasks()
 
+# Worker configuration (se puede sobrescribir en línea de comandos)
+# Por defecto usa CELERY_WORKER_CONCURRENCY del settings (4 workers)
+# Para cambiar: celery -A byteneko worker --concurrency=8
+
 # Celery Beat schedule (periodic tasks)
 app.conf.beat_schedule = {
     # Clean old survey responses (older than 2 years)
@@ -42,12 +46,14 @@ app.conf.beat_schedule = {
 app.conf.task_default_priority = 5
 app.conf.task_inherit_parent_priority = True
 
-# Queue routing
+# Queue routing - TODAS las tareas van a la cola por defecto
+# Si quieres usar colas específicas, debes iniciar workers con -Q nombre_cola
 app.conf.task_routes = {
-    'surveys.tasks.generate_pdf_report': {'queue': 'reports'},
-    'surveys.tasks.generate_pptx_report': {'queue': 'reports'},
-    'surveys.tasks.generate_chart_*': {'queue': 'charts'},
-    'surveys.tasks.import_csv_*': {'queue': 'imports'},
+    # Por ahora comentadas para que todas vayan a la cola por defecto
+    # 'surveys.tasks.generate_pdf_report': {'queue': 'reports'},
+    # 'surveys.tasks.generate_pptx_report': {'queue': 'reports'},
+    # 'surveys.tasks.generate_chart_*': {'queue': 'charts'},
+    # 'surveys.tasks.process_survey_import': {'queue': 'imports'},
 }
 
 @app.task(bind=True, ignore_result=True)

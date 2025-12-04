@@ -1,10 +1,21 @@
 import logging
 import os
+import tempfile
 import time
+import re
+import unicodedata
 from datetime import datetime
 
 import pandas as pd
 from django.contrib import messages
+
+try:
+    import cpp_csv
+    CPP_CSV_AVAILABLE = True
+    logging.info("[IMPORT] Usando cpp_csv para lectura rápida")
+except ImportError:
+    CPP_CSV_AVAILABLE = False
+    logging.warning("[IMPORT] Módulo cpp_csv no disponible, usando Pandas puro (más lento)")
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -33,6 +44,82 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# UTILS: NORMALIZACIÓN Y DETECCIÓN (Sincronizado con Analysis)
+# ============================================================
+
+def _normalize_text(text):
+    """Normalización agresiva para análisis semántico (igual que en survey_analysis)."""
+    if not text:
+        return ''
+    text_str = str(text)
+    # Separar CamelCase
+    text_str = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', text_str)
+    # Limpiar caracteres especiales
+    text_str = re.sub(r'[_\-\.\[\]\(\)\{\}:]', ' ', text_str)
+    text_str = text_str.replace('¿', '').replace('?', '').replace('¡', '').replace('!', '')
+    # Normalizar ASCII
+    normalized = unicodedata.normalize('NFKD', text_str).encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'\s+', ' ', normalized).strip().lower()
+
+def _is_column_relevant(col_name):
+    """
+    Determina si una columna es relevante como Pregunta o si debe ser ignorada/tratada como metadato.
+    Retorna: (es_relevante: bool, razon: str)
+    """
+    normalized = _normalize_text(col_name)
+    
+    # 1. FECHAS Y METADATOS TEMPORALES
+    DATE_KEYWORDS = [
+        'fecha', 'date', 'created', 'creado', 'timestamp', 'hora', 'time', 
+        'nacimiento', 'birth', 'start', 'end', 'inicio', 'fin', 'started', 'ended',
+        'periodo', 'period', 'mes', 'month', 'anio', 'year', 'submitted', 'envio'
+    ]
+
+    # 2. IDENTIFICADORES DE USUARIO Y PII (LISTA COMPLETA)
+    IDENTIFIER_KEYWORDS = [
+        # Identidad directa
+        'nombre', 'name', 'apellido', 'lastname', 'surname', 'fullname', 'full name',
+        'correo', 'email', 'mail', 'e-mail', 'direccion', 'address',
+        # Contacto
+        'telefono', 'tel', 'phone', 'celular', 'mobile', 'movil', 'whatsapp',
+        # Documentos de Identidad
+        'id', 'identificacion', 'identification', 'documento', 'dni', 'curp', 'rfc', 'cedula', 
+        'passport', 'pasaporte', 'ssn', 'matricula', 'legajo',
+        # Huella Digital / Técnica del Usuario
+        'ip', 'ip_address', 'ip address', 'direccion ip', 'mac address',
+        'user_agent', 'user agent', 'browser', 'navegador', 'dispositivo', 'device',
+        'uuid', 'guid', 'token', 'session', 'cookie', 'user', 'usuario', 'login',
+        # Datos Transaccionales
+        'reserva', 'booking', 'ticket', 'folio', 'transaction', 'transaccion',
+        'latitud', 'latitude', 'longitud', 'longitude', 'geo'
+    ]
+
+    # 3. METADATOS TÉCNICOS DE LA ENCUESTA
+    METADATA_KEYWORDS = [
+        'survey', 'encuesta', 'title', 'titulo', 'status', 'estado', 
+        'network', 'red', 'referer', 'source', 'origen', 'channel', 'canal',
+        'campaign', 'campana', 'medium', 'medio',
+        'submit', 'enviado', 'completed', 'completado', 'time taken', 'tiempo tomado',
+        'language', 'idioma'
+    ]
+
+    def contains_keyword(text, kw):
+        if ' ' in kw: return kw in text
+        return re.search(r'\b' + re.escape(kw) + r'\b', text) is not None
+
+    if any(contains_keyword(normalized, kw) for kw in DATE_KEYWORDS):
+        return False, "Campo temporal/fecha"
+    
+    if any(contains_keyword(normalized, kw) for kw in IDENTIFIER_KEYWORDS):
+        return False, "Dato personal o identificador único"
+        
+    if any(contains_keyword(normalized, kw) for kw in METADATA_KEYWORDS):
+        return False, "Metadato técnico de encuesta"
+
+    return True, ""
+
+
+# ============================================================
 # ENDPOINT ASÍNCRONO: ESTADO DEL IMPORT
 # ============================================================
 
@@ -58,340 +145,111 @@ def import_job_status(request, job_id):
 
 
 # ============================================================
-# VISTA ASÍNCRONA: CREA IMPORTJOB Y LANZA CELERY
+# VISTA UNIFICADA: IMPORTACIÓN ASÍNCRONA VÍA CELERY
 # ============================================================
 
 @csrf_exempt
-@login_required
-@require_POST
-def import_survey_csv_async(request):
-    """
-    Recibe un archivo CSV, crea ImportJob, guarda el archivo y lanza la tarea Celery.
-    """
-    csv_file = request.FILES.get("csv_file")
-    if not csv_file:
-        return JsonResponse({"error": "No se envió archivo CSV"}, status=400)
-
-    # Guardar archivo en disco (carpeta temporal segura)
-    upload_dir = os.path.join("data", "import_jobs")
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(
-        upload_dir,
-        f"import_{request.user.id}_{int(time.time())}.csv"
-    )
-
-    with open(file_path, "wb+") as dest:
-        for chunk in csv_file.chunks():
-            dest.write(chunk)
-
-    # Crear ImportJob
-    job = ImportJob.objects.create(
-        user=request.user,
-        csv_file=file_path,
-        status="pending",
-    )
-
-    # Lanzar tarea Celery
-    process_survey_import.delay(job.id)
-
-    return JsonResponse({"job_id": job.id, "status": job.status})
-
-
-# ============================================================
-# HELPER INTERNO: PROCESAR UN SOLO CSV (SIN CELERY)
-# ============================================================
-
-def _process_single_csv_import(csv_file, user, override_title=None):
-    """
-    Lógica central para procesar un archivo CSV y crear una encuesta.
-    Retorna (Survey, rows_count, answers_count) o lanza Exception.
-    """
-    # 1. Validar archivo
-    CSVImportValidator.validate_csv_file(csv_file)
-
-    # 2. Leer CSV en modo batch/chunksize para evitar cargar todo en memoria
-    encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
-    chunk_size = 1000  # Ajustable según RAM/disco
-    df_columns = None
-    survey = None
-    questions_map = {}
-    total_rows = 0
-    title = (
-        override_title
-        if override_title
-        else csv_file.name.replace(".csv", "").replace("_", " ").title()
-    )
-
-    t0 = time.perf_counter()
-    # Intentar distintos encodings
-    for encoding in encodings:
-        try:
-            csv_file.seek(0)
-            chunk_iter = pd.read_csv(csv_file, encoding=encoding, chunksize=chunk_size)
-            first_chunk = next(chunk_iter)
-            df_columns = first_chunk.columns
-            CSVImportValidator.validate_dataframe(first_chunk)
-            with transaction.atomic():
-                survey = Survey.objects.create(
-                    title=title[:255],
-                    description=f"Importado automáticamente desde {csv_file.name}",
-                    status="closed",  # Las encuestas importadas siempre están cerradas
-                    author=user,
-                    is_imported=True,  # Marcar como importada
-                )
-                questions = []
-                questions_map_temp = {}
-                for idx, col_name in enumerate(df_columns):
-                    sample = first_chunk[col_name].dropna()
-                    col_type = "text"
-                    
-                    # Detectar tipo de pregunta según los datos
-                    if pd.api.types.is_numeric_dtype(sample):
-                        # Si todos los valores están entre 0-10, es una escala
-                        if not sample.empty and sample.min() >= 0 and sample.max() <= 10:
-                            col_type = "scale"
-                        else:
-                            col_type = "number"
-                    elif sample.astype(str).str.contains(",").any():
-                        # Si contiene comas, probablemente sea multi-opción
-                        col_type = "multi"
-                    elif sample.nunique() < 20 and sample.nunique() > 1:
-                        # Si tiene pocas opciones únicas (menos de 20), es opción única
-                        col_type = "single"
-                    
-                    q = Question(
-                        survey=survey,
-                        text=col_name[:500],
-                        type=col_type,
-                        order=idx,
-                    )
-                    questions.append(q)
-                    questions_map_temp[col_name] = {
-                        "question": q, 
-                        "dtype": col_type,
-                        "sample": sample  # Guardar sample para usar después
-                    }
-                
-                Question.objects.bulk_create(questions)
-                
-                # Crear opciones para preguntas de tipo single/multi
-                for idx, col_name in enumerate(df_columns):
-                    q = Question.objects.filter(survey=survey, order=idx).first()
-                    temp_data = questions_map_temp[col_name]
-                    col_type = temp_data["dtype"]
-                    sample = temp_data["sample"]
-                    
-                    entry = {"question": q, "dtype": col_type}
-                    
-                    if col_type == "multi":
-                        # Para multi-opción, extraer todas las opciones individuales separadas por comas
-                        all_options = set()
-                        for val in sample.astype(str):
-                            if val and val.lower() not in ['nan', 'none', '']:
-                                # Separar por comas y limpiar cada opción
-                                parts = [p.strip() for p in val.split(',')]
-                                all_options.update(parts)
-                        
-                        # Crear las opciones individuales
-                        options = []
-                        for order, opt_text in enumerate(sorted(all_options)):
-                            if opt_text:
-                                ao, _ = AnswerOption.objects.get_or_create(
-                                    question=q, 
-                                    text=opt_text, 
-                                    defaults={"order": order}
-                                )
-                                options.append((opt_text, ao))
-                        entry["options"] = {k: v for k, v in options}
-                        
-                    elif col_type == "single":
-                        # Para single, cada valor único es una opción
-                        unique_values = sample.astype(str).unique()
-                        options = []
-                        for order, val in enumerate(unique_values):
-                            if val and val.lower() not in ['nan', 'none', '']:
-                                val_norm = val.strip()
-                                ao, _ = AnswerOption.objects.get_or_create(
-                                    question=q, 
-                                    text=val_norm, 
-                                    defaults={"order": order}
-                                )
-                                options.append((val_norm, ao))
-                        entry["options"] = {k: v for k, v in options}
-                    
-                    questions_map[col_name] = entry
-            break
-        except UnicodeDecodeError:
-            continue
-        except Exception as e:
-            logger.error(f"[IMPORT][ERROR][INIT] file={csv_file.name} error={str(e)}", exc_info=True)
-            continue
-    else:
-        raise ValidationError(f"No se pudo leer el archivo {csv_file.name}. Verifique la codificación.")
-
-    answers_count = 0
-    # --- Detectar columna de fecha automáticamente ---
-    DATE_KEYWORDS = ['fecha', 'date', 'created', 'creado', 'timestamp', 'hora', 'time']
-    date_candidates = [col for col in df_columns if any(kw in col.lower() for kw in DATE_KEYWORDS)]
-    date_column = None
-    if len(date_candidates) == 1:
-        date_column = date_candidates[0]
-    elif len(date_candidates) > 1:
-        # Aquí se puede implementar lógica para que el usuario elija, por ahora tomamos la primera
-        # TODO: Permitir selección de columna de fecha en el frontend
-        date_column = date_candidates[0]
-    # Si no hay ninguna, date_column queda en None y se usará la fecha de importación
-
-    def process_chunk(chunk):
-        nonlocal total_rows, answers_count
-        total_rows += len(chunk)
-        res = bulk_import_responses_postgres(survey, chunk, questions_map, date_column=date_column)
-        if isinstance(res, tuple):
-            _, ac = res
-            answers_count += ac
-        else:
-            answers_count += 0
-
-    logger.info(f"[IMPORT][START] file={csv_file.name}")
-    process_chunk(first_chunk)
-    for chunk in chunk_iter:
-        process_chunk(chunk)
-    t1 = time.perf_counter()
-    logger.info(f"[IMPORT][END] file={csv_file.name} survey_id={survey.id if survey else None} rows={total_rows} time={t1-t0:.2f}s")
-    return survey, total_rows, answers_count
-
-
-# ============================================================
-# VISTAS SINCRÓNICAS (FLUJO ANTERIOR)
-# ============================================================
-
-from django.views.decorators.csrf import csrf_exempt
-
-@csrf_exempt
-@login_required
-@require_POST
-@ratelimit(key="user", rate="10/h", method="POST", block=True)
-@log_performance(threshold_ms=5000)
-def import_survey_view(request):
-    """
-    Importa un único archivo CSV.
-    Retorna JSON para integración con el frontend.
-    """
-    try:
-        if request.method != "POST":
-            return JsonResponse({"success": False, "error": "Método no permitido"}, status=405)
-
-        csv_file = request.FILES.get("csv_file", None)
-        survey_title = request.POST.get("survey_title")
-
-        if not csv_file:
-            return JsonResponse(
-                {"success": False, "error": "No se recibió ningún archivo."},
-                status=400,
-            )
-
-        max_size_mb = 10
-        if csv_file.size > max_size_mb * 1024 * 1024:
-            return JsonResponse(
-                {
-                    "success": False,
-                    "error": f"El archivo es demasiado grande, límite: {max_size_mb} MB.",
-                },
-                status=400,
-            )
-
-        survey, rows, _ = _process_single_csv_import(csv_file, request.user, survey_title)
-        logger.info(f"[IMPORT] file={csv_file.name} encuestas=1 respuestas={rows}")
-        messages.success(
-            request,
-            f"¡Éxito! Encuesta '{survey.title}' creada con {rows} respuestas.",
-        )
-        from django.urls import reverse
-        return JsonResponse(
-            {
-                "success": True,
-                "redirect_url": reverse("surveys:results", args=[survey.id]),
-            }
-        )
-    except ValidationError as e:
-        csv_file = locals().get('csv_file', None)
-        logger.warning(f"[IMPORT][VALIDATION] file={getattr(csv_file, 'name', '')} error={str(e)}")
-        return JsonResponse({"success": False, "error": str(e)}, status=400)
-    except Exception as e:
-        csv_file = locals().get('csv_file', None)
-        logger.error(
-            f"[IMPORT][ERROR] file={getattr(csv_file, 'name', '')} error={str(e)}",
-            exc_info=True,
-        )
-        return JsonResponse(
-            {"success": False, "error": f"Error interno: {str(e)}"},
-            status=500,
-        )
-
-
 @login_required
 @require_POST
 @ratelimit(key="user", rate="20/h", method="POST", block=True)
-def import_multiple_surveys_view(request):
+def import_survey_csv_async(request):
     """
-    Importa múltiples archivos CSV a la vez.
+    Vista unificada para importación de CSV con Celery.
+    Soporta:
+    - Un archivo único (csv_file)
+    - Múltiples archivos (csv_files)
+    - Título personalizado opcional (survey_title)
+    
+    TODO EL PROCESAMIENTO SE HACE EN CELERY - EL SERVIDOR RESPONDE EN < 200ms.
     """
-    files = request.FILES.getlist("csv_files")
-    if not files:
-        return JsonResponse(
-            {"success": False, "error": "No se recibieron archivos."},
-            status=400,
-        )
+    # Detectar si es importación única o múltiple
+    single_file = request.FILES.get("csv_file")
+    multiple_files = request.FILES.getlist("csv_files")
+    
+    files_to_process = []
+    if single_file:
+        files_to_process = [single_file]
+    elif multiple_files:
+        files_to_process = multiple_files
+    else:
+        return JsonResponse({"error": "No se envió ningún archivo CSV"}, status=400)
+    
+    # Validar límites
+    if len(files_to_process) > 10:
+        return JsonResponse({"success": False, "error": "Máximo 10 archivos permitidos"}, status=400)
 
-    max_size_mb = 10
-    results = []
+    # Obtener título personalizado (solo para archivo único)
+    survey_title = request.POST.get("survey_title", "").strip() or None
+
+    # Guardado en directorio temporal del sistema (más seguro)
+    temp_dir = tempfile.gettempdir()
+    
+    job_ids = []
     errors = []
-    success_count = 0
-
-    for csv_file in files:
-        if csv_file.size > max_size_mb * 1024 * 1024:
-            msg = f"Archivo {csv_file.name} demasiado grande (> {max_size_mb} MB)"
-            logger.warning(f"[IMPORT][VALIDATION] file={csv_file.name} error=too_large")
-            errors.append(f"❌ {csv_file.name}: {msg}")
-            continue
+    
+    for csv_file in files_to_process:
         try:
-            survey, rows, _ = _process_single_csv_import(csv_file, request.user)
-            logger.info(f"[IMPORT] file={csv_file.name} encuestas=1 respuestas={rows}")
-            results.append(f"✅ {csv_file.name}: {rows} respuestas")
-            success_count += 1
-        except ValidationError as e:
-            logger.warning(
-                f"[IMPORT][VALIDATION] file={csv_file.name} error={str(e)}"
+            # Guardar archivo en disco
+            # Crear archivo temporal único
+            fd, file_path = tempfile.mkstemp(prefix=f"import_{request.user.id}_", suffix=".csv", dir=temp_dir)
+            os.close(fd)
+            with open(file_path, "wb") as dest:
+                for chunk in csv_file.chunks():
+                    dest.write(chunk)
+            
+            # Crear ImportJob
+            job = ImportJob.objects.create(
+                user=request.user,
+                csv_file=file_path,
+                original_filename=csv_file.name,
+                survey_title=survey_title if len(files_to_process) == 1 else None,
+                status="pending",
             )
-            errors.append(f"❌ {csv_file.name}: {str(e)}")
+            
+            # 🚀 LANZAR TAREA CELERY (trabajo pesado en background)
+            process_survey_import.delay(job.id)
+            
+            job_ids.append({"job_id": job.id, "filename": csv_file.name})
+            
         except Exception as e:
-            logger.error(f"[IMPORT][ERROR] file={csv_file.name} error={str(e)}")
-            errors.append(f"❌ {csv_file.name}: Error interno")
+            logger.error(f"[IMPORT][UPLOAD_ERROR] file={csv_file.name} error={e}")
+            errors.append(f"❌ {csv_file.name}: {str(e)}")
+    
+    # Validar que al menos un archivo se procesó
+    if not job_ids:
+        return JsonResponse({
+            "success": False, 
+            "error": "No se pudo procesar ningún archivo", 
+            "all_errors": errors
+        }, status=400)
+    
+    # Respuesta rápida (< 200ms) - El trabajo pesado está en Celery
+    if len(files_to_process) == 1:
+        # Respuesta para archivo único (compatibilidad con código existente)
+        return JsonResponse({
+            "success": True,
+            "job_id": job_ids[0]["job_id"], 
+            "status": "pending"
+        })
+    else:
+        # Respuesta para múltiples archivos
+        return JsonResponse({
+            "success": True, 
+            "jobs": job_ids, 
+            "errors": errors
+        })
 
-    if success_count > 0:
-        msg = f"Se importaron {success_count} encuesta(s) correctamente."
-        messages.success(request, msg)
-    if errors:
-        messages.warning(
-            request,
-            "Hubo errores en algunos archivos. Revisa el reporte.",
-        )
 
-    return JsonResponse(
-        {
-            "success": success_count > 0,
-            "imported_count": success_count,
-            "all_errors": errors,
-            "details": results,
-        }
-    )
+# Alias para compatibilidad con código existente
+import_multiple_surveys_view = import_survey_csv_async
 
 
 @login_required
 @ratelimit(key="user", rate="20/h", method="POST", block=True)
 def import_csv_preview_view(request):
     """
-    Genera una vista previa de la estructura del CSV sin guardar nada en BD.
+    Genera una vista previa INTELIGENTE: Filtra columnas irrelevantes (fechas, IDs)
+    para mostrar solo lo que se convertirá en preguntas de análisis.
     """
     csv_file = request.FILES.get("csv_file")
     if not csv_file:
@@ -399,7 +257,6 @@ def import_csv_preview_view(request):
 
     try:
         CSVImportValidator.validate_csv_file(csv_file)
-
         encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
         df = None
         for encoding in encodings:
@@ -407,14 +264,9 @@ def import_csv_preview_view(request):
                 csv_file.seek(0)
                 df = pd.read_csv(csv_file, encoding=encoding)
                 break
-            except Exception:
-                continue
+            except Exception: continue
 
-        if df is None:
-            return JsonResponse(
-                {"success": False, "error": "Archivo ilegible"},
-                status=400,
-            )
+        if df is None: return JsonResponse({"success": False, "error": "Archivo ilegible"}, status=400)
 
         df = CSVImportValidator.validate_dataframe(df)
 
@@ -424,43 +276,65 @@ def import_csv_preview_view(request):
             "total_rows": len(df),
             "total_columns": len(df.columns),
             "columns": [],
+            "ignored_columns": [],
             "sample_rows": [],
         }
 
+        # --- FILTRADO INTELIGENTE DE COLUMNAS ---
         for col in df.columns:
+            # 1. Determinar relevancia
+            is_relevant, reason = _is_column_relevant(col)
+            
             sample = df[col].dropna()
+            
+            if not is_relevant:
+                preview["ignored_columns"].append({
+                    "name": col,
+                    "reason": reason
+                })
+                continue
+
+            # 2. Si es relevante, determinamos el tipo para el preview
             col_type = "text"
             unique_count = sample.nunique()
             sample_values = []
+            avg_len = sample.astype(str).map(len).mean() if not sample.empty else 0
 
-            # Detectar tipo de pregunta según los datos
-            if pd.api.types.is_numeric_dtype(sample):
-                # Si todos los valores están entre 0-10, es una escala
-                if not sample.empty and sample.min() >= 0 and sample.max() <= 10:
-                    col_type = "scale"
-                    sample_values = [str(int(v)) for v in sorted(sample.unique()[:10])]
-                else:
-                    col_type = "number"
-                    sample_values = [str(v) for v in sample.unique()[:5]]
-            elif sample.astype(str).str.contains(",").any():
-                # Si contiene comas, probablemente sea multi-opción
-                col_type = "multi"
-                # Extraer opciones individuales
-                all_options = set()
-                for val in sample.astype(str):
-                    if val and val.lower() not in ['nan', 'none', '']:
-                        parts = [p.strip() for p in val.split(',')]
-                        all_options.update(parts)
-                sample_values = sorted(list(all_options))[:10]
-            elif unique_count < 20 and unique_count > 1:
-                # Si tiene pocas opciones únicas (menos de 20 y más de 1), es opción única
-                col_type = "single"
-                sample_values = [str(v) for v in sample.unique()[:10] if str(v).lower() not in ['nan', 'none', '']]
+            lower_name = str(col).strip().lower()
+            
+            # Mismas reglas mejoradas que en el importador real
+            if any(k in lower_name for k in ["nps", "recomendacion", "recomendar", "satisfaccion", "rating"]):
+                col_type = "scale"
+                sample_values = [str(int(v)) for v in sorted(sample.unique()[:10])] if not sample.empty else []
+            elif any(k in lower_name for k in ["edad", "age", "antiguedad"]):
+                col_type = "number"
+                sample_values = [str(v) for v in sample.unique()[:5]]
+            elif any(k in lower_name for k in ["comentario", "sugerencia", "opinion", "observacion", "feedback"]):
+                col_type = "text" # FORCE TEXT
+                sample_values = [str(v)[:50] + '...' for v in sample.unique()[:3]]
             else:
-                # Texto libre
-                sample_values = [str(v)[:50] + '...' if len(str(v)) > 50 else str(v) for v in sample.unique()[:3] if str(v).lower() not in ['nan', 'none', '']]
+                if pd.api.types.is_numeric_dtype(sample):
+                    if not sample.empty and sample.min() >= 0 and sample.max() <= 10:
+                        col_type = "scale"
+                        sample_values = [str(int(v)) for v in sorted(sample.unique()[:10])]
+                    else:
+                        col_type = "number"
+                        sample_values = [str(v) for v in sample.unique()[:5]]
+                elif sample.astype(str).str.contains(",").any():
+                    col_type = "multi"
+                    all_options = set()
+                    for val in sample.astype(str):
+                        if val and val.lower() not in ['nan', 'none', '']:
+                            all_options.update([p.strip() for p in val.split(',')])
+                    sample_values = sorted(list(all_options))[:10]
+                # Solo clasificar como single si es corto y repetitivo
+                elif unique_count < 20 and unique_count > 1 and avg_len < 30:
+                    col_type = "single"
+                    sample_values = [str(v) for v in sample.unique()[:10]]
+                else:
+                    col_type = "text"
+                    sample_values = [str(v)[:50] + '...' if len(str(v)) > 50 else str(v) for v in sample.unique()[:3]]
 
-            # Mapeo de tipos a nombres legibles en español
             type_display = {
                 "text": "Texto libre",
                 "number": "Número",
@@ -469,25 +343,16 @@ def import_csv_preview_view(request):
                 "multi": "Opción múltiple"
             }
 
-            preview["columns"].append(
-                {
-                    "name": col,
-                    "display_name": col.replace("_", " ").title(),
-                    "type": col_type,
-                    "type_display": type_display.get(col_type, col_type),
-                    "unique_values": unique_count if col_type != "multi" else len(sample_values),
-                    "sample_values": sample_values,
-                }
-            )
+            preview["columns"].append({
+                "name": col,
+                "display_name": col.replace("_", " ").title(),
+                "type": col_type,
+                "type_display": type_display.get(col_type, col_type),
+                "unique_values": unique_count if col_type != "multi" else len(sample_values),
+                "sample_values": sample_values,
+            })
 
-        preview["sample_rows"] = (
-            df.head(5)
-            .astype(object)
-            .where(pd.notnull(df), "")
-            .astype(str)
-            .values
-            .tolist()
-        )
+        preview["sample_rows"] = df.head(5).astype(object).where(pd.notnull(df), "").astype(str).values.tolist()
 
         return JsonResponse(preview)
 
