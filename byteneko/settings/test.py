@@ -1,9 +1,9 @@
 """
 Test settings for ByteNeko project.
+Lightweight settings optimized for pytest.
 """
-# 🚨 CAMBIO CLAVE: Heredamos de 'base', NO de 'production'.
-# Esto evita cargar Sentry, SSL forzado y configuraciones complejas de servidor.
-from .settings.base import *
+
+from .base import *  # noqa: F401,F403
 
 # ============================================================
 # CONFIGURACIÓN BÁSICA PARA TESTS

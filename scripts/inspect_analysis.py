@@ -8,7 +8,7 @@ if len(sys.argv) < 2:
 survey_id = int(sys.argv[1])
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.production')
 import django
 django.setup()
 

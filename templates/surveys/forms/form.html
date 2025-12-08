@@ -73,6 +73,7 @@
                         </div>
 
                         {% if not object.is_imported %}
+                        <!-- Estado -->
                         <div class="mb-4">
                             <label for="id_status" class="form-label fw-semibold text-body">
                                 Estado de la survey
@@ -111,6 +112,44 @@
                                 <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
                             {% endif %}
                         </div>
+
+                        <!-- Meta de respuestas -->
+                        <div class="mb-4">
+                            <label for="id_sample_goal" class="form-label fw-semibold text-body">
+                                Meta de respuestas
+                                <a tabindex="0"
+                                   class="ms-2 text-muted small"
+                                   data-bs-toggle="tooltip"
+                                   data-bs-placement="right"
+                                   title="Número objetivo de respuestas antes de pausar automáticamente la encuesta. Usa 0 para no limitar.">
+                                    <i class="bi bi-question-circle"></i>
+                                </a>
+                            </label>
+
+                            <div class="input-group">
+                                <input type="number"
+                                       min="0"
+                                       class="form-control bg-body-tertiary border-0"
+                                       id="id_sample_goal"
+                                       name="sample_goal"
+                                       value="{{ form.sample_goal.value|default:object.sample_goal|default:'' }}"
+                                       placeholder="0 = Sin límite">
+                                <span class="input-group-text bg-body-tertiary border-0">
+                                    respuestas
+                                </span>
+                            </div>
+
+                            <div class="form-text small text-muted">
+                                Cuando se alcance esta cantidad, la encuesta se pausará automáticamente.
+                                Luego podrás decidir si seguir recibiendo respuestas o cerrar la encuesta
+                                desde el panel de control.
+                            </div>
+
+                            {% if form.sample_goal.errors %}
+                                <div class="text-danger small mt-1">{{ form.sample_goal.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
                         {% else %}
                         <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
                             <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
@@ -149,6 +188,15 @@
                             <span class="small text-muted">Respuestas</span>
                             <span class="h4 mb-0 fw-bold text-primary">{{ object.responses.count }}</span>
                         </div>
+                        {% if object.sample_goal %}
+                            <p class="small text-muted mb-0">
+                                Meta actual: <strong>{{ object.sample_goal }}</strong> respuestas.
+                            </p>
+                        {% else %}
+                            <p class="small text-muted mb-0">
+                                Sin meta de respuestas (ilimitado).
+                            </p>
+                        {% endif %}
                     </div>
 
                     <div class="mb-3">
@@ -175,7 +223,7 @@
                     </h6>
                     
                     <div class="d-grid gap-2">
-                        <a href="{% url 'surveys:results' object.public_id %}" class="btn btn-outline-primary btn-sm">
+                        <a href="{% url 'surveys:results' object.public_id %}" class="btn btn-outline-primary btn-sm show-results-loader">
                             <i class="bi bi-graph-up me-2"></i>Ver Resultados
                         </a>
                         <a href="{% url 'surveys:respond' object.public_id %}" class="btn btn-outline-secondary btn-sm" target="_blank">

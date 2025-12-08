@@ -8,7 +8,7 @@ import sys
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.production')
 django.setup()
 
 from django.contrib.auth import get_user_model

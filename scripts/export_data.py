@@ -3,7 +3,7 @@ import sys
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.production')
 django.setup()
 
 from django.core.management import call_command

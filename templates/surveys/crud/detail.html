@@ -5,6 +5,60 @@
 {% csrf_token %}
 <div class="container-xl p-4 p-md-5">
 
+    {% if show_goal_modal %}
+    <div class="modal fade" id="goalReachedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content text-center shadow-lg border-0">
+                <div class="modal-header bg-success text-white justify-content-center border-0">
+                    <h5 class="modal-title fw-bold">🎉 ¡Meta Conseguida!</h5>
+                </div>
+                <div class="modal-body p-5">
+                    <div class="mb-3">
+                        <i class="bi bi-trophy-fill text-warning" style="font-size: 4rem;"></i>
+                    </div>
+                    <h3 class="fw-bold mb-3">Has alcanzado tu objetivo</h3>
+                    <p class="text-muted fs-5">
+                        Tu meta de <strong>{{ survey.sample_goal }} respuestas</strong> se ha completado.
+                    </p>
+                    <p class="text-muted small">
+                        El sistema ha <strong>pausado</strong> la recolección automáticamente para respetar tu cuota.
+                    </p>
+                    <hr class="my-4">
+                    <p class="fw-bold text-body-emphasis mb-4">¿Deseas seguir recibiendo más respuestas?</p>
+                    
+                    <div class="d-flex justify-content-center gap-3">
+                        <form action="{% url 'surveys:handle_goal_decision' survey.public_id %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="stop">
+                            <button type="submit" class="btn btn-lg btn-outline-secondary px-4">
+                                <i class="bi bi-x-circle me-2"></i>No, cerrar encuesta
+                            </button>
+                        </form>
+
+                        <form action="{% url 'surveys:handle_goal_decision' survey.public_id %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="decision" value="continue">
+                            <button type="submit" class="btn btn-lg btn-success px-4 fw-bold shadow-sm">
+                                <i class="bi bi-play-circle-fill me-2"></i>¡SÍ! Continuar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var goalModalEl = document.getElementById('goalReachedModal');
+            if (goalModalEl) {
+                var goalModal = new bootstrap.Modal(goalModalEl);
+                goalModal.show();
+            }
+        });
+    </script>
+    {% endif %}
+
     <div class="mb-5 border-bottom border-secondary-subtle pb-4">
         <nav aria-label="breadcrumb" class="mb-3">
             <ol class="breadcrumb small">
@@ -33,7 +87,7 @@
                 <a href="{% url 'surveys:export' survey.public_id %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
                     <i class="bi bi-download me-2"></i>Exportar
                 </a>
-                <a href="{% url 'surveys:results' survey.public_id %}" class="btn btn-primary shadow-sm fw-medium">
+                <a href="{% url 'surveys:results' survey.public_id %}" class="btn btn-primary shadow-sm fw-medium show-results-loader">
                     <i class="bi bi-bar-chart-fill me-2"></i>Ver Resultados
                 </a>
             </div>
@@ -43,7 +97,8 @@
     <div class="row g-4">
 
         <div class="col-lg-8">
-            <div class="card border-0 shadow-sm h-100"> <div class="card-header bg-transparent py-3 px-4 d-flex justify-content-between align-items-center">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent py-3 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold text-body-emphasis mb-0">Cuestionario</h5>
                     <span class="badge bg-body-tertiary text-body border border-dashed">
                         {{ survey.questions.count }} Reactivos
@@ -53,17 +108,19 @@
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush">
                         {% for question in survey.questions.all %}
-                        <div class="list-group-item px-4 py-3 border-bottom-dashed bg-transparent" id="question-{{ question.id }}">
+                        <div class="list-group-item px-4 py-3 border-bottom-dashed bg-transparent" id="question-{{ question.id }}"
+                             data-text="{{ question.text|escapejs }}"
+                             data-type="{{ question.type }}"
+                             data-required="{% if question.is_required %}true{% else %}false{% endif %}"
+                             data-options="{% for option in question.options.all %}{{ option.text|escapejs }}{% if not forloop.last %}\n{% endif %}{% endfor %}">
                             <div class="d-flex gap-3">
                                 <div class="q-index flex-shrink-0">P{{ forloop.counter }}</div>
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <div class="flex-grow-1">
-                                            <!-- Modo vista -->
                                             <div class="view-mode-{{ question.id }}">
                                                 <h6 class="fw-bold text-body mb-0 pt-1">{{ question.text }}</h6>
                                             </div>
-                                            <!-- Modo edición -->
                                             <div class="edit-mode-{{ question.id }} d-none">
                                                 <input type="text" class="form-control" id="text-{{ question.id }}" value="{{ question.text }}">
                                             </div>
@@ -72,10 +129,9 @@
                                             {% if question.is_required %}
                                                 <span class="badge bg-danger-subtle text-danger rounded-pill" style="font-size: 0.65rem;">Requerida</span>
                                             {% endif %}
-                                            <!-- Botones de acción (solo en borrador) -->
                                             {% if survey.status == 'draft' %}
                                             <div class="btn-group btn-group-sm view-mode-{{ question.id }}" role="group">
-                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="editQuestion({{ question.id }})" title="Editar">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="editQuestion({{ question.id }})" title="Editar solo el texto de la pregunta">
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
                                                 <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteQuestion({{ question.id }})" title="Eliminar">
@@ -95,8 +151,7 @@
                                     </div>
                                     
                                     <div class="d-flex gap-3 align-items-center mb-2">
-                                        <!-- Tipo de pregunta -->
-                                        <div class="view-mode-{{ question.id }}">
+                                        <div class="view-mode-{{ question.id }} edit-mode-{{ question.id }}">
                                             <div class="small text-muted">
                                                 {% if question.type == 'text' %}
                                                     <i class="bi bi-textarea-t me-1"></i>
@@ -114,17 +169,7 @@
                                                 {{ question.get_type_display }}
                                             </div>
                                         </div>
-                                        <div class="edit-mode-{{ question.id }} d-none">
-                                            <select class="form-select form-select-sm" id="type-{{ question.id }}" style="width: auto;">
-                                                <option value="text" {% if question.type == 'text' %}selected{% endif %}>Texto libre</option>
-                                                <option value="number" {% if question.type == 'number' %}selected{% endif %}>Número</option>
-                                                <option value="scale" {% if question.type == 'scale' %}selected{% endif %}>Escala 1-10</option>
-                                                <option value="single" {% if question.type == 'single' %}selected{% endif %}>Opción única</option>
-                                                <option value="multi" {% if question.type == 'multi' %}selected{% endif %}>Opción múltiple</option>
-                                            </select>
-                                        </div>
                                         
-                                        <!-- Toggle requerida -->
                                         <div class="edit-mode-{{ question.id }} d-none">
                                             <div class="form-check form-switch">
                                                 <input class="form-check-input" type="checkbox" id="required-{{ question.id }}" {% if question.is_required %}checked{% endif %}>
@@ -136,20 +181,17 @@
                                     </div>
 
                                     {% if question.options.exists %}
-                                    <div class="view-mode-{{ question.id }}">
+                                    <div class="view-mode-{{ question.id }} edit-mode-{{ question.id }}">
                                         <div class="d-flex flex-wrap gap-2 mt-2">
+                                            <label class="form-label small text-muted">Opciones:</label>
                                             {% for option in question.options.all %}
                                                 <span class="badge bg-body-tertiary text-secondary border border-dashed fw-normal">
                                                     {{ option.text }}
                                                 </span>
                                             {% endfor %}
-                                        </div>
-                                    </div>
-                                    <div class="edit-mode-{{ question.id }} d-none">
-                                        <div class="mt-2">
-                                            <label class="form-label small text-muted">Opciones (una por línea):</label>
-                                            <textarea class="form-control form-control-sm" id="options-{{ question.id }}" rows="3">{% for option in question.options.all %}{{ option.text }}
-{% endfor %}</textarea>
+                                            <p class="small text-danger mt-2 mb-0">
+                                                ⚠️ El tipo de pregunta y sus opciones no son editables en este estado.
+                                            </p>
                                         </div>
                                     </div>
                                     {% endif %}
@@ -196,6 +238,7 @@
                                             <small class="text-muted">Este proyecto proviene de un CSV con respuestas registradas y permanece cerrado automáticamente.</small>
                                         </div>
                                     </div>
+
                                 </div>
                             {% else %}
                                 {% if survey.status == 'active' or survey.status == 'paused' or survey.status == 'closed' %}
@@ -249,12 +292,11 @@
                             <i class="bi bi-box-arrow-up-right me-1"></i>Probar enlace
                         </a>
                     </div>
-                </div>
 
                 <div class="card border-0 shadow-sm">
                     <div class="card-body p-4 text-center">
                         <h6 class="text-uppercase text-muted small fw-bold mb-3">Acceso Rápido Móvil</h6>
-                        <div class="bg-white p-2 d-inline-block rounded-3 border">
+                        <div class="bg-body-tertiary p-2 d-inline-block rounded-3 border">
                             <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ respond_absolute_url|urlencode }}"
                                  alt="QR Code" class="img-fluid" style="width: 120px; height: 120px;">
                         </div>
@@ -289,8 +331,8 @@
                         </ul>
                         {% if survey.responses.count > 0 %}
                         <div class="card-footer bg-transparent text-center border-0 py-2">
-                            <a href="{% url 'surveys:results' survey.public_id %}" class="text-decoration-none small fw-bold icon-link icon-link-hover">
-                                Ver todos los resultados <i class="bi bi-arrow-right"></i>
+                            <a href="{% url 'surveys:results' survey.public_id %}" class="text-decoration-none small fw-bold icon-link icon-link-hover show-results-loader">
+                                    Ver todos los resultados <i class="bi bi-arrow-right"></i>
                             </a>
                         </div>
                         {% endif %}
@@ -302,7 +344,6 @@
     </div>
 </div>
 
-<!-- Modal de confirmación para activar encuesta -->
 <div class="modal fade" id="confirmActivateModal" tabindex="-1" aria-labelledby="confirmActivateModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
@@ -345,6 +386,66 @@
     </div>
 </div>
 
+<div class="modal fade" id="questionChangesModal" tabindex="-1" aria-labelledby="questionChangesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-secondary-subtle border-bottom-0">
+                <h5 class="modal-title fw-bold d-flex align-items-center" id="questionChangesModalLabel">
+                    <i class="bi bi-pencil-square me-2 fs-4"></i>
+                    Cambios de la Pregunta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="questionChangesModalBody">
+            </div>
+            <div class="modal-footer border-top-0 bg-body-tertiary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-2"></i>Cerrar
+                </button>
+                <button type="button" class="btn btn-primary" id="questionChangesProceedBtn" onclick="(function(){ const id = this.dataset.questionId; if(id) proceedToEdit(id); }).call(this);">
+                    <i class="bi bi-pencil-square me-2"></i>Editar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmDeleteQuestionModal" tabindex="-1" aria-labelledby="confirmDeleteQuestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger-subtle border-bottom-0">
+                <h5 class="modal-title fw-bold d-flex align-items-center" id="confirmDeleteQuestionModalLabel">
+                    <i class="bi bi-trash-fill text-danger me-2 fs-4"></i>
+                    ⚠️ Confirmar Eliminación de Pregunta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted">
+                    Estás a punto de eliminar la pregunta <strong id="deleteQuestionTextPlaceholder"></strong>.
+                </p>
+                <div class="alert alert-danger border-danger mb-0 py-3">
+                    <div class="d-flex">
+                        <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
+                        <div>
+                            <p class="mb-0 fw-bold">Advertencia:</p>
+                            <small>Esta acción es irreversible y se eliminarán permanentemente todos los datos de respuesta asociados a esta pregunta.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-body-tertiary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-2"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDeletion()">
+                    <i class="bi bi-trash me-2"></i>Sí, Eliminar Permanentemente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const allowedTransitions = {
         draft: ['draft', 'active', 'closed'],
@@ -353,6 +454,7 @@
         closed: ['closed']
     };
     let pendingStatusChange = null;
+    let pendingDeleteQuestionId = null; // Variable para almacenar el ID de la pregunta a eliminar
 
     function cambiarEstado(selectEl) {
         const nuevoEstado = selectEl.value;
@@ -443,10 +545,64 @@
     
     // Funciones de edición de preguntas
     function editQuestion(questionId) {
-        document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
-        document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+        showQuestionChangesModal(questionId);
     }
     
+    function showQuestionChangesModal(questionId) {
+        const container = document.getElementById('question-' + questionId);
+        if (!container) {
+            // fallback: open edit directly
+            document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
+            document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+            return;
+        }
+
+        const text = container.dataset.text || '';
+        const type = container.dataset.type || '';
+        const required = container.dataset.required === 'true';
+        const options = container.dataset.options ? container.dataset.options.split('\n').filter(o => o.trim()) : [];
+
+        const modalBody = document.getElementById('questionChangesModalBody');
+        if (!modalBody) return; // safety
+        modalBody.innerHTML = `
+            <p class="mb-2"><strong>Texto actual:</strong> ${escapeHtml(text)}</p>
+            <p class="mb-2"><strong>Tipo:</strong> ${escapeHtml(type)}</p>
+            <p class="mb-2"><strong>Requerida:</strong> ${required ? 'Sí' : 'No'}</p>
+            ${options.length ? '<div class="mt-2"><strong>Opciones:</strong><div class="mt-2">' + options.map(o => `<span class="badge bg-body-tertiary text-secondary border border-dashed me-1 mb-1">${escapeHtml(o)}</span>`).join('') + '</div></div>' : ''}
+            <p class="text-info mt-3 mb-0">
+                Solo el texto de la pregunta y el estado de "Requerida" son editables. El tipo y las opciones de la pregunta están bloqueados.
+            </p>
+        `;
+
+        const proceedBtn = document.getElementById('questionChangesProceedBtn');
+        if (proceedBtn) proceedBtn.dataset.questionId = questionId;
+
+        const modalEl = document.getElementById('questionChangesModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function proceedToEdit(questionId) {
+        const modalEl = document.getElementById('questionChangesModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+
+        // Ocultar solo los modos de vista originales
+        document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
+        
+        // Mostrar los modos de edición
+        document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function cancelEdit(questionId) {
         document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
         document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.add('d-none'));
@@ -454,11 +610,13 @@
     
     function saveQuestion(questionId) {
         const text = document.getElementById('text-' + questionId).value;
-        const type = document.getElementById('type-' + questionId).value;
         const isRequired = document.getElementById('required-' + questionId).checked;
-        const optionsEl = document.getElementById('options-' + questionId);
-        const options = optionsEl ? optionsEl.value.split('\n').filter(o => o.trim()) : [];
         
+        // Obtenemos los valores no editables originales para enviarlos de vuelta.
+        const container = document.getElementById('question-' + questionId);
+        const originalType = container.dataset.type;
+        const originalOptions = container.dataset.options.split('\n').filter(o => o.trim());
+
         fetch(`/surveys/questions/${questionId}/update/`, {
             method: 'POST',
             headers: {
@@ -467,9 +625,9 @@
             },
             body: JSON.stringify({ 
                 text: text,
-                type: type,
                 is_required: isRequired,
-                options: options
+                type: originalType, 
+                options: originalOptions 
             })
         })
         .then(response => response.json())
@@ -485,12 +643,42 @@
             alert('Error al guardar la pregunta');
         });
     }
-    
+
+    // NUEVAS FUNCIONES PARA MODAL DE ELIMINACIÓN
     function deleteQuestion(questionId) {
-        if (!confirm('¿Estás seguro de eliminar esta pregunta? Esta acción no se puede deshacer.')) {
-            return;
+        const container = document.getElementById('question-' + questionId);
+        const questionText = container ? container.dataset.text : 'esta pregunta';
+
+        // 1. Almacenar el ID de la pregunta
+        pendingDeleteQuestionId = questionId;
+
+        // 2. Actualizar el texto del modal
+        const placeholder = document.getElementById('deleteQuestionTextPlaceholder');
+        if (placeholder) {
+            placeholder.textContent = `"${questionText}"`;
         }
         
+        // 3.  Mostrar el modal
+        const modalEl = document.getElementById('confirmDeleteQuestionModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function confirmDeletion() {
+        if (!pendingDeleteQuestionId) {
+            return;
+        }
+
+        const questionId = pendingDeleteQuestionId;
+        
+        // Cerrar el modal
+        const modalEl = document.getElementById('confirmDeleteQuestionModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+        
+        // Ejecutar la petición de eliminación
         fetch(`/surveys/questions/${questionId}/delete/`, {
             method: 'POST',
             headers: {
@@ -501,15 +689,24 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                document.getElementById('question-' + questionId).remove();
+                // Quitar el elemento de la pregunta de la DOM
+                const questionElement = document.getElementById('question-' + questionId);
+                if (questionElement) {
+                    questionElement.remove();
+                }
+                // Recargar para actualizar el contador y el botón de "Agregar primera pregunta"
+                location.reload(); 
             } else {
-                alert('Error al eliminar: ' + (data.error || 'Error desconocido'));
+                alert('Error al eliminar: ' + (data.error || 'Acción no permitida. ¿Encuesta activa?'));
             }
         })
         .catch(error => {
             console.error('Error:', error);
             alert('Error al eliminar la pregunta');
         });
+
+        // Resetear el ID
+        pendingDeleteQuestionId = null;
     }
     
     function addNewQuestion() {

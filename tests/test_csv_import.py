@@ -1,6 +1,6 @@
 import os
 import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.test')
 django.setup()
 
 import pytest
@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from surveys.models import ImportJob
 from surveys.tasks import process_survey_import
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.test')
 django.setup()
 
 pytestmark = pytest.mark.django_db

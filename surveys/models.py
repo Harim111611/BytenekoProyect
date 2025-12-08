@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
-
 class Survey(models.Model):
     """Survey model - Encuesta"""
 
@@ -31,7 +30,6 @@ class Survey(models.Model):
     title = models.CharField(max_length=255, verbose_name='Title')
     description = models.TextField(null=True, blank=True, verbose_name='Description')
     
-    # Open field to store category from Select or "Other" input
     category = models.CharField(
         max_length=100,
         default='General',
@@ -81,14 +79,31 @@ class Survey(models.Model):
         return self.ALLOWED_TRANSITIONS.get(current_status, {current_status})
 
     def validate_status_transition(self, new_status, *, from_status=None):
-        """Validate if a transition towards `new_status` is allowed."""
+        """Validate if a transition towards `new_status` is allowed with SaaS checks."""
         valid_statuses = {code for code, _ in self.STATUS_CHOICES}
         if new_status not in valid_statuses:
             raise ValidationError(f"Estado inválido: {new_status}")
+            
+        # --- LÓGICA SAAS: Verificar límites antes de activar ---
+        if new_status == self.STATUS_ACTIVE:
+            # Verificamos si el usuario tiene una suscripción válida
+            if hasattr(self.author, 'subscription') and self.author.subscription.is_valid():
+                plan = self.author.subscription.plan
+                # Contamos cuántas encuestas tiene activas YA (excluyendo esta misma)
+                active_surveys_count = Survey.objects.filter(
+                    author=self.author,
+                    status=self.STATUS_ACTIVE
+                ).exclude(pk=self.pk).count()
+                
+                if active_surveys_count >= plan.max_surveys:
+                    raise ValidationError(
+                        f"Has alcanzado el límite de {plan.max_surveys} encuestas activas permitido por tu plan '{plan.name}'. "
+                        "Pausa otra encuesta o mejora tu plan para continuar."
+                    )
+        # --------------------------------------------------------
+
         if new_status not in self.get_allowed_status_transitions(from_status):
-            raise ValidationError(
-                "La transición solicitada no está permitida."
-            )
+            raise ValidationError("La transición solicitada no está permitida.")
         return True
 
     class Meta:
@@ -134,7 +149,6 @@ class Question(models.Model):
         ('multi', 'Opción múltiple'),
     ]
 
-    # Tipos demográficos (si la pregunta se usa para segmentación demográfica)
     DEMOGRAPHIC_TYPES = [
         ('age', 'Edad'),
         ('gender', 'Género'),
@@ -155,9 +169,16 @@ class Question(models.Model):
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name='Type', db_index=True)
     is_required = models.BooleanField(default=False, verbose_name='Required')
     order = models.PositiveIntegerField(default=0, verbose_name='Order')
-    # Marca si la pregunta es demográfica y su tipo (opcional)
+    
     is_demographic = models.BooleanField(default=False, verbose_name='Is Demographic', db_index=True)
     demographic_type = models.CharField(max_length=50, choices=DEMOGRAPHIC_TYPES, null=True, blank=True, verbose_name='Demographic Type')
+    
+    # Campo para análisis avanzado
+    is_analyzable = models.BooleanField(
+        default=True, 
+        verbose_name='Is Analyzable',
+        help_text='Indica si esta pregunta debe incluirse en los reportes estadísticos automáticos'
+    )
 
     def __str__(self):
         return self.text
@@ -218,6 +239,17 @@ class SurveyResponse(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name='Created At', db_index=True)
     is_anonymous = models.BooleanField(default=False, verbose_name='Anonymous')
 
+    def save(self, *args, **kwargs):
+        # Validación SaaS al recibir respuesta (Opcional, pero recomendada)
+        if not self.pk:  # Solo al crear
+            if hasattr(self.survey.author, 'subscription'):
+                plan = self.survey.author.subscription.plan
+                current_count = self.survey.responses.count()
+                if current_count >= plan.max_responses_per_survey:
+                    # Aquí podrías lanzar error o marcar como "quota exceeded"
+                    pass
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Respuesta a {self.survey.title} en {self.created_at.strftime('%Y-%m-%d')}"
 
@@ -230,6 +262,8 @@ class SurveyResponse(models.Model):
             models.Index(fields=['survey', 'is_anonymous'], name='survey_response_anon_idx'),
             models.Index(fields=['user', 'created_at'], name='user_response_date_idx'),
         ]
+
+
 class ImportJob(models.Model):
     """Modelo para rastrear el estado de una importación masiva de respuestas desde CSV."""
     STATUS_CHOICES = [
@@ -305,4 +339,3 @@ class QuestionResponse(models.Model):
             models.Index(fields=['question', 'numeric_value'], name='qresponse_q_numeric_idx'),
             models.Index(fields=['question', 'selected_option'], name='qresponse_q_option_idx'),
         ]
-

@@ -1,5 +1,5 @@
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE','byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','byteneko.settings.production')
 import django
 django.setup()
 from surveys.models import Survey, SurveyResponse

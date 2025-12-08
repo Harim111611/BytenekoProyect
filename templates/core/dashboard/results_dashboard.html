@@ -489,7 +489,7 @@
                                     <tr>
                                         <td class="text-muted fw-bold">{{ forloop.counter }}</td>
                                         <td class="text-truncate" style="max-width: 300px;" title="{{ question.text }}">
-                                            <a href="{% url 'surveys:results' question.survey.id %}" class="text-decoration-none text-body">
+                                            <a href="{% url 'surveys:results' question.survey.id %}" class="text-decoration-none text-body show-results-loader">
                                                 {{ question.text }}
                                             </a>
                                             <br>
@@ -546,7 +546,7 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                                <a href="{% url 'surveys:results' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill flex-shrink-0">
+                                <a href="{% url 'surveys:results' survey.id %}" class="btn btn-sm btn-outline-primary rounded-pill flex-shrink-0 show-results-loader">
                                     Ver <i class="bi bi-arrow-right"></i>
                                 </a>
                             </div>

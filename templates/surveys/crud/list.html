@@ -204,14 +204,14 @@
             <form method="get" class="row g-2 align-items-center">
                 <div class="col-md-8">
                     <div class="input-group">
-                        <span class="input-group-text bg-white border-0 text-muted"><i class="bi bi-search"></i></span>
-                        <input type="text" name="q" class="form-control border-0 bg-white" 
+                        <span class="input-group-text bg-body-tertiary border-0 text-muted"><i class="bi bi-search"></i></span>
+                           <input type="text" name="q" class="form-control border-0 bg-body-tertiary search-input" 
                                placeholder="Buscar por título..." 
-                               value="{{ request.GET.q }}">
+                               value="{{ request.GET.q|default_if_none:'' }}">
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <select name="status" class="form-select border-0 bg-white" onchange="this.form.submit()">
+                    <select name="status" class="form-select border-0 bg-body-tertiary" onchange="this.form.submit()">
                         <option value="">Todos los estados</option>
                         <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Activas</option>
                         <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Borradores</option>
@@ -322,8 +322,8 @@
                         </div>
 
                         <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
-                            <a href="{% url 'surveys:results' survey.public_id %}"
-                               class="btn btn-sm btn-outline-primary flex-grow-1">
+                                     <a href="{% url 'surveys:results' survey.public_id %}"
+                                         class="btn btn-sm btn-outline-primary flex-grow-1 show-results-loader">
                                 <i class="bi bi-bar-chart-fill me-1"></i> Resultados
                             </a>
                                      <a href="{% url 'surveys:edit' survey.public_id %}" 
@@ -404,12 +404,6 @@
     {% endif %}
 </div>
 
-<div id="deletingLoader" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(255,255,255,0.85); z-index:9999; align-items:center; justify-content:center; flex-direction:column;">
-    <div class="spinner-border text-danger" style="width:3rem; height:3rem;"></div>
-    <div class="mt-3 fw-bold text-danger fs-5">Eliminando encuestas...</div>
-    <div class="text-muted">Por favor espera, procesando cambios.</div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -470,11 +464,11 @@ window.pollDeleteTask = async function(taskId) {
             if (!res.ok) break;
             const info = await res.json();
             if (info.ready && (info.status === 'SUCCESS' || info.status === 'success')) {
-                return true;
+                return info;
             }
             if (info.error || (info.ready && info.status !== 'SUCCESS' && info.status !== 'success')) {
                 console.error('Delete failed:', info.error);
-                return false;
+                return info; // return info so caller can inspect error
             }
         } catch (e) {
             console.warn('Delete polling error', e);
@@ -511,6 +505,37 @@ window.pollImportJob = async function(jobId) {
 </script>
 
 <script>
+// Cuando el usuario vuelve con back/forward el navegador puede usar bfcache
+// y mostrar una versión en caché de la página. Forzamos una recarga ligera
+// para garantizar que la lista refleje el estado real del servidor.
+window.addEventListener('pageshow', function(event) {
+    try {
+        // event.persisted === true indica bfcache en muchos navegadores
+        if (event.persisted) {
+            window.location.reload();
+            return;
+        }
+
+        // Algunos navegadores no setean persisted; comprobamos tipo de navegación
+        // si está disponible en PerformanceNavigationTiming
+        if (performance && performance.getEntriesByType) {
+            const entries = performance.getEntriesByType('navigation');
+            if (entries && entries.length) {
+                const nav = entries[0];
+                if (nav.type === 'back_forward') {
+                    window.location.reload();
+                    return;
+                }
+            }
+        }
+    } catch (e) {
+        // En caso de error no bloquear la navegación
+        console.error('pageshow handler error', e);
+    }
+});
+</script>
+
+<script>
 // -----------------------------------------
 // Selección múltiple y borrado en bloque
 // -----------------------------------------
@@ -543,17 +568,19 @@ window.pollImportJob = async function(jobId) {
     const selectedSurveys = new Set();
     let selectionMode = false;
     let skipConfirmBulk = false;
+    // Bandera que indica que la acción en curso es "Eliminar todas".
+    // Cuando es true, actualizamos la UI localmente en lugar de forzar
+    // una recarga completa de la página (evita cerrar toasts/modal innecesariamente).
+    let isDeleteAllAction = false;
 
     function updateSelectionUI() {
         const count = selectedSurveys.size;
         selectedCountSpan.textContent = count;
 
         if (selectionMode) {
-            bulkActionsBar.style.display = 'flex';
-            bulkActionsBar.classList.remove('d-none');
+            bulkActionsBar.classList.add('is-active');
         } else {
-            bulkActionsBar.style.display = 'none';
-            bulkActionsBar.classList.add('d-none');
+            bulkActionsBar.classList.remove('is-active');
         }
 
         const allSelected = (selectBtns.length > 0) && (count === selectBtns.length);
@@ -747,11 +774,12 @@ window.pollImportJob = async function(jobId) {
                 throw new Error(data.error || 'No se pudieron eliminar las encuestas.');
             }
 
-            // Si hay task_id, esperar a que Celery complete
+            // Si hay task_id, esperar a que Celery complete y obtener info final
             const taskId = data.task_id;
+            let taskResultInfo = null;
             if (taskId) {
-                const done = await pollDeleteTask(taskId);
-                if (!done) throw new Error('La tarea de eliminación falló o expiró.');
+                taskResultInfo = await pollDeleteTask(taskId);
+                if (!taskResultInfo || taskResultInfo.error) throw new Error('La tarea de eliminación falló o expiró.');
             }
 
             // Animar el colapso de las columnas
@@ -768,29 +796,88 @@ window.pollImportJob = async function(jobId) {
                 selectedSurveys.clear();
                 updateSelectionUI();
 
-                // Si el DOM está vacío, mostrar loader y recargar INMEDIATAMENTE
+                // Si el DOM está vacío, recargar inmediatamente (sin overlay) a menos
+                // que la acción actual sea "Eliminar todas". En ese caso actualizamos
+                // la UI localmente para mostrar el estado vacío sin recargar.
                 const remainingCards = document.querySelectorAll('.survey-card');
                 if (remainingCards.length === 0) {
-                    document.getElementById('deletingLoader').style.display = 'flex';
-                    const mainGrid = document.querySelector('.row.g-4');
-                    if (mainGrid) mainGrid.style.display = 'none';
-                    
-                    // Recargar INMEDIATAMENTE sin esperar verificación
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                    if (!isDeleteAllAction) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 300);
+                    } else {
+                        // Actualizar la UI localmente para reflejar que no quedan encuestas
+                        // (ocultar grid, paginación, barra de acciones y deshabilitar selección).
+                        const surveyGrid = document.querySelector('.row.g-4');
+                        if (surveyGrid) surveyGrid.remove();
+
+                        const pagination = document.querySelector('nav[aria-label="Page navigation"]');
+                        if (pagination) pagination.remove();
+
+                        if (bulkActionsBar) {
+                            bulkActionsBar.style.display = 'none';
+                            bulkActionsBar.classList.add('d-none');
+                        }
+
+                        if (toggleSelectionBtn) {
+                            toggleSelectionBtn.disabled = true;
+                            toggleSelectionBtn.classList.add('disabled', 'opacity-50');
+                        }
+
+                        // Insertar un estado vacío amigable donde estaba la lista
+                        const container = document.querySelector('.container-xl');
+                        if (container) {
+                            const existingEmpty = document.getElementById('surveys-empty-state');
+                            if (!existingEmpty) {
+                                const empty = document.createElement('div');
+                                empty.id = 'surveys-empty-state';
+                                empty.className = 'text-center py-5';
+                                // Intentar clonar botón de crear encuesta si existe
+                                const createBtn = document.querySelector('a[href*="/surveys/create"]');
+                                const createHtml = createBtn ? createBtn.outerHTML : '';
+                                empty.innerHTML = `
+                                    <div class="mb-4">
+                                        <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
+                                            <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                                        </div>
+                                    </div>
+                                    <h3 class="fw-bold text-body-emphasis mb-2">No se encontraron encuestas</h3>
+                                    <p class="text-muted mb-4 col-md-6 mx-auto">Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar.</p>
+                                    <div class="d-flex justify-content-center gap-3">
+                                        ${createHtml}
+                                        <button class="btn btn-outline-secondary btn-lg px-4" data-bs-toggle="modal" data-bs-target="#importModalPreview">Importar CSV</button>
+                                    </div>
+                                `;
+                                const refNode = document.querySelector('.card.border-0.shadow-sm.mb-4') || container.firstChild;
+                                if (refNode && refNode.parentNode) {
+                                    refNode.parentNode.insertBefore(empty, refNode.nextSibling);
+                                } else {
+                                    container.appendChild(empty);
+                                }
+                            }
+                        }
+
+                        // Resetear flag para futuras acciones
+                        isDeleteAllAction = false;
+                    }
                 }
 
                 if (selectionMode) {
                     toggleSelectionMode();
                 }
 
-                // Mostrar notificación toast
+                // Mostrar notificación toast con conteo real si está disponible
                 const announcementToast = document.getElementById('announcementModal');
                 const announcementBody = document.getElementById('announcementModalBody');
                 if (announcementToast && announcementBody) {
-                    announcementBody.textContent = data.message || 'Las encuestas seleccionadas se eliminaron correctamente.';
-                    const toast = new bootstrap.Toast(announcementToast);
+                    // Prefer the user-facing 'deleted_surveys' when available
+                    const deletedCount = (taskResultInfo && (taskResultInfo.deleted_surveys || taskResultInfo.deleted || (taskResultInfo.result && (taskResultInfo.result.deleted_surveys || taskResultInfo.result.deleted)))) || data.deleted || 0;
+                    if (deletedCount > 0) {
+                        announcementBody.textContent = deletedCount === 1 ? 'Eliminada correctamente' : `Se eliminaron ${deletedCount} encuesta(s).`;
+                    } else {
+                        announcementBody.textContent = data.message || 'Las encuestas seleccionadas se eliminaron correctamente.';
+                    }
+                    const toast = new bootstrap.Toast(announcementToast, { autohide: false });
                     toast.show();
                 }
             }, 300);
@@ -843,6 +930,11 @@ window.pollImportJob = async function(jobId) {
                 });
                 updateSelectionUI();
 
+                // Ejecutar eliminación masiva y cerrar el modal inmediatamente.
+                // Marcamos `isDeleteAllAction` para que, al terminar la eliminación,
+                // el script actualice la UI localmente (mostrar estado vacío)
+                // en lugar de forzar una recarga completa.
+                isDeleteAllAction = true;
                 skipConfirmBulk = true;
                 deleteSelectedBtn.click();
                 modal.hide();
@@ -947,9 +1039,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data.success) throw new Error(data.error || 'No se pudo eliminar.');
 
             const taskId = data.task_id;
+            let taskResultInfo = null;
             if (taskId) {
-                const done = await pollDeleteTask(taskId);
-                if (!done) throw new Error('La tarea de eliminación falló o expiró.');
+                taskResultInfo = await pollDeleteTask(taskId);
+                if (!taskResultInfo || taskResultInfo.error) throw new Error('La tarea de eliminación falló o expiró.');
             }
 
             if (card) {
@@ -962,24 +1055,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             removeDeletingId(surveyId);
 
-            // Si el DOM está vacío después de remover, recargar INMEDIATAMENTE
+            // Si el DOM está vacío después de remover, recargar INMEDIATAMENTE (sin overlay)
             setTimeout(() => {
                 if (document.querySelectorAll('.survey-card').length === 0) {
-                    document.getElementById('deletingLoader').style.display = 'flex';
-                    const mainGrid = document.querySelector('.row.g-4');
-                    if (mainGrid) mainGrid.style.display = 'none';
                     setTimeout(() => {
                         window.location.reload();
-                    }, 1000);
+                    }, 300);
                 }
             }, 350);
 
-            // Mostrar notificación toast
+            // Mostrar notificación toast con conteo real si está disponible
             const announcementToast = document.getElementById('announcementModal');
             const announcementBody = document.getElementById('announcementModalBody');
             if (announcementToast && announcementBody) {
-                announcementBody.textContent = data.message || 'Eliminado correctamente';
-                const toast = new bootstrap.Toast(announcementToast);
+                const deletedCount = (taskResultInfo && (taskResultInfo.deleted_surveys || taskResultInfo.deleted || (taskResultInfo.result && (taskResultInfo.result.deleted_surveys || taskResultInfo.result.deleted)))) || data.deleted || 0;
+                if (deletedCount > 0) {
+                    announcementBody.textContent = deletedCount === 1 ? 'Eliminada correctamente' : `Se eliminaron ${deletedCount} encuesta(s).`;
+                } else {
+                    announcementBody.textContent = data.message || 'Eliminado correctamente';
+                }
+                const toast = new bootstrap.Toast(announcementToast, { autohide: false });
                 toast.show();
             }
 
@@ -1105,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             try {
                 // Usamos el endpoint actualizado para múltiples
-                const response = await fetch("{% url 'surveys:import_multiple' %}", {
+                const response = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
                     method: 'POST', body: formData, headers: {'X-CSRFToken': getCsrfToken()}
                 });
                 const data = await response.json();
@@ -1189,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('csrfmiddlewaretoken', getCsrfToken());
 
         try {
-            const response = await fetch("{% url 'surveys:import_multiple' %}", {
+            const response = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
                 method: 'POST', body: formData, headers: {'X-CSRFToken': getCsrfToken()}
             });
             const data = await response.json();
@@ -1295,6 +1390,14 @@ document.addEventListener('DOMContentLoaded', function() {
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
 @keyframes fadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.8); } }
 
+/* Search input adjustments so it respects dark mode variables */
+.search-input {
+    background-color: var(--input-bg) !important;
+    color: var(--input-text) !important;
+    border-radius: 0.45rem;
+}
+.search-input::placeholder { color: var(--input-placeholder) !important; }
+
 .survey-card--deleting {
     opacity: 0.5; filter: grayscale(0.8); pointer-events: none; position: relative;
 }
@@ -1333,5 +1436,4 @@ document.addEventListener('DOMContentLoaded', function() {
 [data-bs-theme="dark"] .bulk-actions-bar-custom .btn-danger {
     background: #ff6b6b; color: #fff; border-color: #ff8787;
 }
-</style>
 {% endblock %}

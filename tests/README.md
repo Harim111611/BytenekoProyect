@@ -1,3 +1,24 @@
+# Estructura de tests centralizada
+
+Todos los tests unitarios y de integración se ubican en la carpeta raíz `tests/`.
+
+Organización recomendada:
+
+- `tests/core/` para tests de la app core (si existen)
+- `tests/surveys/` para tests de la app surveys
+- `tests/fixtures/` para datos de prueba
+
+Ejecuta todos los tests con:
+
+```bash
+pytest
+```
+
+o para un módulo específico:
+
+```bash
+pytest tests/surveys/test_models.py
+```
 # Tests - Suite de Pruebas Automatizadas
 
 Este directorio centraliza todos los tests del proyecto.

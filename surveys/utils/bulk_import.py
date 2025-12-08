@@ -1,249 +1,266 @@
-"""
-Utilidades de importación masiva usando PostgreSQL COPY FROM.
-Alto rendimiento para insertar grandes volúmenes de datos.
-Soporta psycopg2 (copy_expert) y psycopg 3 (copy).
-"""
-
-
+import csv
 import io
-import pandas as pd
+import re
 from datetime import datetime
 
-from django.db import transaction, connection
-from django.utils import timezone
+import pandas as pd
+from dateutil import parser
 from django.conf import settings
+from django.db import connection, transaction
+from django.utils import timezone
 
-from surveys.models import (
-    Survey,
-    Question,
-    AnswerOption,
-    SurveyResponse,
-    QuestionResponse,
-)
+from surveys.models import SurveyResponse, QuestionResponse
+
+
+def parse_date_safe(date_str):
+    """
+    Intenta parsear un valor de fecha a un datetime timezone-aware.
+    Devuelve None si el valor no se puede interpretar como fecha.
+    """
+    if pd.isna(date_str):
+        return None
+
+    value = str(date_str).strip()
+    if not value:
+        return None
+
+    # Intento 1: pandas.to_datetime (acepta muchos formatos)
+    try:
+        dt = pd.to_datetime(value, errors="coerce")
+        if pd.isna(dt):
+            raise ValueError
+        py_dt = dt.to_pydatetime()
+        if timezone.is_naive(py_dt):
+            py_dt = timezone.make_aware(py_dt)
+        return py_dt
+    except Exception:
+        pass
+
+    # Intento 2: dateutil.parser (más flexible todavía)
+    try:
+        dt = parser.parse(value)
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt)
+        return dt
+    except Exception:
+        return None
+
+
+def _clean_numeric_value(raw: str):
+    """
+    Intenta extraer un número entero desde una cadena arbitraria.
+    - Elimina caracteres no numéricos salvo signo y separador decimal.
+    - Soporta '1,234', '1.234', '5.0', etc.
+    Devuelve (num_value, text_fallback) donde solo uno de los dos
+    estará informado.
+    """
+    s = str(raw).strip()
+    if not s:
+        return None, None
+
+    # Si es algo muy claramente no numérico, devolvemos texto
+    # (ej. 'No', 'N/A').
+    if not any(ch.isdigit() for ch in s):
+        return None, s
+
+    # Normalizar coma decimal a punto
+    s_norm = s.replace(",", ".")
+    # Quedarnos solo con dígitos, signo y punto
+    cleaned = "".join(ch for ch in s_norm if (ch.isdigit() or ch in ".-"))
+
+    # Evitar casos patológicos como sólo '.' o '-'
+    if cleaned in {"", ".", "-", "-."}:
+        return None, s
+
+    try:
+        num_float = float(cleaned)
+        # Guardamos como entero para simplificar análisis (ej. escalas 1–10)
+        num_int = int(num_float)
+        return num_int, None
+    except Exception:
+        return None, s
+
+
+def _split_multi_value(value: str):
+    """
+    Divide respuestas múltiples usando coma o punto y coma como separadores.
+    Ejemplo: 'A, B; C' => ['A', 'B', 'C']
+    """
+    if pd.isna(value):
+        return []
+
+    s = str(value).strip()
+    if not s:
+        return []
+
+    parts = re.split(r"[;,]", s)
+    return [p.strip() for p in parts if p.strip()]
 
 
 def bulk_import_responses_postgres(survey, dataframe_or_chunk, questions_map, date_column=None):
     """
-    Importa respuestas usando ORM + bulk_create, procesando por batch/chunk.
+    Inserta masivamente respuestas a partir de un DataFrame.
+    Usa COPY de PostgreSQL para QuestionResponse para maximizar rendimiento.
 
-    - Mantiene el uso de RAM bajo (solo se procesa el chunk actual).
-    - Crea SurveyResponse y QuestionResponse para cada fila/columna.
-    - Usa questions_map enriquecido:
-        questions_map[col_name] = {
-            "question": Question,
-            "dtype": "single" | "multi" | "number" | "scale" | "text",
-            "options": { "valor": AnswerOption, ... }  # opcional
-        }
-    Devuelve: (num_survey_responses, num_question_responses)
+    Parámetros:
+    - survey: instancia de Survey
+    - dataframe_or_chunk: DataFrame completo o chunk
+    - questions_map: dict {col_name: {"question": Question, "dtype": str, "options": {text: AnswerOption}}}
+    - date_column: nombre de la columna que contiene la fecha/hora de respuesta (opcional)
     """
-
-    # Convertir el chunk actual a lista de dicts
-    rows = dataframe_or_chunk.to_dict("records")
-    total_rows = len(rows)
-    if total_rows == 0:
+    if dataframe_or_chunk is None:
         return 0, 0
 
-    chunk_size = getattr(settings, 'SURVEY_IMPORT_CHUNK_SIZE', 1000)
-    
-    # Pre-cachear created_at para evitar llamadas repetidas a datetime.now()
-    base_created_at = datetime.now()
-    if timezone.is_naive(base_created_at):
-        base_created_at = timezone.make_aware(base_created_at)
-    
+    rows = dataframe_or_chunk.to_dict("records")
+    if not rows:
+        return 0, 0
+
+    chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 2000)
+    default_date = timezone.now()
+
     with transaction.atomic():
-        # OPTIMIZACIÓN: Desactivar espera de disco para velocidad extrema
-        # Riesgo aceptable: Si la DB crashea <500ms después, se pierden estos datos (el usuario reintenta).
+        # Desactivar synchronous_commit dentro de la transacción para acelerar COPY
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL synchronous_commit TO OFF;")
-        
-        # 1) Crear SurveyResponse en bloque
-        survey_responses = []
 
+        # ------------------------------------------------------------
+        # 1) Crear SurveyResponse por cada fila
+        # ------------------------------------------------------------
+        response_datetimes = []
         for row in rows:
-            created_at = base_created_at
+            created_at = default_date
+            if date_column and date_column in row:
+                parsed = parse_date_safe(row.get(date_column))
+                if parsed:
+                    created_at = parsed
+            response_datetimes.append(created_at)
 
-            if date_column and date_column in row and row[date_column]:
-                try:
-                    val = row[date_column]
-                    if not pd.isna(val):
-                        dt = pd.to_datetime(val)
-                        created_at = dt.to_pydatetime()
-                        # Asegurar que created_at sea aware si USE_TZ=True
-                        if timezone.is_naive(created_at):
-                            created_at = timezone.make_aware(created_at)
-                except (ValueError, TypeError):
-                    # Si falla, usamos base_created_at
-                    created_at = base_created_at
+        sr_objects = [
+            SurveyResponse(survey=survey, created_at=dt, is_anonymous=True)
+            for dt in response_datetimes
+        ]
+        created_srs = SurveyResponse.objects.bulk_create(sr_objects, batch_size=chunk_size)
 
-            survey_responses.append(
-                SurveyResponse(
-                    survey=survey,
-                    user=None,          # respuestas anónimas
-                    created_at=created_at,
-                    is_anonymous=True,
-                )
-            )
+        # ------------------------------------------------------------
+        # 2) Construir buffer CSV para COPY de QuestionResponse
+        # ------------------------------------------------------------
+        qr_buffer = io.StringIO()
+        qr_writer = csv.writer(
+            qr_buffer,
+            delimiter=",",
+            quotechar='"',
+            quoting=csv.QUOTE_MINIMAL,
+        )
 
-        SurveyResponse.objects.bulk_create(survey_responses, batch_size=chunk_size)
-
-        # 2) Crear QuestionResponse en bloque
-        answer_objects = []
-        new_options_to_create = []  # Para crear opciones en batch
+        final_rows_count = 0
 
         for idx, row in enumerate(rows):
-            sr = survey_responses[idx]
+            sr_id = created_srs[idx].id
 
-            for column_name, value in row.items():
-                # Ignorar columnas no mapeadas
-                if column_name not in questions_map:
+            for col_name, raw_val in row.items():
+                # Saltar columna de fecha
+                if col_name == date_column:
                     continue
 
-                # Ignorar NaN o cadenas vacías
-                if value is None or (isinstance(value, float) and pd.isna(value)):
-                    continue
-                if isinstance(value, str) and not value.strip():
+                # Sólo consideramos columnas que tienen una pregunta asociada
+                if col_name not in questions_map:
                     continue
 
-                qdata = questions_map[column_name]
-                question = qdata.get("question")
-                dtype = qdata.get("dtype", "text")
-                options = qdata.get("options", {}) or {}
+                if pd.isna(raw_val) or raw_val == "":
+                    continue
 
-                # SINGLE CHOICE
-                if dtype == "single":
-                    val_str = str(value).strip()
-                    option = options.get(val_str)
+                s_val = str(raw_val).strip()
+                if not s_val:
+                    continue
 
-                    if option is None:
-                        # Crear nueva opción en memoria, se guardará en batch después
-                        option = AnswerOption(
-                            question=question,
-                            text=val_str,
-                            order=len(options) + len(new_options_to_create) + 1,
-                        )
-                        new_options_to_create.append(option)
-                        options[val_str] = option  # actualizar cache en questions_map
+                q_data = questions_map[col_name]
+                question = q_data["question"]
+                dtype = q_data["dtype"]
+                options_map = q_data.get("options", {})
 
-                    answer_objects.append(
-                        QuestionResponse(
-                            survey_response=sr,
-                            question=question,
-                            selected_option=option,
-                            numeric_value=None,
-                            text_value=None,
-                        )
-                    )
+                q_id = question.id
+                so_id = "\\N"
+                text_val = "\\N"
+                num_val = "\\N"
 
-                # MULTI CHOICE (valores separados por coma)
-                elif dtype == "multi":
-                    parts = str(value).split(",")
-                    for part in parts:
-                        val_str = part.strip()
-                        if not val_str:
-                            continue
-                        option = options.get(val_str)
-                        if option is None:
-                            option = AnswerOption(
-                                question=question,
-                                text=val_str,
-                                order=len(options) + len(new_options_to_create) + 1,
-                            )
-                            new_options_to_create.append(option)
-                            options[val_str] = option
-                        answer_objects.append(
-                            QuestionResponse(
-                                survey_response=sr,
-                                question=question,
-                                selected_option=option,
-                                numeric_value=None,
-                                text_value=None,
-                            )
-                        )
+                try:
+                    if dtype == "single":
+                        # Opción única: intentamos mapear a AnswerOption por texto
+                        if s_val in options_map:
+                            so_id = options_map[s_val].id
+                        else:
+                            # Si la opción no existe (typo, valor nuevo...), guardamos como texto
+                            text_val = s_val.replace("\n", " ").replace("\r", "")[:5000]
 
-                # NUMBER / SCALE (valor numérico)
-                elif dtype == "number" or dtype == "scale":
-                    try:
-                        # Convertir a int primero (el campo es IntegerField, no FloatField)
-                        num_val = int(float(value))
-                    except (ValueError, TypeError):
+                    elif dtype == "multi":
+                        # Opción múltiple: podemos generar varias filas QuestionResponse
+                        for part in _split_multi_value(s_val):
+                            if part in options_map:
+                                sub_so_id = options_map[part].id
+                                qr_writer.writerow([sr_id, q_id, sub_so_id, "\\N", "\\N"])
+                                final_rows_count += 1
+                            else:
+                                # Si no encaja con ninguna opción conocida, lo almacenamos como texto independiente
+                                text_entry = part.replace("\n", " ").replace("\r", "")[:5000]
+                                qr_writer.writerow([sr_id, q_id, "\\N", text_entry, "\\N"])
+                                final_rows_count += 1
+                        # Ya hemos generado las filas correspondientes a esta pregunta
                         continue
 
-                    answer_objects.append(
-                        QuestionResponse(
-                            survey_response=sr,
-                            question=question,
-                            selected_option=None,
-                            numeric_value=num_val,
-                            text_value=None,
+                    elif dtype in ("number", "scale"):
+                        # Valores numéricos / de escala.
+                        num, fallback_text = _clean_numeric_value(s_val)
+                        if num is not None:
+                            num_val = num
+                        elif fallback_text is not None:
+                            text_val = fallback_text.replace("\n", " ").replace("\r", "")[:5000]
+
+                    else:
+                        # Texto libre
+                        text_val = s_val.replace("\n", " ").replace("\r", "")[:5000]
+
+                    qr_writer.writerow([sr_id, q_id, so_id, text_val, num_val])
+                    final_rows_count += 1
+
+                except Exception:
+                    # Nunca queremos detener todo el import por una fila problemática.
+                    continue
+
+        # ------------------------------------------------------------
+        # 3) COPY a PostgreSQL
+        # ------------------------------------------------------------
+        qr_buffer.seek(0)
+        table = QuestionResponse._meta.db_table
+        cols = "(survey_response_id, question_id, selected_option_id, text_value, numeric_value)"
+        sql = f"COPY {table} {cols} FROM STDIN WITH (FORMAT CSV, NULL '\\N')"
+
+        with connection.cursor() as cursor:
+            try:
+                if hasattr(cursor, "copy_expert"):
+                    cursor.copy_expert(sql, qr_buffer)
+                elif hasattr(cursor, "copy"):
+                    with cursor.copy(sql) as copy:
+                        copy.write(qr_buffer.read())
+                else:  # pragma: no cover - drivers antiguos
+                    # Fallback muy lento, pero evita perder los datos
+                    qr_buffer.seek(0)
+                    reader = csv.reader(qr_buffer)
+                    for row in reader:
+                        (
+                            sr_id,
+                            q_id,
+                            so_id,
+                            text_value,
+                            numeric_value,
+                        ) = row
+                        QuestionResponse.objects.create(
+                            survey_response_id=int(sr_id),
+                            question_id=int(q_id),
+                            selected_option_id=None if so_id == "\\N" else int(so_id),
+                            text_value=None if text_value == "\\N" else text_value,
+                            numeric_value=None if numeric_value == "\\N" else int(numeric_value),
                         )
-                    )
+            except Exception as e:  # pragma: no cover - logging en producción
+                print(f"[IMPORT][COPY_ERROR] {e}")
 
-                # TEXT (default)
-                else:
-                    text_val = str(value)
-                    text_val = text_val.replace("\t", " ").replace("\n", " ").strip()
-                    text_val = text_val[:500]
-
-                    if not text_val:
-                        continue
-
-                    answer_objects.append(
-                        QuestionResponse(
-                            survey_response=sr,
-                            question=question,
-                            selected_option=None,
-                            numeric_value=None,
-                            text_value=text_val,
-                        )
-                    )
-
-        # Crear nuevas opciones en batch ANTES de crear las respuestas
-        if new_options_to_create:
-            AnswerOption.objects.bulk_create(new_options_to_create, batch_size=chunk_size)
-
-        # Inserción de QuestionResponse: vía COPY para máximo rendimiento si está habilitado
-        use_copy = getattr(settings, 'SURVEY_IMPORT_USE_COPY_QR', True)
-        if use_copy and answer_objects:
-            table = QuestionResponse._meta.db_table
-            columns = [
-                'survey_response_id',
-                'question_id',
-                'selected_option_id',
-                'text_value',
-                'numeric_value',
-            ]
-
-            # Construir CSV en memoria con valores NULL como \N
-            buf = io.StringIO()
-            for obj in answer_objects:
-                sr_id = obj.survey_response_id or (obj.survey_response.id if obj.survey_response else None)
-                q_id = obj.question_id or (obj.question.id if obj.question else None)
-                so_id = obj.selected_option_id or (obj.selected_option.id if obj.selected_option else None)
-                txt = obj.text_value if obj.text_value is not None else '\\N'
-                num = obj.numeric_value if obj.numeric_value is not None else '\\N'
-                # Escapar comas y nuevas líneas en texto
-                if txt != '\\N':
-                    txt = str(txt).replace('\n', ' ').replace('\r', ' ')
-                buf.write(f"{sr_id},{q_id},{so_id if so_id is not None else '\\N'},{txt},{num}\n")
-
-            buf.seek(0)
-            with connection.cursor() as cursor:
-                copy_sql = (
-                    f"COPY {table} ({', '.join(columns)}) FROM STDIN WITH (FORMAT CSV, DELIMITER ',', NULL '\\N')"
-                )
-                # Soporte para psycopg2
-                if hasattr(cursor, 'copy_expert'):
-                    cursor.copy_expert(copy_sql, buf)
-                # Soporte para psycopg3
-                elif hasattr(cursor, 'copy'):
-                    # psycopg3 API: cursor.copy(sql) context manager y .write()
-                    buf.seek(0)
-                    with cursor.copy(copy_sql) as cp:
-                        cp.write(buf.read())
-                else:
-                    # Fallback: si el driver no soporta COPY, usar bulk_create
-                    QuestionResponse.objects.bulk_create(answer_objects, batch_size=chunk_size)
-        elif answer_objects:
-            QuestionResponse.objects.bulk_create(answer_objects, batch_size=chunk_size)
-
-    return len(survey_responses), len(answer_objects)
+    return len(rows), final_rows_count

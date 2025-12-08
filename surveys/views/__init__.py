@@ -25,7 +25,6 @@ from .crud_views import (
 from .import_views import (
     import_survey_csv_async,
     import_job_status,
-    import_multiple_surveys_view,
     import_csv_preview_view,
     import_responses_view,
 )
@@ -49,6 +48,8 @@ __all__ = [
     'import_views',
     'report_views',
     'respond_views',
+    'question_views',
+    
     # CRUD views
     'SurveyListView',
     'SurveyDetailView',
@@ -56,12 +57,13 @@ __all__ = [
     'SurveyUpdateView',
     'SurveyDeleteView',
     'bulk_delete_surveys_view',
+    
     # Import views
     'import_survey_csv_async',
     'import_job_status',
-    'import_multiple_surveys_view',
     'import_csv_preview_view',
     'import_responses_view',
+    
     # Report views
     'survey_results_view',
     'export_survey_csv_view',
@@ -69,7 +71,7 @@ __all__ = [
     'change_survey_status',
     'debug_analysis_view',
     'survey_analysis_ajax',
+    
     # Respond views
     'respond_survey_view',
 ]
-

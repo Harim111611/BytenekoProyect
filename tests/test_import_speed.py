@@ -3,7 +3,7 @@ import os
 import django
 import time
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.test')
 django.setup()
 from surveys.signals import disable_signals, enable_signals
 from django.core.management import call_command

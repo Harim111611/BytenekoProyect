@@ -108,9 +108,28 @@
                         </div>
 
                         <div class="mt-4">
-                            <button type="submit" class="btn btn-primary w-100 mb-2" formaction="{% url 'report_pdf' %}">
+                            <button type="button" id="generate-pdf-btn" class="btn btn-primary w-100 mb-2">
                                 <i class="bi bi-file-earmark-pdf-fill me-1"></i> Generar PDF
                             </button>
+                            {% block extra_js %}
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const pdfBtn = document.getElementById('generate-pdf-btn');
+                                if (pdfBtn) {
+                                    pdfBtn.addEventListener('click', function(e) {
+                                        const select = document.getElementById('survey_id');
+                                        const publicId = select ? select.value : '';
+                                        if (!publicId) {
+                                            alert('Selecciona una survey para generar el PDF.');
+                                            return;
+                                        }
+                                        const url = `{% url 'report_pdf' %}?public_id=${encodeURIComponent(publicId)}`;
+                                        window.location.href = url;
+                                    });
+                                }
+                            });
+                            </script>
+                            {% endblock %}
                             <button type="submit" class="btn btn-outline-primary w-100" formaction="{% url 'report_pptx' %}">
                                 <i class="bi bi-file-earmark-slides-fill me-1"></i> Generar PowerPoint
                             </button>

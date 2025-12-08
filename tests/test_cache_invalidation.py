@@ -1,7 +1,7 @@
 import pytest
 import os
 import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.test')
 django.setup()
 from surveys.models import Survey, SurveyResponse
 from django.contrib.auth.models import User

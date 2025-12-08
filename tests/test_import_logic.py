@@ -6,7 +6,7 @@ from surveys.models import ImportJob, Survey
 from django.contrib.auth.models import User
 from surveys.tasks import process_survey_import
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.test')
 django.setup()
 
 @pytest.mark.django_db

@@ -36,5 +36,5 @@ Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host ""
 
 & .\.venv\Scripts\activate.ps1
-$env:DJANGO_SETTINGS_MODULE = "byteneko.settings"
+$env:DJANGO_SETTINGS_MODULE = "byteneko.settings.production"
 python manage.py runserver 127.0.0.1:8010

@@ -16,6 +16,7 @@ from django.db.models import Count, Avg, Q, Min, Max
 from django.db.models.functions import TruncDate
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.serializers.json import DjangoJSONEncoder # <--- IMPORTANTE
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse
@@ -55,7 +56,9 @@ def _get_survey_quick_stats(survey_id, user_id):
             numeric_value__isnull=False
         ).aggregate(avg=Avg('numeric_value'))
         
-        stats['satisfaction_avg'] = round(sat_avg['avg'] or 0, 1)
+        # Convert to float to avoid Decimal serialization issues
+        avg_val = sat_avg['avg']
+        stats['satisfaction_avg'] = round(float(avg_val), 1) if avg_val is not None else 0
         
         cache.set(cache_key, stats, CACHE_TIMEOUT_STATS)
     
@@ -104,10 +107,11 @@ def _get_trend_data_fast(survey_id, days=14):
                 ).order_by('dia')
             )
             
-            sat_map = {
-                item['dia']: round(item['avg_satisfaction'] or 0, 1)
-                for item in daily_satisfaction
-            }
+            # Map and convert Decimals to floats explicitly
+            sat_map = {}
+            for item in daily_satisfaction:
+                val = item['avg_satisfaction']
+                sat_map[item['dia']] = round(float(val), 1) if val is not None else 0
             
             trend = {
                 'labels': labels,
@@ -326,22 +330,27 @@ def survey_results_view(request, public_id):
         total_respuestas = respuestas_qs.count()
         
         # Para filtros, usar análisis sin caché (datos específicos)
-        # Cache key versioned to include demographic aggregation changes
-        cache_key = f"survey_results_v11_{survey_id}_{start}_{end}_{segment_col}_{segment_val}_{segment_demo}"
+        # CACHE KEY UPDATE: v13 to ensure clean state
+        cache_key = f"survey_results_v13_{survey_id}_{start}_{end}_{segment_col}_{segment_val}_{segment_demo}"
         use_base_filter = False  # Use filtered IDs
     else:
         # Sin filtros: usar caché base
         respuestas_qs = SurveyResponse.objects.filter(survey=survey)
-        cache_key = f"survey_results_base_v11_{survey_id}"
+        # CACHE KEY UPDATE: v13 to ensure clean state
+        cache_key = f"survey_results_base_v13_{survey_id}"
         use_base_filter = True  # Use direct survey_id (fastest)
     
+    # 6. Detectar modo oscuro desde el query param 'theme'
+    theme = request.GET.get('theme', '')
+    dark_mode = theme == 'dark'
     # 6. Obtener análisis (con caché)
     analysis_result = SurveyAnalysisService.get_analysis_data(
         survey, 
         respuestas_qs, 
         include_charts=True,
         cache_key=cache_key,
-        use_base_filter=use_base_filter
+        use_base_filter=use_base_filter,
+        dark_mode=dark_mode
     )
     
     # 7. Obtener tendencia (cacheada)
@@ -372,10 +381,10 @@ def survey_results_view(request, public_id):
                 ).order_by('dia')
             )
             
-            sat_map = {
-                item['dia']: round(item['avg_satisfaction'] or 0, 1)
-                for item in daily_satisfaction
-            }
+            sat_map = {}
+            for item in daily_satisfaction:
+                val = item['avg_satisfaction']
+                sat_map[item['dia']] = round(float(val), 1) if val is not None else 0
             
             trend_data = {
                 'labels': labels,
@@ -385,7 +394,16 @@ def survey_results_view(request, public_id):
         else:
             trend_data = None
     
+    # Helper to convert Decimal to float for JSON
+    def to_float(val):
+        if val is None: return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return val
+
     # 8. Preparar datos para JSON (completo para gráficas)
+    # Convertimos explícitamente a float para evitar TypeError de JSON
     analysis_data_json = [
         {
             'id': item.get('id'),
@@ -396,8 +414,8 @@ def survey_results_view(request, public_id):
             'chart_data': item.get('chart_data', []),
             'insight': item.get('insight', ''),
             'total_respuestas': item.get('total_respuestas', 0),
-            'avg': item.get('avg'),
-            'estadisticas': item.get('estadisticas'),
+            'avg': to_float(item.get('avg')),
+            'estadisticas': {k: to_float(v) for k, v in item.get('estadisticas').items()} if item.get('estadisticas') else None,
             'opciones': item.get('opciones', []),
             'top_options': item.get('top_options', [])
         }
@@ -432,17 +450,21 @@ def survey_results_view(request, public_id):
         .order_by('order')
     )
     
+    # FIX: Acceso defensivo a nps_data
+    nps_data = analysis_result.get('nps_data', {'score': 0})
+    
     context = {
         'survey': survey,
         'total_respuestas': total_respuestas,
-        'nps_score': analysis_result['nps_data'].get('score', 0),
-        'nps_data': analysis_result['nps_data'],
+        'nps_score': nps_data.get('score', 0),
+        'nps_data': nps_data,
         'metrics': {
-            'promedio_satisfaccion': round(analysis_result.get('kpi_prom_satisfaccion', 0), 1)
+            'promedio_satisfaccion': round(float(analysis_result.get('kpi_prom_satisfaccion', 0)), 1)
         },
         'analysis_data': analysis_result['analysis_data'],
-        'analysis_data_json': json.dumps(analysis_data_json),
-        'trend_data': json.dumps(trend_data) if trend_data else None,
+        # Usamos DjangoJSONEncoder como respaldo para fechas y otros tipos
+        'analysis_data_json': json.dumps(analysis_data_json, cls=DjangoJSONEncoder),
+        'trend_data': json.dumps(trend_data, cls=DjangoJSONEncoder) if trend_data else None,
         'top_insights': top_insights,
         'heatmap_image': analysis_result.get('heatmap_image'),
         'heatmap_image_dark': analysis_result.get('heatmap_image_dark'),
@@ -545,8 +567,8 @@ def survey_analysis_ajax(request, public_id):
     except Exception:
         return JsonResponse({'error': 'Sin permisos'}, status=403)
     
-    # Usar caché base
-    cache_key = f"survey_results_base_{survey.pk}"
+    # Usar caché base (v12)
+    cache_key = f"survey_results_base_v12_{survey.pk}"
     respuestas_qs = SurveyResponse.objects.filter(survey=survey)
     
     analysis = SurveyAnalysisService.get_analysis_data(
@@ -557,11 +579,11 @@ def survey_analysis_ajax(request, public_id):
     return JsonResponse({
         'success': True,
         'analysis_data': analysis['analysis_data'],
-        'nps_data': analysis['nps_data'],
+        'nps_data': analysis.get('nps_data', {'score': 0}),
         'heatmap_image': analysis.get('heatmap_image'),
         'heatmap_image_dark': analysis.get('heatmap_image_dark'),
         'ignored_questions': analysis.get('ignored_questions', []),
-    })
+    }, encoder=DjangoJSONEncoder) # Encoder en JsonResponse también
 
 
 @login_required
@@ -593,7 +615,7 @@ def debug_analysis_view(request, public_id):
         'survey_id': survey.id,
         'summary': summary,
         'ignored_questions': analysis.get('ignored_questions', [])
-    })
+    }, encoder=DjangoJSONEncoder)
 
 
 # --- Vista de agradecimiento ---

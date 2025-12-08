@@ -1,333 +1,353 @@
 # surveys/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from django.db.models import Count
+from django.db.models import Count, Avg
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
+from django.utils.translation import gettext_lazy as _
+from .models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse, ImportJob
 
+# --- 1. CONFIGURACIÓN DE BRANDING (Identidad Visual) ---
+admin.site.site_header = "Administración Byteneko"
+admin.site.site_title = "Byteneko Portal"
+admin.site.index_title = "Panel de Control de Encuestas"
+admin.site.enable_nav_sidebar = True  # Barra lateral de navegación moderna
+
+# --- Inlines ---
+
+class CsvLogInline(admin.TabularInline):
+    """
+    Permite ver el historial de importaciones CSV directamente 
+    dentro de la ficha de la Encuesta.
+    """
+    model = ImportJob
+    extra = 0
+    fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_message')
+    readonly_fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_message')
+    can_delete = False
+    show_change_link = True
+    classes = ('collapse',)
+    verbose_name = "Historial de Importación CSV"
+    verbose_name_plural = "Historial de Importaciones CSV"
+
+    def status_pill_inline(self, obj):
+        colors = {
+            'completed': 'green', 'failed': 'red', 
+            'processing': 'orange', 'pending': 'gray'
+        }
+        return format_html(
+            '<span style="color: white; background-color: {}; padding: 3px 8px; border-radius: 10px; font-size: 10px;">{}</span>',
+            colors.get(obj.status, 'gray'),
+            obj.get_status_display().upper()
+        )
+    status_pill_inline.short_description = 'Estado'
 
 class AnswerOptionInline(admin.TabularInline):
     model = AnswerOption
     extra = 1
-    fields = ('text', 'order')
+    fields = ('text', 'order', 'preview_usage')
+    readonly_fields = ('preview_usage',)
     ordering = ['order']
+    classes = ('collapse',)
 
+    def preview_usage(self, obj):
+        # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
+        manager = getattr(obj, 'questionresponse', None) or getattr(obj, 'questionresponse_set', None)
+        count = manager.count() if manager else 0
+        return f"{count} selecciones"
 
 class QuestionInline(admin.StackedInline):
     model = Question
     extra = 0
-    fields = ('text', 'type', 'is_required', 'order', 'is_demographic', 'demographic_type')
+    fields = ('text', 'type', 'is_required', 'order', 'is_demographic')
     ordering = ['order']
     show_change_link = True
-
+    classes = ('collapse',)
 
 class QuestionResponseInline(admin.TabularInline):
     model = QuestionResponse
     extra = 0
-    fields = ('question', 'selected_option', 'numeric_value', 'text_value')
-    readonly_fields = ('question', 'selected_option', 'numeric_value', 'text_value')
+    fields = ('question', 'response_value')
+    readonly_fields = ('question', 'response_value')
     can_delete = False
-    max_num = 0  # No permitir agregar nuevos
+    max_num = 0
 
+    def response_value(self, obj):
+        if obj.selected_option:
+            return obj.selected_option.text
+        return obj.text_value or obj.numeric_value or "-"
+
+# --- Model Admins ---
 
 @admin.register(Survey)
 class SurveyAdmin(admin.ModelAdmin):
+    # Optimización visual de la lista
     list_display = (
         'title', 
         'status_badge', 
+        'progress_bar',  # Nueva barra visual
+        'metrics_summary', # Nuevos contadores
         'author', 
-        'response_count',
-        'category',
-        'sample_goal',
-        'completion_percentage',
         'created_at'
     )
     list_filter = ('status', 'category', 'created_at', 'author')
-    search_fields = ('title', 'description', 'author__username')
-    inlines = [QuestionInline]
-    readonly_fields = ('created_at', 'updated_at', 'response_stats', 'question_count')
-    date_hierarchy = 'created_at'
+    search_fields = ('title', 'description', 'public_id')
+    readonly_fields = ('created_at', 'updated_at', 'quick_analysis') # Nuevo panel de análisis
     
+    # Django 5.0+: Muestra conteos en los filtros laterales
+    show_facets = admin.ShowFacets.ALWAYS
+    
+    # AGREGADO: CsvLogInline para ver logs dentro de la encuesta
+    inlines = [QuestionInline, CsvLogInline] 
+    date_hierarchy = 'created_at'
+    list_per_page = 20
+
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('title', 'description', 'category', 'status', 'author')
+        ('🎯 Tablero Principal', {
+            'fields': ('title', 'quick_analysis', 'status')
         }),
-        ('Goals & Metrics', {
-            'fields': ('sample_goal', 'response_stats', 'question_count')
+        ('⚙️ Configuración', {
+            'fields': ('description', 'category', 'sample_goal', 'author', 'public_id'),
+            'classes': ('collapse',),
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
+        ('📅 Auditoría', {
+            'fields': ('created_at', 'updated_at', 'is_imported'),
+            'classes': ('collapse',),
         }),
     )
-    
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.annotate(
             _response_count=Count('responses', distinct=True),
             _question_count=Count('questions', distinct=True)
         )
-    
+
+    # --- Widgets Visuales ---
+
+    @admin.display(description='Progreso')
+    def progress_bar(self, obj):
+        """Barra de progreso visual basada en la meta de muestra."""
+        if obj.sample_goal <= 0:
+            return "—"
+        
+        count = getattr(obj, '_response_count', obj.responses.count())
+        percent = min((count / obj.sample_goal) * 100, 100)
+        
+        # Color dinámico: Rojo < 30%, Amarillo < 70%, Verde > 70%
+        color = "#dc3545" if percent < 30 else "#ffc107" if percent < 70 else "#28a745"
+        
+        return format_html(
+            '''
+            <div style="width: 100px; background-color: #e9ecef; border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle;">
+                <div style="width: {}%; background-color: {}; height: 10px;"></div>
+            </div>
+            <span style="font-size: 11px; margin-left: 5px;">{:.0f}%</span>
+            ''',
+            percent,
+            color,
+            percent
+        )
+
+    @admin.display(description='Métricas')
+    def metrics_summary(self, obj):
+        """Muestra contadores clave en una sola columna."""
+        resps = getattr(obj, '_response_count', 0)
+        quest = getattr(obj, '_question_count', 0)
+        return format_html(
+            '<span title="Respuestas">📥 {}</span> &nbsp;|&nbsp; <span title="Preguntas">❓ {}</span>',
+            resps,
+            quest
+        )
+
+    @admin.display(description='Estado')
     def status_badge(self, obj):
         colors = {
-            'draft': '#6c757d',
-            'active': '#28a745',
-            'closed': '#dc3545'
+            'draft': '#6c757d',   # Gris
+            'active': '#28a745',  # Verde
+            'closed': '#343a40',  # Oscuro
+            'paused': '#ffc107'   # Amarillo
         }
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px; font-size: 11px;">{}</span>',
-            colors.get(obj.status, '#6c757d'),
-            obj.get_status_display()
+            '<span style="background-color: {}; color: white; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 11px;">{}</span>',
+            colors.get(obj.status, 'black'),
+            obj.get_status_display().upper()
         )
-    status_badge.short_description = 'Status'
-    status_badge.admin_order_field = 'status'
-    
-    def response_count(self, obj):
-        count = obj._response_count if hasattr(obj, '_response_count') else obj.responses.count()
-        return format_html('<strong>{}</strong>', count)
-    response_count.short_description = 'Responses'
-    response_count.admin_order_field = '_response_count'
-    
-    def question_count(self, obj):
-        count = obj._question_count if hasattr(obj, '_question_count') else obj.questions.count()
-        return format_html('{} questions', count)
-    question_count.short_description = 'Questions'
-    
-    def completion_percentage(self, obj):
-        if obj.sample_goal == 0:
-            return '—'
-        count = obj._response_count if hasattr(obj, '_response_count') else obj.responses.count()
-        percentage = (count / obj.sample_goal) * 100
-        color = '#28a745' if percentage >= 100 else '#ffc107' if percentage >= 50 else '#dc3545'
-        return format_html(
-            '<div style="width: 100px; background: #e9ecef; border-radius: 3px; overflow: hidden;">'
-            '<div style="width: {}%; background: {}; padding: 2px 5px; color: white; font-size: 10px; text-align: center;">{}%</div>'
-            '</div>',
-            min(percentage, 100),
-            color,
-            int(percentage)
-        )
-    completion_percentage.short_description = 'Progress'
-    
-    def response_stats(self, obj):
-        count = obj.responses.count()
-        return format_html(
-            '<strong>{}</strong> responses / <strong>{}</strong> goal',
-            count,
-            obj.sample_goal
-        )
-    response_stats.short_description = 'Response Statistics'
 
-    def delete_model(self, request, obj):
-        """Eliminación ultra-rápida usando SQL crudo, igual que en las vistas."""
-        from django.db import transaction, connection
-        # _fast_delete_surveys was moved/removed; use helper from tasks for single deletions
-        from surveys.tasks import perform_delete_surveys
-        from surveys.signals import DisableSignals
-        from django.core.cache import cache
-        survey_id = obj.id
-        author_id = obj.author.id if obj.author else None
-        with DisableSignals():
-            try:
-                with transaction.atomic():
-                    # Use perform_delete_surveys helper to remove the survey for its author
-                    # Pass the survey's author (or author id) so helper validates ownership
-                    perform_delete_surveys([survey_id], obj.author.id if obj.author else request.user.id)
-            except Exception as e:
-                import logging
-                logger = logging.getLogger('surveys')
-                logger.error(f"[ADMIN] Error eliminando encuesta {survey_id}: {e}", exc_info=True)
-                raise
-        # Limpiar caché igual que en la vista
-        if author_id:
-            cache.delete(f"dashboard_data_user_{author_id}")
-            try:
-                cache.delete(f"survey_stats_{survey_id}")
-            except Exception:
-                pass
+    @admin.display(description='Análisis Rápido')
+    def quick_analysis(self, obj):
+        """
+        Inyecta una tabla HTML dentro del formulario de detalle
+        con los resultados preliminares.
+        """
+        total_responses = obj.responses.count()
+        if total_responses == 0:
+            return "Sin datos para analizar aún."
 
-    def delete_queryset(self, request, queryset):
-        """Eliminación ultra-rápida masiva desde el admin usando SQL crudo."""
-        from django.db import transaction
-        from surveys.signals import DisableSignals
-        from django.core.cache import cache
-        survey_ids = list(queryset.values_list('id', flat=True))
-        author_ids = list(queryset.values_list('author_id', flat=True))
-        with DisableSignals():
-            try:
-                with transaction.atomic():
-                    # Perform an unconditional ORM delete for the given survey ids.
-                    # We avoid relying on the removed _fast_delete_surveys helper here.
-                    Survey.objects.filter(id__in=survey_ids).delete()
-            except Exception as e:
-                import logging
-                logger = logging.getLogger('surveys')
-                logger.error(f"[ADMIN] Error eliminando encuestas {survey_ids}: {e}", exc_info=True)
-                raise
-        # Limpiar caché para todos los autores afectados
-        for author_id, survey_id in zip(author_ids, survey_ids):
-            if author_id:
-                cache.delete(f"dashboard_data_user_{author_id}")
-                try:
-                    cache.delete(f"survey_stats_{survey_id}")
-                except Exception:
-                    pass
+        # Obtenemos las primeras 5 preguntas para no saturar
+        questions = obj.questions.all()[:5]
+        
+        html_rows = ""
+        for q in questions:
+            # Lógica simple de visualización según tipo
+            preview_data = "Texto libre / Numérico"
+            if q.type in ['single', 'multi']:
+                # Calcular top opción
+                # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
+                top_opt = AnswerOption.objects.filter(question=q)\
+                    .annotate(num_answers=Count('questionresponse'))\
+                    .order_by('-num_answers').first()
+                if top_opt and top_opt.num_answers > 0:
+                    pct = int((top_opt.num_answers / total_responses) * 100)
+                    preview_data = f"Top: <strong>{top_opt.text}</strong> ({pct}%)"
+                else:
+                    preview_data = "Sin selecciones"
+            
+            html_rows += f"""
+                <tr>
+                    <td style="padding: 5px; border-bottom: 1px solid #eee;">{q.text[:40]}...</td>
+                    <td style="padding: 5px; border-bottom: 1px solid #eee;">
+                        <span class="badge" style="background:#eee; padding:2px 5px;">{q.get_type_display()}</span>
+                    </td>
+                    <td style="padding: 5px; border-bottom: 1px solid #eee;">{preview_data}</td>
+                </tr>
+            """
+
+        return format_html(
+            '''
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #17a2b8;">
+                <h4 style="margin-top:0;">📊 Resumen Ejecutivo (Total: {})</h4>
+                <table style="width:100%; font-size: 12px;">
+                    <thead>
+                        <tr style="text-align:left; color: #666;">
+                            <th>Pregunta</th>
+                            <th>Tipo</th>
+                            <th>Tendencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {}
+                    </tbody>
+                </table>
+                <p style="margin-bottom:0; margin-top:10px; font-size:11px; color:#666;">
+                    * Mostrando primeras 5 preguntas.
+                </p>
+            </div>
+            ''',
+            total_responses,
+            mark_safe(html_rows)
+        )
 
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('text_preview', 'survey_link', 'type_badge', 'order', 'is_required', 'is_demographic', 'demographic_type', 'option_count')
-    list_filter = ('type', 'is_required', 'is_demographic', 'demographic_type', 'survey__status')
-    search_fields = ('text', 'survey__title')
+    list_display = ('text_short', 'survey_link', 'type_visual', 'is_required', 'stats_usage')
+    list_filter = ('type', 'survey', 'is_analyzable')
+    search_fields = ('text',)
+    list_select_related = ('survey',)
+    show_facets = admin.ShowFacets.ALWAYS
     inlines = [AnswerOptionInline]
-    readonly_fields = ('option_count',)
-    list_per_page = 50
-    
-    fieldsets = (
-        ('Question Details', {
-            'fields': ('survey', 'text', 'type', 'is_required', 'order', 'is_demographic', 'demographic_type')
-        }),
-        ('Statistics', {
-            'fields': ('option_count',),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    def text_preview(self, obj):
-        return obj.text[:60] + '...' if len(obj.text) > 60 else obj.text
-    text_preview.short_description = 'Question Text'
-    
+
+    @admin.display(description='Pregunta')
+    def text_short(self, obj):
+        return (obj.text[:60] + '...') if len(obj.text) > 60 else obj.text
+
+    @admin.display(description='Encuesta', ordering='survey')
     def survey_link(self, obj):
-        url = reverse('admin:surveys_survey_change', args=[obj.survey.id])
-        return format_html('<a href="{}">{}</a>', url, obj.survey.title)
-    survey_link.short_description = 'Survey'
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:surveys_survey_change', args=[obj.survey.id]),
+            obj.survey.title
+        )
+
+    @admin.display(description='Tipo')
+    def type_visual(self, obj):
+        icons = {
+            'text': '📝', 'number': '🔢', 'scale': '⚖️',
+            'single': '🔘', 'multi': '☑️'
+        }
+        return f"{icons.get(obj.type, '')} {obj.get_type_display()}"
+
+    @admin.display(description='Datos')
+    def stats_usage(self, obj):
+        # Muestra si tiene opciones
+        count = obj.options.count()
+        if count > 0:
+            return f"{count} Opciones"
+        return "Abierta"
+
+
+@admin.register(SurveyResponse)
+class SurveyResponseAdmin(admin.ModelAdmin):
+    list_display = ('id_visual', 'survey_link', 'user', 'created_at', 'completion_status')
+    list_filter = ('survey', 'created_at', 'is_anonymous')
+    date_hierarchy = 'created_at'
+    inlines = [QuestionResponseInline]
+    show_facets = admin.ShowFacets.ALWAYS
     
-    def type_badge(self, obj):
+    @admin.display(description='ID')
+    def id_visual(self, obj):
+        return f"#{obj.id}"
+
+    @admin.display(description='Encuesta')
+    def survey_link(self, obj):
+        return obj.survey.title
+
+    @admin.display(description='Completado')
+    def completion_status(self, obj):
+        # Visual simple para ver si respondió algo
+        answered = obj.question_responses.count()
+        return format_html(
+            '<span style="color:green;">✔ {} Respuestas</span>', answered
+        ) if answered > 0 else format_html('<span style="color:red;">Vacío</span>')
+
+
+@admin.register(ImportJob)
+class ImportJobAdmin(admin.ModelAdmin):
+    list_display = ('file_info', 'status_pill', 'survey_created', 'created_at')
+    list_filter = ('status', 'created_at')
+    readonly_fields = ('processed_rows', 'error_message', 'csv_file')
+    show_facets = admin.ShowFacets.ALWAYS
+
+    @admin.display(description='Archivo')
+    def file_info(self, obj):
+        name = obj.original_filename or obj.csv_file
+        return format_html(
+            '<strong>{}</strong><br><small>{}</small>', 
+            name, 
+            obj.survey_title or "-"
+        )
+
+    @admin.display(description='Estado')
+    def status_pill(self, obj):
         colors = {
-            'text': '#6c757d',
-            'number': '#007bff',
-            'scale': '#17a2b8',
-            'single': '#28a745',
-            'multi': '#ffc107'
+            'completed': 'green', 'failed': 'red', 
+            'processing': 'orange', 'pending': 'gray'
         }
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 10px;">{}</span>',
-            colors.get(obj.type, '#6c757d'),
-            obj.get_type_display()
+            '<span style="color: white; background-color: {}; padding: 3px 8px; border-radius: 10px; font-size: 10px;">{}</span>',
+            colors.get(obj.status, 'gray'),
+            obj.get_status_display().upper()
         )
-    type_badge.short_description = 'Type'
-    type_badge.admin_order_field = 'type'
-    
-    def option_count(self, obj):
-        count = obj.options.count()
-        return format_html('{} options', count) if count > 0 else '—'
-    option_count.short_description = 'Answer Options'
 
+    @admin.display(description='Encuesta Generada')
+    def survey_created(self, obj):
+        if obj.survey:
+            url = reverse('admin:surveys_survey_change', args=[obj.survey.id])
+            return format_html('<a href="{}">Ver Encuesta ➡</a>', url)
+        return "-"
 
 @admin.register(AnswerOption)
 class AnswerOptionAdmin(admin.ModelAdmin):
     list_display = ('text', 'question_preview', 'order', 'response_count')
     list_filter = ('question__type', 'question__survey')
     search_fields = ('text', 'question__text')
-    readonly_fields = ('response_count',)
     
     def question_preview(self, obj):
         return obj.question.text[:50] + '...' if len(obj.question.text) > 50 else obj.question.text
-    question_preview.short_description = 'Question'
     
     def response_count(self, obj):
-        count = obj.question_responses.count()
+        # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
+        manager = getattr(obj, 'questionresponse', None) or getattr(obj, 'questionresponse_set', None)
+        count = manager.count() if manager else 0
         return format_html('<strong>{}</strong> times selected', count)
-    response_count.short_description = 'Usage'
-
-
-@admin.register(SurveyResponse)
-class SurveyResponseAdmin(admin.ModelAdmin):
-    list_display = (
-        'id', 
-        'survey_link', 
-        'user_display',
-        'anonymous_badge',
-        'answer_count',
-        'created_at'
-    )
-    list_filter = ('survey', 'is_anonymous', 'created_at')
-    search_fields = ('survey__title', 'user__username')
-    readonly_fields = ('created_at', 'answer_count')
-    inlines = [QuestionResponseInline]
-    date_hierarchy = 'created_at'
-    
-    fieldsets = (
-        ('Response Information', {
-            'fields': ('survey', 'user', 'is_anonymous')
-        }),
-        ('Statistics', {
-            'fields': ('answer_count', 'created_at')
-        }),
-    )
-    
-    def survey_link(self, obj):
-        url = reverse('admin:surveys_survey_change', args=[obj.survey.id])
-        return format_html('<a href="{}">{}</a>', url, obj.survey.title)
-    survey_link.short_description = 'Survey'
-    
-    def user_display(self, obj):
-        if obj.user:
-            return obj.user.username
-        return '—'
-    user_display.short_description = 'User'
-    
-    def anonymous_badge(self, obj):
-        if obj.is_anonymous:
-            return format_html(
-                '<span style="background-color: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 10px;">ANONYMOUS</span>'
-            )
-        return '—'
-    anonymous_badge.short_description = 'Type'
-    
-    def answer_count(self, obj):
-        count = obj.question_responses.count()
-        return format_html('<strong>{}</strong> answers', count)
-    answer_count.short_description = 'Answers'
-
-
-@admin.register(QuestionResponse)
-class QuestionResponseAdmin(admin.ModelAdmin):
-    list_display = (
-        'id',
-        'survey_link',
-        'question_preview',
-        'response_value',
-        'created_date'
-    )
-    list_filter = ('question__type', 'survey_response__survey', 'survey_response__created_at')
-    search_fields = ('question__text', 'text_value', 'survey_response__survey__title')
-    readonly_fields = ('survey_response', 'question', 'selected_option', 'numeric_value', 'text_value')
-    date_hierarchy = 'survey_response__created_at'
-    
-    def survey_link(self, obj):
-        url = reverse('admin:surveys_survey_change', args=[obj.survey_response.survey.id])
-        return format_html('<a href="{}">{}</a>', url, obj.survey_response.survey.title)
-    survey_link.short_description = 'Survey'
-    
-    def question_preview(self, obj):
-        text = obj.question.text
-        return text[:40] + '...' if len(text) > 40 else text
-    question_preview.short_description = 'Question'
-    
-    def response_value(self, obj):
-        if obj.selected_option:
-            return format_html('<span style="color: #28a745;">✓ {}</span>', obj.selected_option.text)
-        elif obj.numeric_value is not None:
-            return format_html('<strong>{}</strong>', obj.numeric_value)
-        elif obj.text_value:
-            preview = obj.text_value[:50] + '...' if len(obj.text_value) > 50 else obj.text_value
-            return format_html('<em>{}</em>', preview)
-        return '—'
-    response_value.short_description = 'Answer'
-    
-    def created_date(self, obj):
-        return obj.survey_response.created_at
-    created_date.short_description = 'Date'
-    created_date.admin_order_field = 'survey_response__created_at'

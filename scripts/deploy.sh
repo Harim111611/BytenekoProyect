@@ -15,14 +15,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Variables
-PROJECT_DIR="/var/www/byteneko"
-VENV_DIR="$PROJECT_DIR/venv"
-PYTHON="$VENV_DIR/bin/python"
-PIP="$VENV_DIR/bin/pip"
-MANAGE="$PYTHON $PROJECT_DIR/manage.py"
-CELERY="$VENV_DIR/bin/celery"
 
-export DJANGO_SETTINGS_MODULE="byteneko.settings_production"
+# Set DJANGO_SETTINGS_MODULE to new path
+export DJANGO_SETTINGS_MODULE="byteneko.settings.production"
+
+# If you want to use local or test settings, change to:
+# export DJANGO_SETTINGS_MODULE="byteneko.settings.local"
+# export DJANGO_SETTINGS_MODULE="byteneko.settings.test"
 
 # Funciones de ayuda
 print_success() {

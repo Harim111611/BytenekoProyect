@@ -11,7 +11,7 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_ENV', 'local')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
+os.environ.setdefault('DJANGO_ENV', os.environ.get('DJANGO_ENV', 'local'))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.base')
 
 application = get_asgi_application()

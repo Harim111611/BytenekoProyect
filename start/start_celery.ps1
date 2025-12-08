@@ -7,7 +7,7 @@ Write-Host "Iniciando Celery Worker..." -ForegroundColor Cyan
 & .\.venv\Scripts\activate.ps1
 
 # Configurar settings
-$env:DJANGO_SETTINGS_MODULE = "byteneko.settings"
+$env:DJANGO_SETTINGS_MODULE = "byteneko.settings.production"
 
 # Iniciar Celery con 4 workers
 Write-Host "Celery worker corriendo con 4 workers (pool=solo para Windows)" -ForegroundColor Green

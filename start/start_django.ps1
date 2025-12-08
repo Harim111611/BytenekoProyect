@@ -10,7 +10,7 @@ Remove-Item Env:DJANGO_SETTINGS_MODULE -ErrorAction SilentlyContinue
 & .\.venv\Scripts\activate.ps1
 
 # Configurar settings
-$env:DJANGO_SETTINGS_MODULE = "byteneko.settings"
+$env:DJANGO_SETTINGS_MODULE = "byteneko.settings.local"
 
 # Iniciar servidor
 Write-Host "Django corriendo en http://127.0.0.1:8010" -ForegroundColor Green

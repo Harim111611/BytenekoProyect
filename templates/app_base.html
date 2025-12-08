@@ -79,22 +79,8 @@
 
     </aside>
 
+
     <main class="app-content">
-
-        {# --- HEADER MÓVIL (Solo visible en pantallas < lg) --- #}
-        <header class="d-lg-none border-bottom bg-body px-4 py-3 d-flex align-items-center justify-content-between mb-3">
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-outline-secondary border-0 p-1" id="sidebarToggleBtn">
-                    <i class="bi bi-list fs-2"></i>
-                </button>
-                <span class="fs-5 fw-bold ms-2">Byteneko</span>
-            </div>
-            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                 style="width: 32px; height: 32px; font-size: 0.8rem;">
-                {{ request.user.username|first|upper }}
-            </div>
-        </header>
-
         {% block app_content %}
         {% endblock %}
     </main>
@@ -120,5 +106,37 @@
             if(overlay) overlay.addEventListener('click', closeSidebar);
         });
     </script>
+
+        <!-- Loader sencillo para navegación a Resultados (disfraz de carga) -->
+        <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 bg-transparent shadow-none">
+                    <div class="modal-body text-center">
+                        <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
+                        <div class="mt-3"><strong>Cargando resultados...</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        document.addEventListener('click', function(e) {
+                var el = e.target.closest && e.target.closest('a.show-results-loader');
+                if (!el) return;
+                // Interceptar navegación para mostrar loader
+                try {
+                        e.preventDefault();
+                        var href = el.href;
+                        var modalEl = document.getElementById('globalResultsLoaderModal');
+                        var modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+                        if (modal) modal.show();
+                        // Navegar ligeramente después de mostrar el modal para dar tiempo a pintar
+                        setTimeout(function() { window.location.href = href; }, 80);
+                } catch (err) {
+                        // En caso de fallo, seguir navegación normal
+                        window.location.href = el.href;
+                }
+        }, { capture: true });
+        </script>
 
 {% endblock %}

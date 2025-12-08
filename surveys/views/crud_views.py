@@ -1,4 +1,3 @@
-
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -7,7 +6,7 @@ from django.urls import reverse, reverse_lazy
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.core.cache import cache
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.core.exceptions import FieldError, ValidationError
 from django.http import JsonResponse
 from django.db import connection
@@ -44,10 +43,6 @@ def legacy_survey_redirect_view(request, pk, legacy_path=None):
     return redirect(base)
 
 
-# Nota: La función _fast_delete_surveys se movió a surveys/tasks.py
-# para ser ejecutada de forma asíncrona con Celery
-
-
 @login_required
 @require_GET
 def delete_task_status(request, task_id):
@@ -65,55 +60,41 @@ def delete_task_status(request, task_id):
         'ready': result.ready(),
     }
     
-    # Verificar si Celery está disponible (verificación no bloqueante)
     try:
-        # Intentar ping a los workers (más confiable que active() en Windows)
         inspect = current_app.control.inspect(timeout=1.0)
         ping_result = inspect.ping()
         
         if ping_result:
-            # Hay al menos un worker respondiendo
             response_data['celery_available'] = True
         else:
-            # No respondieron workers, pero puede ser timeout
-            # No bloqueamos la UI, solo advertimos
             response_data['celery_available'] = False
-            # Solo mostrar error si la tarea está realmente pendiente por mucho tiempo
             if result.state == 'PENDING':
                 response_data['warning'] = 'No se detectaron workers activos. Verifica que Celery esté corriendo.'
     except Exception as e:
         logger.warning(f"[DELETE_TASK_STATUS] Error verificando workers: {e}")
-        # No bloqueamos, asumimos que el worker puede estar corriendo
-        response_data['celery_available'] = True  # Asumir disponible para no bloquear UI
+        response_data['celery_available'] = True
     
     if result.ready():
         if result.successful():
             response_data['result'] = result.result
-            # La tarea devuelve 'deleted', no 'deleted_count'
             response_data['deleted_count'] = result.result.get('deleted', 0) if isinstance(result.result, dict) else 0
+            # number of surveys requested to delete (user-facing)
+            response_data['deleted_surveys'] = result.result.get('deleted_surveys', 0) if isinstance(result.result, dict) else 0
         else:
             response_data['error'] = str(result.info)
     else:
-        # Tarea aún en progreso o pendiente
-        if result.state == 'PENDING':
-            # La tarea está pendiente - puede ser normal si acaba de enviarse
-            # Ya agregamos una advertencia arriba si no detectamos workers
-            pass
-        elif hasattr(result.info, 'get'):
+        if hasattr(result.info, 'get'):
             response_data['progress'] = result.info.get('progress', 0)
     
     return JsonResponse(response_data)
 
 
-# --- Bulk delete surveys ---
 @login_required
 @require_POST
 @ratelimit(key="user", rate="50/h", method="POST", block=True)
 def bulk_delete_surveys_view(request):
     """
     Eliminación masiva usando Celery para procesamiento en background.
-    TODO EL BORRADO SE HACE EN CELERY - EL SERVIDOR RESPONDE EN < 200ms.
-    Crea una tarea asíncrona y retorna el job_id para polling.
     """
     from surveys.tasks import delete_surveys_task
     
@@ -121,87 +102,53 @@ def bulk_delete_surveys_view(request):
 
     if not survey_ids:
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse(
-                {'success': False, 'error': 'No se seleccionaron encuestas para eliminar.'},
-                status=400
-            )
-        messages.error(request, 'No se seleccionaron encuestas para eliminar.')
+            return JsonResponse({'success': False, 'error': 'No se seleccionaron encuestas.'}, status=400)
+        messages.error(request, 'No se seleccionaron encuestas.')
         return redirect('surveys:list')
 
-    # Normalizar IDs
     try:
         clean_ids = [int(sid) for sid in survey_ids]
     except ValueError:
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse(
-                {'success': False, 'error': 'IDs de encuestas inválidos.'},
-                status=400
-            )
+            return JsonResponse({'success': False, 'error': 'IDs inválidos.'}, status=400)
         messages.error(request, 'IDs de encuestas inválidos.')
         return redirect('surveys:list')
 
-    # Verificar permisos (solo validación, no borrado)
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
     if not base_qs.exists():
-        logger.warning(f"[BULK_DELETE][PERMISSION_DENIED] user_id={request.user.id} ids={clean_ids}")
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse(
-                {'success': False, 'error': 'No tienes permisos para eliminar las encuestas seleccionadas.'},
-                status=403
-            )
-        messages.error(request, 'No tienes permisos para eliminar las encuestas seleccionadas.')
+            return JsonResponse({'success': False, 'error': 'No tienes permisos.'}, status=403)
+        messages.error(request, 'No tienes permisos.')
         return redirect('surveys:list')
 
-    # 🚀 Intentar lanzar tarea CELERY (trabajo pesado en background)
     task_result = None
     try:
         task_result = delete_surveys_task.delay(clean_ids, request.user.id)
-        logger.info(
-            f'[BULK_DELETE][CELERY] Tarea lanzada task_id={task_result.id} user_id={request.user.id} count={len(clean_ids)}'
-        )
+        logger.info(f'[BULK_DELETE][CELERY] Tarea lanzada task_id={task_result.id}')
     except Exception as e:
-        logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback a borrado síncrono: {e}")
+        logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")
     
-    # Si Celery no está disponible, borrar de forma síncrona para no dejar la UI inconsistente
     if task_result is None:
         try:
             from django.db import transaction
             with transaction.atomic():
                 deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': True,
-                    'deleted': deleted_count,
-                    'message': f'Se eliminaron {deleted_count} encuesta(s).',
-                })
+                return JsonResponse({'success': True, 'deleted': deleted_count, 'deleted_surveys': len(clean_ids), 'message': f'Se eliminaron {len(clean_ids)} encuesta(s).'})
             messages.success(request, f'Se eliminaron {deleted_count} encuesta(s).')
             return redirect('surveys:list')
         except Exception as e:
-            logger.error(f"[BULK_DELETE][SYNC_ERROR] Error en borrado síncrono: {e}")
+            logger.error(f"[BULK_DELETE][SYNC_ERROR] {e}")
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No se pudo eliminar encuestas. Inténtalo de nuevo.',
-                }, status=500)
-            messages.error(request, 'No se pudo eliminar encuestas. Inténtalo de nuevo.')
+                return JsonResponse({'success': False, 'error': 'Error al eliminar.'}, status=500)
+            messages.error(request, 'Error al eliminar.')
             return redirect('surveys:list')
 
-    # Respuesta AJAX (< 200ms)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({
-            'success': True,
-            'task_id': task_result.id,
-            'total_surveys': len(clean_ids),
-            'message': f'Procesando eliminación de {len(clean_ids)} encuesta(s)...'
-        })
+        return JsonResponse({'success': True, 'task_id': task_result.id, 'total_surveys': len(clean_ids), 'message': 'Procesando eliminación...'})
 
-    # Respuesta normal (< 200ms)
-    messages.success(
-        request,
-        f'Procesando eliminación de {len(clean_ids)} encuesta(s). Esto puede tardar unos momentos.'
-    )
+    messages.success(request, 'Procesando eliminación.')
     return redirect('surveys:list')
-
 
 
 class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
@@ -214,6 +161,17 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.filter(author=self.request.user)
+        # Aplicar filtros de búsqueda y estado desde query params
+        try:
+            q = (self.request.GET.get('q') or '').strip()
+            status = (self.request.GET.get('status') or '').strip()
+            if q:
+                qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+            if status:
+                qs = qs.filter(status=status)
+        except Exception:
+            # In case of any error, don't break the list
+            pass
         try:
             qs = qs.annotate(
                 total_responses=Count('responses', distinct=True),
@@ -232,7 +190,6 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
         except FieldError:
             qs = qs.order_by('-id')
         return qs
-
 
 
 class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
@@ -256,30 +213,35 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         survey = context.get('survey') or self.object
+        
+        # --- Lógica de URL ---
         base_url = getattr(settings, 'PUBLIC_BASE_URL', '').strip()
         if base_url:
             base_url = base_url.rstrip('/')
         else:
             base_url = self.request.build_absolute_uri('/').rstrip('/')
-            # Nota: Deshabilitamos la conversión automática de 127.0.0.1 a LAN_IP
-            # para permitir desarrollo local. Si quieres usar LAN_IP, configura PUBLIC_BASE_URL.
-            # host = self.request.get_host().split(':')[0]
-            # port = self.request.get_port() or '80'
-            # lan_ip = getattr(settings, 'LOCAL_LAN_IP', '')
-            # if host in ('127.0.0.1', 'localhost') and lan_ip:
-            #     scheme = 'http'
-            #     base_url = f"{scheme}://{lan_ip}:{port}"
         respond_path = reverse('surveys:respond', args=[survey.public_id])
         context['respond_absolute_url'] = f"{base_url}{respond_path}"
+        
+        # --- Lógica de Meta de Respuestas ---
+        responses_count = survey.responses.count()
+        context['responses_count'] = responses_count
+        
+        # Flag para el modal: Si está pausada, tiene meta y la alcanzó
+        context['show_goal_modal'] = (
+            survey.status == Survey.STATUS_PAUSED and
+            survey.sample_goal > 0 and
+            responses_count >= survey.sample_goal
+        )
+        
         return context
-
 
 
 class SurveyCreateView(LoginRequiredMixin, CreateView):
     """View to create a new survey."""
     model = Survey
     template_name = 'surveys/forms/survey_create.html'
-    fields = ['title', 'description', 'category']  # Removido 'status', siempre será draft
+    fields = ['title', 'description', 'category', 'sample_goal'] # Agregado sample_goal
     success_url = reverse_lazy('surveys:list')
 
     def post(self, request, *args, **kwargs):
@@ -289,47 +251,25 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
         if 'application/json' in content_type:
             try:
                 data = json.loads(request.body)
-
-                # Compatibilidad con payloads antiguos (surveyInfo/titulo/descripcion)
                 legacy_info = data.get('surveyInfo') or {}
-                title = (
-                    data.get('title')
-                    or legacy_info.get('title')
-                    or legacy_info.get('titulo')
-                    or 'Sin título'
-                )
-                description = (
-                    data.get('description')
-                    or legacy_info.get('description')
-                    or legacy_info.get('descripcion')
-                    or ''
-                )
-                category = (
-                    data.get('category')
-                    or legacy_info.get('category')
-                    or legacy_info.get('categoria')
-                    or 'general'
-                )
+                title = data.get('title') or legacy_info.get('title') or 'Sin título'
+                description = data.get('description') or legacy_info.get('description') or ''
+                category = data.get('category') or legacy_info.get('category') or 'general'
+                sample_goal = int(data.get('sample_goal') or 0)
 
-                # Crear la encuesta (siempre en borrador para encuestas web)
                 survey = Survey.objects.create(
                     title=title,
                     description=description,
-                    status='draft',  # Siempre empieza en borrador
+                    status='draft',
                     category=category,
+                    sample_goal=sample_goal,
                     author=request.user,
-                    is_imported=False  # Marca explícita de encuesta manual
+                    is_imported=False
                 )
                 
-                # Crear las preguntas
                 questions_data = data.get('questions', [])
                 for idx, q_data in enumerate(questions_data):
-                    question_text = (
-                        q_data.get('text')
-                        or q_data.get('title')
-                        or q_data.get('titulo')
-                        or ''
-                    )
+                    question_text = q_data.get('text') or q_data.get('title') or ''
                     question_type = q_data.get('type') or q_data.get('tipo') or 'text'
                     question = Question.objects.create(
                         survey=survey,
@@ -338,69 +278,31 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
                         order=idx + 1,
                         is_required=q_data.get('required', True)
                     )
-                    
-                    # Crear opciones de respuesta si aplica
                     options = q_data.get('options') or q_data.get('opciones') or []
                     for opt_idx, opt_text in enumerate(options):
                         if opt_text:
-                            AnswerOption.objects.create(
-                                question=question,
-                                text=opt_text,
-                                order=opt_idx + 1
-                            )
+                            AnswerOption.objects.create(question=question, text=opt_text, order=opt_idx + 1)
                 
-                log_user_action(
-                    'create_survey',
-                    success=True,
-                    user_id=request.user.id,
-                    survey_title=survey.title,
-                    category=survey.category
-                )
+                log_user_action('create_survey', success=True, user_id=request.user.id, survey_title=survey.title)
+                return JsonResponse({'success': True, 'survey_id': survey.id, 'redirect_url': reverse('surveys:detail', args=[survey.public_id])})
                 
-                try:
-                    cache.delete(f"dashboard_data_user_{request.user.id}")
-                    cache.delete(f"survey_count_user_{request.user.id}")
-                except Exception:
-                    pass
-                
-                return JsonResponse({
-                    'success': True,
-                    'survey_id': survey.id,
-                    'redirect_url': reverse('surveys:detail', args=[survey.public_id])
-                })
-                
-            except json.JSONDecodeError:
-                return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
             except Exception as e:
-                logger.error(f"[CREATE_SURVEY][ERROR] user_id={request.user.id} error={e}", exc_info=True)
+                logger.error(f"[CREATE_SURVEY][ERROR] {e}", exc_info=True)
                 return JsonResponse({'success': False, 'error': str(e)}, status=500)
         
-        # Formulario HTML estándar
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.status = 'draft'  # Forzar estado draft en creación por formulario HTML
-        log_user_action(
-            'create_survey',
-            success=True,
-            user_id=self.request.user.id,
-            survey_title=form.instance.title,
-            category=form.instance.category
-        )
-        try:
-            cache.delete(f"dashboard_data_user_{self.request.user.id}")
-            cache.delete(f"survey_count_user_{self.request.user.id}")
-        except Exception:
-            pass
+        form.instance.status = 'draft'
+        log_user_action('create_survey', success=True, user_id=self.request.user.id, survey_title=form.instance.title)
         return super().form_valid(form)
-
 
 
 class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
     """View to update a survey (creator only)."""
     model = Survey
-    fields = ['title', 'description', 'status']
+    fields = ['title', 'description', 'status', 'sample_goal'] # Agregado sample_goal
     template_name = 'surveys/forms/form.html'
     success_url = reverse_lazy('surveys:list')
     slug_field = 'public_id'
@@ -430,9 +332,6 @@ class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-
-# Modifica SurveyDeleteView en surveys/views/crud_views.py
-
 class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
     """
     Vista para eliminar una encuesta individual (solo el creador).
@@ -444,28 +343,39 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
     slug_url_kwarg = 'public_id'
 
     def delete(self, request, *args, **kwargs):
-        """
-        Sobrescribe delete para usar Celery y soportar AJAX.
-        """
         from surveys.tasks import delete_surveys_task
-        
         self.object = self.get_object()
         survey_id = self.object.id
         survey_title = self.object.title
-        
         logger.info(f"[DELETE] Iniciando borrado asíncrono survey_id={survey_id}")
-        
-        # 🚀 LANZAR TAREA CELERY
         task_result = delete_surveys_task.delay([survey_id], request.user.id)
-        
-        # --- NUEVO: RESPUESTA JSON PARA AJAX ---
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({
-                'success': True,
-                'task_id': task_result.id,
-                'message': f"Eliminando '{survey_title}'..."
-            })
-        
-        # Fallback para peticiones normales (no recomendada para grandes volúmenes)
+            return JsonResponse({'success': True, 'task_id': task_result.id, 'message': f"Eliminando '{survey_title}'..."})
         messages.success(request, f"Procesando eliminación de '{survey_title}'...")
         return redirect(self.success_url)
+
+
+# --- NUEVA VISTA PARA GESTIONAR EL MODAL DE META ---
+@login_required
+@require_POST
+def handle_goal_decision(request, public_id):
+    """
+    Procesa la decisión del usuario cuando se alcanza la meta.
+    """
+    survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
+    decision = request.POST.get('decision') # 'continue' o 'stop'
+    
+    if decision == 'continue':
+        # Opción SÍ: Quitar límite y reactivar
+        survey.sample_goal = 0 # 0 = Ilimitado
+        survey.status = Survey.STATUS_ACTIVE
+        survey.save()
+        messages.success(request, "¡Meta removida! La encuesta está activa nuevamente sin límites.")
+        
+    elif decision == 'stop':
+        # Opción NO: Cerrar definitivamente
+        survey.status = Survey.STATUS_CLOSED
+        survey.save()
+        messages.info(request, "Encuesta cerrada oficialmente. Meta cumplida.")
+        
+    return redirect('surveys:detail', public_id=public_id)

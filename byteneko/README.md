@@ -6,11 +6,9 @@ Este directorio contiene la configuración central del proyecto Django.
 
 - **settings/**: Directorio con configuraciones de entorno
   - `base.py`: Configuración base compartida
-  - `development.py`: Configuración para desarrollo
+  - `local.py`: Configuración para desarrollo local
   - `production.py`: Configuración para producción
-
-- **settings_production.py**: Configuración específica para producción (legacy)
-- **settings_test.py**: Configuración para entorno de testing
+  - `test.py`: Configuración ligera para pytest
 
 - **asgi.py**: Punto de entrada ASGI para servidores web asincronos
 - **wsgi.py**: Punto de entrada WSGI para servidores web tradicionales
