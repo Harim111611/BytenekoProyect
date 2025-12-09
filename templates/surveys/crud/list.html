@@ -539,7 +539,7 @@ window.addEventListener('pageshow', function(event) {
 // -----------------------------------------
 // Selección múltiple y borrado en bloque
 // -----------------------------------------
-(function () {
+document.addEventListener('DOMContentLoaded', function () {
     const toggleSelectionBtn = document.getElementById('toggleSelectionBtn');
     const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
     const bulkActionsBar     = document.getElementById('bulkActionsBar');
@@ -549,17 +549,23 @@ window.addEventListener('pageshow', function(event) {
     const deleteSelectedBtn  = document.getElementById('deleteSelectedBtn');
     const deleteAllBtn       = document.getElementById('deleteAllBtn');
 
-    const selectBtns = document.querySelectorAll('.js-select-survey-btn');
-    const cards      = document.querySelectorAll('.survey-card');
+    function getSelectBtns() {
+        return Array.from(document.querySelectorAll('.js-select-survey-btn'));
+    }
+    function getCards() {
+        return Array.from(document.querySelectorAll('.survey-card'));
+    }
 
     if (!toggleSelectionBtn || !cancelSelectionBtn || !bulkActionsBar || !selectedCountSpan || !deleteSelectedBtn) {
         return;
     }
 
-    // Si NO hay encuestas, ocultamos la barra
-    if (!cards.length) {
-        bulkActionsBar.style.display = 'none';
-        bulkActionsBar.classList.add('d-none');
+    // Ocultar la barra de acciones de selección por defecto
+    bulkActionsBar.style.display = 'none';
+    bulkActionsBar.classList.add('d-none');
+
+    // Si NO hay encuestas, deshabilitar selección
+    if (getCards().length === 0) {
         toggleSelectionBtn.disabled = true;
         toggleSelectionBtn.classList.add('disabled', 'opacity-50');
         return;
@@ -568,21 +574,29 @@ window.addEventListener('pageshow', function(event) {
     const selectedSurveys = new Set();
     let selectionMode = false;
     let skipConfirmBulk = false;
-    // Bandera que indica que la acción en curso es "Eliminar todas".
-    // Cuando es true, actualizamos la UI localmente en lugar de forzar
-    // una recarga completa de la página (evita cerrar toasts/modal innecesariamente).
     let isDeleteAllAction = false;
 
     function updateSelectionUI() {
+        const selectBtns = getSelectBtns();
         const count = selectedSurveys.size;
         selectedCountSpan.textContent = count;
-
         if (selectionMode) {
             bulkActionsBar.classList.add('is-active');
+            bulkActionsBar.classList.remove('d-none');
+            bulkActionsBar.style.display = '';
+            // Mostrar checkboxes
+            document.querySelectorAll('.selection-checkbox').forEach(el => {
+                el.style.display = 'block';
+            });
         } else {
             bulkActionsBar.classList.remove('is-active');
+            bulkActionsBar.classList.add('d-none');
+            bulkActionsBar.style.display = 'none';
+            // Ocultar checkboxes
+            document.querySelectorAll('.selection-checkbox').forEach(el => {
+                el.style.display = 'none';
+            });
         }
-
         const allSelected = (selectBtns.length > 0) && (count === selectBtns.length);
         if (selectAllBtn && deselectAllBtn) {
             selectAllBtn.style.display   = allSelected ? 'none' : 'inline-block';
@@ -590,24 +604,26 @@ window.addEventListener('pageshow', function(event) {
         }
     }
 
-    function toggleSelectionMode() {
-        selectionMode = !selectionMode;
-        document.body.classList.toggle('survey-selection-mode', selectionMode);
-
-        document.querySelectorAll('.selection-checkbox').forEach(el => {
-            el.style.display = selectionMode ? 'block' : 'none';
+    function clearSelectionVisuals() {
+        getSelectBtns().forEach(btn => {
+            btn.classList.remove('btn-primary', 'text-white');
+            btn.style.border = '2px solid #dee2e6';
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'bi bi-circle';
         });
+    }
 
+    function toggleSelectionMode(forceOff = false) {
+        if (forceOff) {
+            selectionMode = false;
+        } else {
+            selectionMode = true;
+        }
+        document.body.classList.toggle('survey-selection-mode', selectionMode);
         if (!selectionMode) {
             selectedSurveys.clear();
-            selectBtns.forEach(btn => {
-                btn.classList.remove('btn-primary', 'text-white');
-                btn.style.border = '2px solid #dee2e6';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = 'bi bi-circle';
-            });
+            clearSelectionVisuals();
         }
-
         updateSelectionUI();
     }
 
@@ -628,67 +644,78 @@ window.addEventListener('pageshow', function(event) {
         updateSelectionUI();
     }
 
-    // Eventos
-    toggleSelectionBtn.addEventListener('click', toggleSelectionMode);
-    cancelSelectionBtn.addEventListener('click', toggleSelectionMode);
+    toggleSelectionBtn.addEventListener('click', () => toggleSelectionMode(false));
+    cancelSelectionBtn.addEventListener('click', () => toggleSelectionMode(true));
 
-    selectBtns.forEach(btn => {
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const surveyId = this.dataset.surveyId;
-            if (!surveyId) return;
-            toggleSurveySelection(surveyId, this);
+    function attachSelectBtnListeners() {
+        // Permitir seleccionar tocando toda la tarjeta en modo selección
+        getCards().forEach(card => {
+            card.onclick = function (e) {
+                if (!selectionMode) return;
+                // Evitar doble toggle si el click fue en el botón
+                if (e.target.closest('.js-select-survey-btn')) return;
+                // Si el click fue en un enlace dentro de la tarjeta, prevenir navegación
+                const link = e.target.closest('a');
+                if (link && card.contains(link)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                const btn = card.querySelector('.js-select-survey-btn');
+                if (!btn) return;
+                const surveyId = btn.dataset.surveyId;
+                if (!surveyId) return;
+                toggleSurveySelection(surveyId, btn);
+            };
         });
-    });
+        // El botón sigue funcionando igual
+        getSelectBtns().forEach(btn => {
+            btn.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const surveyId = this.dataset.surveyId;
+                if (!surveyId) return;
+                toggleSurveySelection(surveyId, this);
+            };
+        });
+    }
+    attachSelectBtnListeners();
 
     if (selectAllBtn) {
-        selectAllBtn.addEventListener('click', function () {
-            selectBtns.forEach(btn => {
+        selectAllBtn.onclick = function () {
+            getSelectBtns().forEach(btn => {
                 const surveyId = btn.dataset.surveyId;
                 if (!surveyId) return;
                 if (!selectedSurveys.has(surveyId)) {
                     selectedSurveys.add(surveyId);
-                    btn.classList.add('btn-primary', 'text-white');
-                    btn.style.border = '2px solid var(--bk-primary)';
-                    const icon = btn.querySelector('i');
-                    if (icon) icon.className = 'bi bi-check-circle-fill';
                 }
+                btn.classList.add('btn-primary', 'text-white');
+                btn.style.border = '2px solid var(--bk-primary)';
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'bi bi-check-circle-fill';
             });
             updateSelectionUI();
-        });
+        };
     }
 
     if (deselectAllBtn) {
-        deselectAllBtn.addEventListener('click', function () {
+        deselectAllBtn.onclick = function () {
             selectedSurveys.clear();
-            selectBtns.forEach(btn => {
-                btn.classList.remove('btn-primary', 'text-white');
-                btn.style.border = '2px solid #dee2e6';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = 'bi bi-circle';
-            });
+            clearSelectionVisuals();
             updateSelectionUI();
-        });
+        };
     }
 
-    // --- BOTÓN ELIMINAR SELECCIONADAS ---
-    deleteSelectedBtn.addEventListener('click', async function () {
+    deleteSelectedBtn.onclick = async function () {
         if (selectedSurveys.size === 0) {
             showPageAlert('warning', 'Nada para eliminar', 'No hay encuestas seleccionadas.', 4000);
             return;
         }
-
         const count = selectedSurveys.size;
-
-        // Usar modal de confirmación en lugar de confirm() nativo
         if (!skipConfirmBulk) {
             const deleteSelectedModal = document.getElementById('deleteSelectedModal');
             const deleteSelectedCount = document.getElementById('deleteSelectedCount');
             const confirmDeleteSelectedBtn = document.getElementById('confirmDeleteSelectedBtn');
-            
             if (!deleteSelectedModal || !confirmDeleteSelectedBtn) {
-                // Fallback a confirm nativo si el modal no existe
                 const message = count === 1
                     ? '¿Estás seguro de que deseas eliminar esta encuesta?'
                     : `¿Estás seguro de que deseas eliminar ${count} encuestas?`;
@@ -696,14 +723,8 @@ window.addEventListener('pageshow', function(event) {
                     return;
                 }
             } else {
-                // Mostrar modal de confirmación
-                if (deleteSelectedCount) {
-                    deleteSelectedCount.textContent = count;
-                }
-                
+                if (deleteSelectedCount) deleteSelectedCount.textContent = count;
                 const modal = new bootstrap.Modal(deleteSelectedModal);
-                
-                // Esperar confirmación del usuario
                 const userConfirmed = await new Promise((resolve) => {
                     const onConfirm = () => {
                         confirmDeleteSelectedBtn.removeEventListener('click', onConfirm);
@@ -716,27 +737,19 @@ window.addEventListener('pageshow', function(event) {
                         deleteSelectedModal.removeEventListener('hidden.bs.modal', onCancel);
                         resolve(false);
                     };
-                    
                     confirmDeleteSelectedBtn.addEventListener('click', onConfirm);
                     deleteSelectedModal.addEventListener('hidden.bs.modal', onCancel);
                     modal.show();
                 });
-                
-                if (!userConfirmed) {
-                    return;
-                }
+                if (!userConfirmed) return;
             }
         }
         skipConfirmBulk = false;
-
         const originalBtnHtml = deleteSelectedBtn.innerHTML;
         deleteSelectedBtn.disabled = true;
-        deleteSelectedBtn.innerHTML =
-            '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
-
+        deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
         const ids = Array.from(selectedSurveys);
         const cardsToDelete = [];
-
         ids.forEach(id => {
             const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
             if (card) {
@@ -744,12 +757,10 @@ window.addEventListener('pageshow', function(event) {
                 cardsToDelete.push(card);
             }
         });
-
         try {
             const formData = new FormData();
             formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
             ids.forEach(id => formData.append('survey_ids', id));
-
             const response = await fetch("{% url 'surveys:bulk_delete' %}", {
                 method: 'POST',
                 body: formData,
@@ -757,74 +768,44 @@ window.addEventListener('pageshow', function(event) {
                     'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
                 }
             });
-
             if (!response.ok) {
                 const txt = await response.text();
                 throw new Error(txt || ('Error HTTP ' + response.status));
             }
-
             let data = {};
-            try {
-                data = await response.json();
-            } catch (e) {
-                data = { success: true };
-            }
-
+            try { data = await response.json(); } catch (e) { data = { success: true }; }
             if (data.success === false) {
                 throw new Error(data.error || 'No se pudieron eliminar las encuestas.');
             }
-
-            // Si hay task_id, esperar a que Celery complete y obtener info final
             const taskId = data.task_id;
             let taskResultInfo = null;
             if (taskId) {
                 taskResultInfo = await pollDeleteTask(taskId);
                 if (!taskResultInfo || taskResultInfo.error) throw new Error('La tarea de eliminación falló o expiró.');
             }
-
-            // Animar el colapso de las columnas
             const colsToDelete = cardsToDelete.map(card => card.closest('.col-md-6'));
-            colsToDelete.forEach(col => {
-                if (col) col.classList.add('col-removing');
-            });
-            
-            // Esperar a que termine la animación antes de remover
+            colsToDelete.forEach(col => { if (col) col.classList.add('col-removing'); });
             setTimeout(() => {
-                colsToDelete.forEach(col => {
-                    if (col) col.remove();
-                });
+                colsToDelete.forEach(col => { if (col) col.remove(); });
                 selectedSurveys.clear();
                 updateSelectionUI();
-
-                // Si el DOM está vacío, recargar inmediatamente (sin overlay) a menos
-                // que la acción actual sea "Eliminar todas". En ese caso actualizamos
-                // la UI localmente para mostrar el estado vacío sin recargar.
                 const remainingCards = document.querySelectorAll('.survey-card');
                 if (remainingCards.length === 0) {
                     if (!isDeleteAllAction) {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 300);
+                        setTimeout(() => { window.location.reload(); }, 300);
                     } else {
-                        // Actualizar la UI localmente para reflejar que no quedan encuestas
-                        // (ocultar grid, paginación, barra de acciones y deshabilitar selección).
                         const surveyGrid = document.querySelector('.row.g-4');
                         if (surveyGrid) surveyGrid.remove();
-
                         const pagination = document.querySelector('nav[aria-label="Page navigation"]');
                         if (pagination) pagination.remove();
-
                         if (bulkActionsBar) {
                             bulkActionsBar.style.display = 'none';
                             bulkActionsBar.classList.add('d-none');
                         }
-
                         if (toggleSelectionBtn) {
                             toggleSelectionBtn.disabled = true;
                             toggleSelectionBtn.classList.add('disabled', 'opacity-50');
                         }
-
-                        // Insertar un estado vacío amigable donde estaba la lista
                         const container = document.querySelector('.container-xl');
                         if (container) {
                             const existingEmpty = document.getElementById('surveys-empty-state');
@@ -832,7 +813,6 @@ window.addEventListener('pageshow', function(event) {
                                 const empty = document.createElement('div');
                                 empty.id = 'surveys-empty-state';
                                 empty.className = 'text-center py-5';
-                                // Intentar clonar botón de crear encuesta si existe
                                 const createBtn = document.querySelector('a[href*="/surveys/create"]');
                                 const createHtml = createBtn ? createBtn.outerHTML : '';
                                 empty.innerHTML = `
@@ -856,21 +836,15 @@ window.addEventListener('pageshow', function(event) {
                                 }
                             }
                         }
-
-                        // Resetear flag para futuras acciones
                         isDeleteAllAction = false;
                     }
                 }
-
                 if (selectionMode) {
-                    toggleSelectionMode();
+                    toggleSelectionMode(true);
                 }
-
-                // Mostrar notificación toast con conteo real si está disponible
                 const announcementToast = document.getElementById('announcementModal');
                 const announcementBody = document.getElementById('announcementModalBody');
                 if (announcementToast && announcementBody) {
-                    // Prefer the user-facing 'deleted_surveys' when available
                     const deletedCount = (taskResultInfo && (taskResultInfo.deleted_surveys || taskResultInfo.deleted || (taskResultInfo.result && (taskResultInfo.result.deleted_surveys || taskResultInfo.result.deleted)))) || data.deleted || 0;
                     if (deletedCount > 0) {
                         announcementBody.textContent = deletedCount === 1 ? 'Eliminada correctamente' : `Se eliminaron ${deletedCount} encuesta(s).`;
@@ -881,31 +855,24 @@ window.addEventListener('pageshow', function(event) {
                     toast.show();
                 }
             }, 300);
-
         } catch (error) {
             console.error('Error eliminando encuestas:', error);
             cardsToDelete.forEach(card => card.classList.remove('survey-card--deleting'));
-            showPageAlert(
-                'danger',
-                'Error al eliminar encuestas',
-                error.message || 'Ocurrió un error al eliminar las encuestas.',
-                6000
-            );
+            showPageAlert('danger', 'Error al eliminar encuestas', error.message || 'Ocurrió un error al eliminar las encuestas.', 6000);
         } finally {
             deleteSelectedBtn.disabled = false;
             deleteSelectedBtn.innerHTML = originalBtnHtml;
         }
-    });
+    };
 
-    // --- BOTÓN ELIMINAR TODAS ---
     if (deleteAllBtn) {
-        deleteAllBtn.addEventListener('click', function () {
+        deleteAllBtn.onclick = function () {
+            const cards = getCards();
             const total = cards.length;
             if (!total) {
                 showPageAlert('info', 'No hay encuestas', 'No hay encuestas en la lista para eliminar.', 4000);
                 return;
             }
-
             document.getElementById('deleteAllCount').textContent = `${total}`;
             const heavyNotice = document.getElementById('deleteAllHeavyNotice');
             if (total >= 5) {
@@ -914,14 +881,12 @@ window.addEventListener('pageshow', function(event) {
             } else {
                 heavyNotice.style.display = 'none';
             }
-
             const modal = new bootstrap.Modal(document.getElementById('deleteAllModal'));
             modal.show();
-
             const confirmBtn = document.getElementById('confirmDeleteAllBtn');
             const handler = function () {
                 selectedSurveys.clear();
-                selectBtns.forEach(btn => {
+                getSelectBtns().forEach(btn => {
                     const surveyId = btn.dataset.surveyId;
                     if (!surveyId) return;
                     selectedSurveys.add(surveyId);
@@ -929,11 +894,6 @@ window.addEventListener('pageshow', function(event) {
                     btn.style.border = '2px solid var(--bk-primary)';
                 });
                 updateSelectionUI();
-
-                // Ejecutar eliminación masiva y cerrar el modal inmediatamente.
-                // Marcamos `isDeleteAllAction` para que, al terminar la eliminación,
-                // el script actualice la UI localmente (mostrar estado vacío)
-                // en lugar de forzar una recarga completa.
                 isDeleteAllAction = true;
                 skipConfirmBulk = true;
                 deleteSelectedBtn.click();
@@ -941,12 +901,12 @@ window.addEventListener('pageshow', function(event) {
                 confirmBtn.removeEventListener('click', handler);
             };
             confirmBtn.addEventListener('click', handler);
-        });
+        };
     }
 
     bulkActionsBar.style.display = 'none';
     updateSelectionUI();
-})();
+});
 </script>
 
 <script>
