@@ -11,13 +11,12 @@
 {% include 'surveys/modals/announcement_modal.html' %}
 
 <div class="modal fade" id="importModalPreview" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header border-0 pb-0 bg-body-tertiary">
                 <h5 class="modal-title fw-bold text-body-emphasis">
                     <i class="bi bi-upload me-2"></i>Importar con Vista Previa
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
             <div id="step1-upload" class="modal-body pt-4">
@@ -40,6 +39,7 @@
                     <div class="form-text small">
                         <i class="bi bi-info-circle me-1"></i>
                         Puedes seleccionar múltiples archivos CSV. La primera fila debe contener los encabezados.
+                        <br><span class="text-danger fw-semibold">Si seleccionas más de un archivo, <u>no se mostrará vista previa</u> y la importación será directa.</span>
                     </div>
                     <div id="fileList" class="mt-2"></div>
                 </div>
@@ -133,6 +133,11 @@
             </div>
 
             <div id="step-loading" class="modal-body text-center py-5" style="display:none;">
+                <div class="mb-2"></div>
+                <div class="alert alert-info mt-3" id="import-wait-message">
+                    <i class="bi bi-hourglass-split me-2"></i>
+                    Por favor espera a que termine la importación. No puedes cerrar ni minimizar esta ventana hasta que finalice el proceso.
+                </div>
                 <div class="mb-4" id="loading-animation">
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Loading...</span>
@@ -153,15 +158,8 @@
             </div>
 
             <div class="modal-footer border-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="btn-cancel">Cancelar</button>
-                <button type="button" class="btn btn-outline-primary" id="btn-back-to-upload" style="display:none;">
-                    <i class="bi bi-arrow-left me-1"></i>Volver
-                </button>
                 <button type="button" class="btn btn-primary" id="btn-analyze">
-                    <i class="bi bi-search me-2"></i>Ver Vista Previa
-                </button>
-                <button type="button" class="btn btn-success" id="btn-confirm-import" style="display:none;">
-                    <i class="bi bi-check-circle me-2"></i>Importar y Ver Resultados
+                    <i class="bi bi-search me-2"></i>Ver Vista Previa / Importar
                 </button>
             </div>
         </div>
@@ -408,6 +406,112 @@
 
 {% block extra_js %}
 <script>
+// --- Barra flotante para progreso minimizado persistente ---
+function createFloatingProgressBar() {
+    let bar = document.getElementById('floating-progress-bar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'floating-progress-bar';
+        bar.style.position = 'fixed';
+        bar.style.bottom = '24px';
+        bar.style.right = '24px';
+        bar.style.zIndex = '1080';
+        bar.style.background = '#fff';
+        bar.style.border = '1.5px solid #0d6efd';
+        bar.style.borderRadius = '12px';
+        bar.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
+        bar.style.padding = '12px 20px 12px 16px';
+        bar.style.display = 'flex';
+        bar.style.alignItems = 'center';
+        bar.style.gap = '12px';
+        bar.innerHTML = `
+            <span id="floating-progress-title" class="fw-bold text-primary">Importando...</span>
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span id="floating-progress-text" class="text-muted small">Procesando datos...</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="restore-progress-modal" title="Restaurar">
+                <i class="bi bi-arrow-up-square"></i>
+            </button>
+        `;
+        document.body.appendChild(bar);
+    }
+    return bar;
+}
+
+// Guardar y restaurar estado de progreso minimizado
+function saveFloatingProgressState(title, text) {
+    localStorage.setItem('import_progress_minimized', '1');
+    localStorage.setItem('import_progress_title', title || 'Importando...');
+    localStorage.setItem('import_progress_text', text || 'Procesando datos...');
+}
+function clearFloatingProgressState() {
+    localStorage.removeItem('import_progress_minimized');
+    localStorage.removeItem('import_progress_title');
+    localStorage.removeItem('import_progress_text');
+}
+function restoreFloatingProgressIfNeeded() {
+    if (localStorage.getItem('import_progress_minimized') === '1') {
+        const bar = createFloatingProgressBar();
+        document.getElementById('floating-progress-title').textContent = localStorage.getItem('import_progress_title') || 'Importando...';
+        document.getElementById('floating-progress-text').textContent = localStorage.getItem('import_progress_text') || 'Procesando datos...';
+        bar.style.display = 'flex';
+    }
+}
+    // --- Minimizar/Restaurar modal de progreso ---
+    let progressModalInstance = null;
+    let lastLoadingTitle = '';
+    let lastLoadingText = '';
+    function minimizeProgressModal() {
+        // Guardar estado en localStorage
+        saveFloatingProgressState(lastLoadingTitle, lastLoadingText);
+        const modalEl = document.getElementById('importModalPreview');
+        if (!progressModalInstance) {
+            progressModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        }
+        // Guardar textos actuales
+        lastLoadingTitle = document.getElementById('loading-title')?.textContent || '';
+        lastLoadingText = document.getElementById('loading-text')?.textContent || '';
+        // Ocultar modal
+        progressModalInstance.hide();
+        // Mostrar barra flotante
+        const bar = createFloatingProgressBar();
+        document.getElementById('floating-progress-title').textContent = lastLoadingTitle || 'Importando...';
+        document.getElementById('floating-progress-text').textContent = lastLoadingText || 'Procesando datos...';
+        bar.style.display = 'flex';
+    }
+    function restoreProgressModal() {
+        const modalEl = document.getElementById('importModalPreview');
+        if (!progressModalInstance) {
+            progressModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        }
+        // Restaurar modal
+        progressModalInstance.show();
+        // Ocultar barra flotante
+        const bar = document.getElementById('floating-progress-bar');
+        if (bar) bar.style.display = 'none';
+        // Limpiar estado de localStorage
+        clearFloatingProgressState();
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+            // Forzar que el modal de importación no se cierre por click fuera ni por teclado
+            const importModalEl = document.getElementById('importModalPreview');
+            if (importModalEl) {
+                const importModal = bootstrap.Modal.getOrCreateInstance(importModalEl, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+            }
+        // Restaurar barra flotante si estaba minimizada
+        restoreFloatingProgressIfNeeded();
+        const minBtn = document.getElementById('minimize-progress-modal');
+        if (minBtn) {
+            minBtn.addEventListener('click', minimizeProgressModal);
+        }
+        document.body.addEventListener('click', function(e) {
+            if (e.target.closest && e.target.closest('#restore-progress-modal')) {
+                restoreProgressModal();
+            }
+        });
+    });
 /**
  * UTILIDADES GLOBALES
  */
@@ -812,20 +916,26 @@ document.addEventListener('DOMContentLoaded', function () {
                             if (!existingEmpty) {
                                 const empty = document.createElement('div');
                                 empty.id = 'surveys-empty-state';
-                                empty.className = 'text-center py-5';
-                                const createBtn = document.querySelector('a[href*="/surveys/create"]');
-                                const createHtml = createBtn ? createBtn.outerHTML : '';
+                                // Copia la estructura y clases del estado vacío original
                                 empty.innerHTML = `
-                                    <div class="mb-4">
-                                        <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
-                                            <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                                    <div class="text-center py-5 my-5">
+                                        <div class="mb-4">
+                                            <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
+                                                <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <h3 class="fw-bold text-body-emphasis mb-2">No se encontraron encuestas</h3>
-                                    <p class="text-muted mb-4 col-md-6 mx-auto">Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar.</p>
-                                    <div class="d-flex justify-content-center gap-3">
-                                        ${createHtml}
-                                        <button class="btn btn-outline-secondary btn-lg px-4" data-bs-toggle="modal" data-bs-target="#importModalPreview">Importar CSV</button>
+                                        <h3 class="fw-bold text-body-emphasis mb-2">No se encontraron encuestas</h3>
+                                        <p class="text-muted mb-4 col-md-6 mx-auto">
+                                            Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar.
+                                        </p>
+                                        <div class="d-flex justify-content-center gap-3">
+                                            <a href=\"{% url 'surveys:create' %}\" class=\"btn btn-primary btn-lg px-4\">
+                                                <i class=\"bi bi-plus-lg me-2\"></i>Crear Encuesta
+                                            </a>
+                                            <button class=\"btn btn-outline-secondary btn-lg px-4\" data-bs-toggle=\"modal\" data-bs-target=\"#importModalPreview\">
+                                                Importar CSV
+                                            </button>
+                                        </div>
                                     </div>
                                 `;
                                 const refNode = document.querySelector('.card.border-0.shadow-sm.mb-4') || container.firstChild;
@@ -1092,6 +1202,62 @@ document.addEventListener('DOMContentLoaded', function() {
         if(btnAnalyze) btnAnalyze.style.display = (step === 'upload') ? 'inline-block' : 'none';
         if(btnBack)    btnBack.style.display    = (step === 'preview' || step === 'error') ? 'inline-block' : 'none';
         if(btnConfirm) btnConfirm.style.display = (step === 'preview') ? 'inline-block' : 'none';
+
+        // Si se muestra el paso loading, bloquear el modal y mostrar detalles
+        if (step === 'loading') {
+            // Bloquear interacción con backdrop
+            if (modalElement) {
+                modalElement.classList.add('modal-blocked');
+                modalElement.querySelectorAll('button, input, select, textarea').forEach(el => {
+                    if (!el.classList.contains('btn-close')) el.disabled = true;
+                });
+            }
+            restoreProgressModal();
+        }
+        // Si termina la importación (se vuelve a upload, preview o error), desbloquear modal
+        if (step === 'upload' || step === 'preview' || step === 'error') {
+            if (modalElement) {
+                modalElement.classList.remove('modal-blocked');
+                modalElement.querySelectorAll('button, input, select, textarea').forEach(el => {
+                    el.disabled = false;
+                });
+            }
+        }
+            // Al cargar la vista, si no hay importación activa, oculta la barra flotante y limpia localStorage
+            if (!localStorage.getItem('import_progress_minimized')) {
+                localStorage.removeItem('import_progress_title');
+                localStorage.removeItem('import_progress_text');
+                const bar = document.getElementById('floating-progress-bar');
+                if (bar) bar.style.display = 'none';
+            }
+            // Escuchar evento global para restaurar modal desde cualquier vista SOLO UNA VEZ
+            window.addEventListener('restore-import-modal', function() {
+                // Solo restaurar si el modal de importación existe en la vista actual
+                const modalEl = document.getElementById('importModalPreview');
+                if (modalEl) {
+                    // Solo mostrar loading si hay importación activa
+                    if (localStorage.getItem('import_progress_minimized') === '1') {
+                        restoreProgressModal();
+                        showStep('loading');
+                    } else {
+                        // Si no hay importación activa, oculta barra y modal
+                        if (window.clearFloatingProgressState) window.clearFloatingProgressState();
+                        const bar = document.getElementById('floating-progress-bar');
+                        if (bar) bar.style.display = 'none';
+                        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.hide();
+                    }
+                }
+            });
+        // Escuchar evento global para restaurar modal desde cualquier vista SOLO UNA VEZ
+        window.addEventListener('restore-import-modal', function() {
+            // Solo restaurar si el modal de importación existe en la vista actual
+            const modalEl = document.getElementById('importModalPreview');
+            if (modalEl) {
+                restoreProgressModal();
+                showStep('loading');
+            }
+        });
     }
 
     function showError(message) {
@@ -1151,6 +1317,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!files || files.length === 0) return;
 
         showStep('loading');
+        // Mostrar detalles iniciales
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Subiendo archivos y preparando importación...';
         const formData = new FormData();
         formData.append('csrfmiddlewaretoken', getCsrfToken());
 
@@ -1170,10 +1339,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         showStep('loading');
                         const loadingText = document.getElementById('loading-text');
                         const loadingTitle = document.getElementById('loading-title');
-                        
                         if (loadingTitle) loadingTitle.textContent = `Importando ${jobs.length} archivo(s)...`;
                         if (loadingText) loadingText.textContent = 'Procesando datos, por favor espera...';
-                        
                         // Monitorear progreso de jobs - ESPERAR A TODOS
                         let completedCount = 0;
                         const allPromises = jobs.map((job, idx) => 
@@ -1185,18 +1352,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                 return success;
                             })
                         );
-                        
                         // ESPERAR A QUE TODOS LOS JOBS TERMINEN
                         Promise.all(allPromises).then((results) => {
                             if (loadingText) loadingText.textContent = 'Todos los archivos procesados';
                             const allSuccessful = results.every(r => r === true);
-                            if (allSuccessful) {
-                                setTimeout(() => {
-                                    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-                                    modal.hide();
-                                    window.location.reload();
-                                }, 1000);
-                            } else {
+                            setTimeout(() => {
+                                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                                modal.hide();
+                                window.location.reload();
+                            }, 2000); // Delay de 2 segundos SIEMPRE
+                            if (!allSuccessful) {
                                 showError('Algunos archivos no se importaron correctamente');
                             }
                         }).catch((err) => {
@@ -1254,21 +1419,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     showStep('loading');
                     const loadingText = document.getElementById('loading-text');
                     const loadingTitle = document.getElementById('loading-title');
-                    
                     if (loadingTitle) loadingTitle.textContent = 'Importando encuesta...';
                     if (loadingText) loadingText.textContent = 'Procesando datos, por favor espera...';
-                    
                     // Iniciar polling y esperar a que complete antes de cerrar modal
                     pollImportJob(jobId).then((success) => {
                         if (success) {
                             if (loadingText) loadingText.textContent = 'Importación completada';
-                            // Esperar 1 segundo antes de cerrar el modal y recargar
                             setTimeout(() => {
                                 const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
                                 modal.hide();
-                                // Recargar la página después de cerrar el modal
                                 window.location.reload();
-                            }, 1000);
+                            }, 2000); // Delay de 2 segundos SIEMPRE
                         } else {
                             showError('Error al importar la encuesta');
                         }
