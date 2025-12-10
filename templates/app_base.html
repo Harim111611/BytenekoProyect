@@ -139,5 +139,52 @@
                 }
         }, { capture: true });
         </script>
+        {# --- SCRIPT GESTIÓN TEMA Y SIDEBAR --- #}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. Lógica del Sidebar Móvil
+            const toggleBtn = document.getElementById('sidebarToggleBtn');
+            const closeBtn = document.getElementById('sidebarCloseBtn');
+            const overlay = document.getElementById('sidebarOverlay');
+            const body = document.body;
 
+            function toggleSidebar() { body.classList.toggle('sidebar-open'); }
+            function closeSidebar() { body.classList.remove('sidebar-open'); }
+
+            if(toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+            if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
+            if(overlay) overlay.addEventListener('click', closeSidebar);
+
+            // 2. Lógica de Persistencia del Tema (Dark Mode Fix)
+            // Esto asegura que el servidor sepa qué tema usar para los gráficos estáticos
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+                        const newTheme = document.documentElement.getAttribute('data-bs-theme');
+                        
+                        // Guardar cookie por 1 año
+                        document.cookie = `theme=${newTheme}; path=/; max-age=31536000; SameSite=Lax`;
+                        
+                        // Si estamos en una página de reportes/resultados, necesitamos recargar
+                        // para que Django regenere los gráficos de Matplotlib con el nuevo color de texto.
+                        // Los gráficos interactivos (Chart.js) se actualizan solos, pero los estáticos no.
+                        if (window.location.pathname.includes('/results/') || window.location.pathname.includes('/dashboard/')) {
+                            // Pequeño delay para permitir que la UI termine de transicionar
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 300);
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+            
+            // Asegurar que la cookie exista al cargar (por si es la primera visita)
+            const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            if (!document.cookie.includes('theme=')) {
+                document.cookie = `theme=${currentTheme}; path=/; max-age=31536000; SameSite=Lax`;
+            }
+        });
+    </script>
 {% endblock %}

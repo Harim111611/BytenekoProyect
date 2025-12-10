@@ -14,21 +14,23 @@
         {% csrf_token %}
         <div class="row g-4">
 
-            <div class="col-lg-5">
+            <div class="col-lg-4">
                 <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header p-4">
-                        <h5 class="fw-bold mb-0">Configuración del reporte</h5>
+                    <div class="card-header bg-body border-bottom p-4">
+                        <h5 class="fw-bold mb-0">Configuración</h5>
                     </div>
                     <div class="card-body p-4">
 
                         <div class="mb-4">
-                            <label for="survey_id" class="form-label fw-medium">Selecciona survey
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Selecciona la survey" data-bs-content="Escoge la survey cuyos datos deseas incluir en el reporte. Si no hay resultados, asegúrate de que la survey tenga respuestas.">
-                                    <i class="bi bi-question-circle"></i>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label for="public_id" class="form-label fw-bold small text-uppercase text-body-secondary mb-0">Encuesta</label>
+                                <a href="#" id="btn-reset-survey" class="text-danger text-decoration-none small fw-bold" style="display: none; font-size: 0.75rem;">
+                                    <i class="bi bi-x-circle-fill me-1"></i>LIMPIAR
                                 </a>
-                            </label>
-                            <select class="form-select" id="survey_id" name="survey_id" required>
-                                <option value="" disabled selected>Selecciona una survey...</option>
+                            </div>
+                            
+                            <select class="form-select" id="public_id" name="public_id" required>
+                                <option value="" selected>Selecciona una encuesta...</option>
                                 {% for survey in surveys %}
                                     <option value="{{ survey.public_id }}">{{ survey.title }}</option>
                                 {% endfor %}
@@ -36,55 +38,44 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-medium">Rango de Análisis
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Rango de Análisis" data-bs-content="Selecciona si quieres todo el histórico o solo los últimos días. Para comparaciones específicas, usa 'Rango personalizado'.">
-                                    <i class="bi bi-question-circle"></i>
-                                </a>
-                            </label>
-                            <select class="form-select mb-3" id="window_days" name="window_days">
-                                <option value="all" selected>Todo el histórico (Completo)</option>
-                                <option value="15">Últimos 15 días (Tendencia)</option>
-                                <option value="30">Últimos 30 días (Mensual)</option>
-                                <option value="custom" disabled hidden>Rango personalizado (Activo)</option>
+                            <label class="form-label fw-bold small text-uppercase text-body-secondary">Periodo de Análisis</label>
+                            <select class="form-select mb-2" id="window_days" name="window_days">
+                                <option value="all" selected>Todo el histórico</option>
+                                <option value="15">Últimos 15 días</option>
+                                <option value="30">Últimos 30 días</option>
+                                <option value="custom">Rango personalizado</option>
                             </select>
 
-                            <div class="collapse" id="customDateCollapse">
-                                <div class="card card-body bg-light border-0 py-2 px-3">
-                                    <small class="text-muted mb-2 d-block fw-bold">O rango personalizado:</small>
-                                    <div class="row g-2">
-                                        <div class="col-6">
-                                            <input type="date" class="form-control form-control-sm" id="start_date" name="start_date" placeholder="Desde">
-                                        </div>
-                                        <div class="col-6">
-                                            <input type="date" class="form-control form-control-sm" id="end_date" name="end_date" placeholder="Hasta">
-                                        </div>
+                            <div class="collapse mt-2" id="customDateCollapse">
+                                <div class="p-3 bg-body-tertiary rounded border">
+                                    <div class="mb-2">
+                                        <label class="form-label small">Desde:</label>
+                                        <input type="date" class="form-control form-control-sm" id="start_date" name="start_date">
+                                    </div>
+                                    <div>
+                                        <label class="form-label small">Hasta:</label>
+                                        <input type="date" class="form-control form-control-sm" id="end_date" name="end_date">
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-text mt-1">
-                                <a href="#" class="text-decoration-none small" id="toggleCustomDates">
-                                    Definir fechas específicas...
-                                </a>
-                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Secciones a incluir
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Qué incluir en el reporte?" data-bs-content="Marca KPIs, gráficos y tablas según lo que necesites exportar. Menos secciones reduce tamaño y tiempo de generación.">
-                                    <i class="bi bi-question-circle"></i>
-                                </a>
-                            </label>
-                            <div class="form-check">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-uppercase text-body-secondary">Contenido del Reporte</label>
+                            
+                            <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="include_kpis" id="include_kpis" checked>
-                                <label class="form-check-label" for="include_kpis">KPIs de resumen</label>
+                                <label class="form-check-label" for="include_kpis">Incluir KPIs y Resumen</label>
                             </div>
-                            <div class="form-check">
+                            
+                            <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="include_charts" id="include_charts" checked>
-                                <label class="form-check-label" for="include_charts">Gráficos de análisis</label>
+                                <label class="form-check-label" for="include_charts">Incluir Gráficos</label>
                             </div>
-                            <div class="form-check">
+                            
+                            <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" name="include_table" id="include_table" checked>
-                                <label class="form-check-label" for="include_table">Tablas de análisis detallado</label>
+                                <label class="form-check-label" for="include_table">Incluir Tablas de Datos</label>
                             </div>
                         </div>
 
@@ -92,49 +83,34 @@
                 </div>
             </div>
 
-            <div class="col-lg-7">
-                <div class="card shadow-sm border-0 h-100">
-                    <div class="card-header p-4">
-                        <h5 class="fw-bold mb-0">Vista Previa y Descarga</h5>
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 h-100 d-flex flex-column">
+                    <div class="card-header bg-body p-3 d-flex justify-content-between align-items-center border-bottom">
+                        <h5 class="fw-bold mb-0">Vista Previa</h5>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" formaction="{% url 'report_pdf' %}">
+                                <i class="bi bi-file-pdf"></i> PDF
+                            </button>
+                            <button type="submit" class="btn btn-outline-primary btn-sm" formaction="{% url 'report_pptx' %}">
+                                <i class="bi bi-file-ppt"></i> PPTX
+                            </button>
+                        </div>
                     </div>
-                    <div class="card-body p-4 d-flex flex-column">
-
-                        <div class="card bg-body-tertiary border-dashed h-100" id="report-preview-container">
-                            <div class="card-body p-4 p-md-5 d-flex flex-column align-items-center justify-content-center text-center h-100">
-                                <i class="bi bi-file-earmark-medical fs-1 text-muted"></i>
-                                <h5 class="text-muted fw-normal mt-3">La vista previa aparecerá aquí</h5>
-                                <p class="small text-muted">Selecciona una survey para comenzar.</p>
+                    
+                    <div class="card-body p-0 bg-body-tertiary position-relative" style="height: 600px; overflow-y: auto;">
+                        <div id="report-preview-container" class="p-4 h-100">
+                            
+                            <div id="preview-placeholder" class="h-100 d-flex flex-column align-items-center justify-content-center text-center">
+                                <div class="mb-4 p-4 rounded-circle bg-body-secondary d-flex align-items-center justify-content-center shadow-sm" style="width: 100px; height: 100px;">
+                                    <i class="bi bi-bar-chart-line fs-1 text-primary opacity-75"></i>
+                                </div>
+                                <h5 class="fw-bold text-body-emphasis">Sin encuesta seleccionada</h5>
+                                <p class="text-body-secondary mw-75 mx-auto">
+                                    Selecciona una encuesta del panel de configuración para visualizar el análisis en tiempo real.
+                                </p>
                             </div>
-                        </div>
 
-                        <div class="mt-4">
-                            <button type="button" id="generate-pdf-btn" class="btn btn-primary w-100 mb-2">
-                                <i class="bi bi-file-earmark-pdf-fill me-1"></i> Generar PDF
-                            </button>
-                            {% block extra_js %}
-                            <script>
-                            document.addEventListener('DOMContentLoaded', function() {
-                                const pdfBtn = document.getElementById('generate-pdf-btn');
-                                if (pdfBtn) {
-                                    pdfBtn.addEventListener('click', function(e) {
-                                        const select = document.getElementById('survey_id');
-                                        const publicId = select ? select.value : '';
-                                        if (!publicId) {
-                                            alert('Selecciona una survey para generar el PDF.');
-                                            return;
-                                        }
-                                        const url = `{% url 'report_pdf' %}?public_id=${encodeURIComponent(publicId)}`;
-                                        window.location.href = url;
-                                    });
-                                }
-                            });
-                            </script>
-                            {% endblock %}
-                            <button type="submit" class="btn btn-outline-primary w-100" formaction="{% url 'report_pptx' %}">
-                                <i class="bi bi-file-earmark-slides-fill me-1"></i> Generar PowerPoint
-                            </button>
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -150,90 +126,145 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
-    const surveySelect = document.getElementById('survey_id');
+    const form = document.getElementById('report-form');
+    const surveySelect = document.getElementById('public_id');
     const previewContainer = document.getElementById('report-preview-container');
+    const resetBtn = document.getElementById('btn-reset-survey');
+    
+    // Guardamos el HTML inicial (Placeholder) para restaurarlo luego
     const placeholderHtml = previewContainer.innerHTML;
 
-    // Filtros
+    // Inputs
     const windowSelect = document.getElementById('window_days');
     const startDateInput = document.getElementById('start_date');
     const endDateInput = document.getElementById('end_date');
-    const toggleLink = document.getElementById('toggleCustomDates');
-    const customCollapse = document.getElementById('customDateCollapse');
-
-    // Toggles
-    const checkKpis = document.getElementById('include_kpis');
-    const checkCharts = document.getElementById('include_charts');
-    const checkTable = document.getElementById('include_table');
-
-    // --- INTERACCIÓN DE FECHAS ---
-    toggleLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        const bsCollapse = new bootstrap.Collapse(customCollapse, { toggle: true });
-    });
-
-    // Si elige rango predefinido
-    windowSelect.addEventListener('change', function() {
-        if (this.value !== 'custom') {
-            startDateInput.value = '';
-            endDateInput.value = '';
-            loadPreview();
-        }
-    });
-
-    // Si usa el calendario
-    function handleDateChange() {
-        if (startDateInput.value || endDateInput.value) {
-            windowSelect.value = 'custom';
+    const customCollapse = new bootstrap.Collapse(document.getElementById('customDateCollapse'), { toggle: false });
+    
+    // --- LÓGICA DE LIMPIEZA ---
+    function updateResetButton() {
+        if (surveySelect.value) {
+            resetBtn.style.display = 'inline-block';
         } else {
-            windowSelect.value = 'all';
+            resetBtn.style.display = 'none';
         }
-        loadPreview();
     }
 
-    startDateInput.addEventListener('change', handleDateChange);
-    endDateInput.addEventListener('change', handleDateChange);
-
-    // Listeners generales
-    [checkKpis, checkCharts, checkTable, surveySelect].forEach(el => {
-        el.addEventListener('change', loadPreview);
+    resetBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        surveySelect.value = ""; // Limpiar selección
+        updateResetButton();     // Ocultar botón
+        previewContainer.innerHTML = placeholderHtml; // Restaurar placeholder
     });
 
-    // --- FUNCIÓN DE CARGA ---
+    // --- MANEJO DE FECHAS ---
+    windowSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customCollapse.show();
+        } else {
+            customCollapse.hide();
+            startDateInput.value = '';
+            endDateInput.value = '';
+            debouncedPreview();
+        }
+    });
+
+    const dateInputs = [startDateInput, endDateInput];
+    dateInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            if (input.value) windowSelect.value = 'custom';
+            debouncedPreview();
+        });
+    });
+
+    // --- LISTENERS DE CAMBIOS ---
+    const triggers = [
+        surveySelect, 
+        document.getElementById('include_kpis'), 
+        document.getElementById('include_charts'), 
+        document.getElementById('include_table')
+    ];
+
+    triggers.forEach(el => {
+        el.addEventListener('change', () => {
+            if (el === surveySelect) updateResetButton();
+            debouncedPreview();
+        });
+    });
+
+    let debounceTimer;
+    function debouncedPreview() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(loadPreview, 300);
+    }
+
+    // --- CARGA DE PREVIEW ---
+    let abortController = null;
+
     function loadPreview() {
-        const surveyId = surveySelect.value;
-        if (!surveyId) {
+        const publicId = surveySelect.value;
+
+        // CORRECCIÓN CRÍTICA: Si no hay ID, restauramos el placeholder y salimos
+        if (!publicId) {
             previewContainer.innerHTML = placeholderHtml;
             return;
         }
 
+        if (abortController) abortController.abort();
+        abortController = new AbortController();
+
         previewContainer.innerHTML = `
-            <div class="card-body p-4 p-md-5 d-flex flex-column align-items-center justify-content-center text-center h-100">
+            <div class="h-100 d-flex flex-column align-items-center justify-content-center text-body-secondary">
                 <div class="spinner-border text-primary mb-3" role="status"></div>
-                <p class="text-muted small">Actualizando análisis...</p>
+                <p class="small">Generando análisis...</p>
             </div>
         `;
 
-        const params = new URLSearchParams({
-            window_days: windowSelect.value,
-            start_date: startDateInput.value,
-            end_date: endDateInput.value,
-            include_kpis: checkKpis.checked,
-            include_charts: checkCharts.checked,
-            include_table: checkTable.checked
+        const urlTemplate = "{% url 'report_preview' public_id='__PID__' %}";
+        const url = urlTemplate.replace('__PID__', encodeURIComponent(publicId));
+        const params = new URLSearchParams(new FormData(form));
+
+        fetch(`${url}?${params.toString()}`, { 
+            signal: abortController.signal,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(async response => {
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                const msg = (data && data.error) ? data.error : response.statusText;
+                throw new Error(msg);
+            }
+            return data;
+        })
+        .then(data => {
+            if (data && data.html) {
+                previewContainer.innerHTML = data.html;
+            } else {
+                throw new Error("Respuesta vacía del servidor");
+            }
+        })
+        .catch(err => {
+            if (err.name === 'AbortError') return;
+            console.error(err);
+            let displayMsg = "No se pudo cargar la vista previa.";
+            
+            // Si el error es 404 (probablemente al cambiar rápido), restauramos placeholder o mostramos error
+            if (err.message.includes("404")) {
+                 // Si fue un 404 real, es mejor volver al estado limpio
+                 previewContainer.innerHTML = placeholderHtml;
+                 return;
+            }
+
+            previewContainer.innerHTML = `
+                <div class="h-100 d-flex flex-column align-items-center justify-content-center text-danger p-4 text-center">
+                    <div class="mb-3 p-3 rounded-circle bg-danger-subtle text-danger">
+                        <i class="bi bi-exclamation-triangle fs-2"></i>
+                    </div>
+                    <p class="fw-bold mb-1">Error al cargar</p>
+                    <p class="small text-body-secondary">${displayMsg}</p>
+                    <small class="text-muted fst-italic" style="font-size: 0.7rem;">${err.message}</small>
+                </div>
+            `;
         });
-
-        const previewUrlTemplate = "{% url 'report_preview' public_id='__PUBLIC_ID__' %}";
-        const url = previewUrlTemplate.replace('__PUBLIC_ID__', encodeURIComponent(surveyId));
-
-        fetch(`${url}?${params.toString()}`)
-            .then(r => r.ok ? r.text() : Promise.reject(r.statusText))
-            .then(html => {
-                previewContainer.innerHTML = html;
-            })
-            .catch(err => {
-                previewContainer.innerHTML = `<div class="p-4 text-danger text-center">Error: ${err}</div>`;
-            });
     }
 });
 </script>

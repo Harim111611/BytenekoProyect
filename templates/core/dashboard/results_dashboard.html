@@ -7,6 +7,9 @@
     .kpi-card-modern, .chart-card {
         box-shadow: 0 4px 20px rgba(0,0,0,0.03);
         transition: transform 0.2s;
+        /* Asegurar fondo correcto en dark mode */
+        background-color: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
     }
     .kpi-card-modern:hover { transform: translateY(-3px); }
 
@@ -41,205 +44,31 @@
         border-radius: 12px;
         font-weight: 600;
     }
+
+    /* === DARK MODE FIXES FOR ANALYSIS CARDS === */
+    /* Forzar colores de fondo sutiles en modo oscuro para las tarjetas de análisis */
+    [data-bs-theme="dark"] .bg-success-subtle { background-color: rgba(25, 135, 84, 0.2) !important; color: #75b798 !important; }
+    [data-bs-theme="dark"] .bg-primary-subtle { background-color: rgba(13, 110, 253, 0.2) !important; color: #6ea8fe !important; }
+    [data-bs-theme="dark"] .bg-warning-subtle { background-color: rgba(255, 193, 7, 0.2) !important; color: #ffda6a !important; }
+    [data-bs-theme="dark"] .bg-danger-subtle { background-color: rgba(220, 53, 69, 0.2) !important; color: #ea868f !important; }
+    [data-bs-theme="dark"] .bg-info-subtle { background-color: rgba(13, 202, 240, 0.2) !important; color: #6edff6 !important; }
+    [data-bs-theme="dark"] .bg-body-tertiary { background-color: rgba(255, 255, 255, 0.05) !important; }
+    
+    /* Asegurar que el texto énfasis respete el tema */
+    .text-body-emphasis { color: var(--bs-body-color) !important; }
+    .text-body-secondary { color: var(--bs-secondary-color) !important; }
     
     /* Estilos específicos para impresión */
     @media print {
-        /* Forzar modo claro en todo el documento */
-        :root {
-            color-scheme: light only !important;
+        :root { color-scheme: light only !important; }
+        html, body { background-color: #ffffff !important; color: #212529 !important; }
+        .card, .kpi-card-modern, .chart-card { 
+            box-shadow: none !important; border: 1px solid #dee2e6 !important; break-inside: avoid; 
         }
-        
-        html,
-        html[data-bs-theme="dark"],
-        html[data-bs-theme="dark"] body,
-        body {
-            background-color: #ffffff !important;
-            color: #212529 !important;
-            filter: none !important;
-        }
-        
-        /* Forzar todos los elementos a modo claro */
-        * {
-            background-color: inherit !important;
-            color: inherit !important;
-            border-color: #dee2e6 !important;
-        }
-        
-        /* Tarjetas y contenedores */
-        .card,
-        .kpi-card,
-        .bg-dark,
-        div[class*="bg-"] {
-            background-color: #ffffff !important;
-            color: #212529 !important;
-            border: 1px solid #dee2e6 !important;
-        }
-        
-        .card-body,
-        .card-header {
-            background-color: #ffffff !important;
-            color: #212529 !important;
-        }
-        
-        /* Canvas de gráficos */
-        canvas {
-            background-color: #ffffff !important;
-            filter: none !important;
-        }
-        
-        /* Encabezados */
-        h1, h2, h3, h4, h5, h6,
-        .text-white,
-        .text-light,
-        .text-muted {
-            color: #212529 !important;
-        }
-        
-        /* Tablas */
-        table,
-        th,
-        td {
-            background-color: #ffffff !important;
-            color: #212529 !important;
-            border-color: #dee2e6 !important;
-        }
-        
-        .table-striped tbody tr:nth-of-type(odd) {
-            background-color: #f8f9fa !important;
-        }
-        
-        body { 
-            background: white !important;
-            color: #212529 !important;
-            font-size: 11pt;
-        }
-        
-        .container-xl {
-            max-width: 100% !important;
-            padding: 0 !important;
-        }
-        
-        /* Ocultar elementos no necesarios */
-        .btn, button, .d-print-none {
-            display: none !important;
-        }
-        
-        /* Ajustar tarjetas para impresión */
-        .kpi-card-modern, .chart-card {
-            box-shadow: none !important;
-            border: 1px solid #dee2e6 !important;
-            page-break-inside: avoid;
-            background-color: white !important;
-        }
-        
-        /* Forzar texto oscuro en todos los elementos */
-        .text-muted {
-            color: #6c757d !important;
-        }
-        
-        .text-body-emphasis,
-        h1, h2, h3, h4, h5, h6 {
-            color: #212529 !important;
-        }
-        
-        /* Encabezado para impresión */
-        .print-header {
-            display: block !important;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #0d6efd !important;
-        }
-        
-        /* Forzar impresión en color para gráficos */
-        * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-        }
-        
-        /* Saltos de página estratégicos */
-        .page-break-before {
-            page-break-before: always;
-        }
-        
-        .page-break-avoid {
-            page-break-inside: avoid;
-        }
-        
-        /* Mantener colores de fondo en KPIs */
-        .bg-primary-subtle,
-        .bg-success-subtle,
-        .bg-info-subtle,
-        .bg-secondary-subtle,
-        .bg-soft-blue {
-            print-color-adjust: exact !important;
-            -webkit-print-color-adjust: exact !important;
-        }
-        
-        /* Forzar fondos claros en tarjetas KPI */
-        .kpi-card-modern.bg-primary-subtle {
-            background-color: #e7f1ff !important;
-        }
-        
-        .kpi-card-modern.bg-success-subtle {
-            background-color: #d1f4e0 !important;
-        }
-        
-        .kpi-card-modern.bg-info-subtle {
-            background-color: #d1ecf1 !important;
-        }
-        
-        .kpi-card-modern.bg-secondary-subtle {
-            background-color: #e9ecef !important;
-        }
-        
-        /* Forzar colores de texto en KPIs */
-        .text-primary {
-            color: #0d6efd !important;
-        }
-        
-        .text-success {
-            color: #198754 !important;
-        }
-        
-        .text-info {
-            color: #0dcaf0 !important;
-        }
-        
-        .text-secondary {
-            color: #6c757d !important;
-        }
-        
-        /* Forzar fondos blancos en cards */
-        .card, .chart-card {
-            background-color: white !important;
-            border: 1px solid #dee2e6 !important;
-        }
-        
-        /* Tablas con fondo claro */
-        table {
-            background-color: white !important;
-        }
-        
-        .table-hover tbody tr:hover {
-            background-color: #f8f9fa !important;
-        }
-        
-        .bg-body-tertiary {
-            background-color: #f8f9fa !important;
-        }
+        .btn, .d-print-none { display: none !important; }
+        .d-print-only { display: block !important; }
     }
-    
-    /* Ocultar en pantalla, mostrar en impresión */
-    .d-print-only {
-        display: none;
-    }
-    
-    @media print {
-        .d-print-only {
-            display: block !important;
-        }
-    }
+    .d-print-only { display: none; }
 </style>
 {% endblock %}
 
@@ -248,7 +77,7 @@
 
     {# Encabezado para impresión (solo visible al imprimir) #}
     <div class="d-print-only print-header">
-        <div class="row align-items-center">
+        <div class="row align-items-center mb-4 border-bottom pb-2">
             <div class="col-8">
                 <h1 class="h3 fw-bold mb-1">Vista Global de Resultados</h1>
                 <p class="text-muted mb-0">Reporte generado el {{ "now"|date:"d/m/Y H:i" }}</p>
@@ -265,7 +94,7 @@
                 <i class="bi bi-bar-chart-fill me-1"></i>Análisis Consolidado
             </h6>
             <h1 class="h2 fw-bold text-body-emphasis mb-0">Vista Global de Resultados</h1>
-            <p class="text-muted mt-1 mb-0">Métricas agregadas y análisis comparativo de todas tus surveys activas.</p>
+            <p class="text-body-secondary mt-1 mb-0">Métricas agregadas y análisis comparativo de todas tus surveys activas.</p>
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary fw-medium">
@@ -311,6 +140,15 @@
                     </a>
                 </div>
             </div>
+            
+            {% if is_flat_data_warning %}
+            <div class="alert alert-warning d-flex align-items-center mt-3 mb-0 py-2">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2"></i>
+                <div class="small">
+                    <strong>Aviso de Datos:</strong> Se detectó una alta concentración de respuestas en fechas específicas. Es posible que estos datos provengan de una importación masiva (CSV).
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -332,21 +170,21 @@
                             <div class="p-3 bg-success-subtle rounded">
                                 <i class="bi bi-emoji-heart-eyes fs-3 text-success mb-2 d-block"></i>
                                 <h4 class="fw-bold text-success mb-0">{{ promoters|default:"0" }}%</h4>
-                                <small class="text-success">Promotores</small>
+                                <small class="text-success-emphasis">Promotores</small>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="p-3 bg-soft-blue rounded">
-                                <i class="bi bi-emoji-neutral fs-3 text-soft-blue mb-2 d-block"></i>
-                                <h4 class="fw-bold text-soft-blue mb-0">{{ passives|default:"0" }}%</h4>
-                                <small class="text-soft-blue">Pasivos</small>
+                            <div class="p-3 bg-info-subtle rounded">
+                                <i class="bi bi-emoji-neutral fs-3 text-info mb-2 d-block"></i>
+                                <h4 class="fw-bold text-info mb-0">{{ passives|default:"0" }}%</h4>
+                                <small class="text-info-emphasis">Pasivos</small>
                             </div>
                         </div>
                         <div class="col-4">
                             <div class="p-3 bg-danger-subtle rounded">
                                 <i class="bi bi-emoji-frown fs-3 text-danger mb-2 d-block"></i>
                                 <h4 class="fw-bold text-danger mb-0">{{ detractors|default:"0" }}%</h4>
-                                <small class="text-danger">Detractores</small>
+                                <small class="text-danger-emphasis">Detractores</small>
                             </div>
                         </div>
                     </div>
@@ -365,9 +203,9 @@
                         <i class="bi bi-people-fill"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <p class="text-primary small text-uppercase fw-bold mb-1">Respuestas</p>
+                        <p class="text-primary-emphasis small text-uppercase fw-bold mb-1">Respuestas</p>
                         <h2 class="h3 fw-bold mb-0 text-primary">{{ total_responses|default:"0"|floatformat:0 }}</h2>
-                        <small class="text-primary opacity-75">
+                        <small class="text-primary-emphasis opacity-75">
                             Acumuladas
                             {% if weekly_change %}
                                 <span class="trend-badge {% if weekly_change >= 0 %}bg-success text-white{% else %}bg-danger text-white{% endif %} ms-1">
@@ -389,12 +227,12 @@
                         <i class="bi bi-emoji-smile-fill"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <p class="text-success small text-uppercase fw-bold mb-1">Satisfacción</p>
+                        <p class="text-success-emphasis small text-uppercase fw-bold mb-1">Satisfacción</p>
                         <h2 class="h3 fw-bold mb-0 text-success">
                             {{ global_satisfaction|default:"0"|floatformat:1 }} 
                             <small class="opacity-75 fs-6">/10</small>
                         </h2>
-                        <small class="text-success opacity-75">Promedio global</small>
+                        <small class="text-success-emphasis opacity-75">Promedio global</small>
                     </div>
                 </div>
             </div>
@@ -408,9 +246,9 @@
                         <i class="bi bi-broadcast-pin"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <p class="text-info small text-uppercase fw-bold mb-1">Activas</p>
+                        <p class="text-info-emphasis small text-uppercase fw-bold mb-1">Activas</p>
                         <h2 class="h3 fw-bold mb-0 text-info">{{ total_active|default:"0" }}</h2>
-                        <small class="text-info opacity-75">de {{ total_surveys }} totales</small>
+                        <small class="text-info-emphasis opacity-75">de {{ total_surveys }} totales</small>
                     </div>
                 </div>
             </div>
@@ -424,9 +262,9 @@
                         <i class="bi bi-collection-fill"></i>
                     </div>
                     <div class="flex-grow-1">
-                        <p class="text-secondary small text-uppercase fw-bold mb-1">Total</p>
+                        <p class="text-secondary-emphasis small text-uppercase fw-bold mb-1">Total</p>
                         <h2 class="h3 fw-bold mb-0 text-secondary">{{ total_surveys|default:"0" }}</h2>
-                        <small class="text-secondary opacity-75">Encuestas</small>
+                        <small class="text-secondary-emphasis opacity-75">Encuestas</small>
                     </div>
                 </div>
             </div>
@@ -438,7 +276,7 @@
             <div class="card chart-card h-100 page-break-avoid">
                 <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
                     <h5 class="h6 fw-bold m-0 text-primary"><i class="bi bi-graph-up me-2"></i>Tendencia de Respuestas (30 días)</h5>
-                    <small class="text-muted">Todas las surveys</small>
+                    <small class="text-body-secondary">Todas las surveys</small>
                 </div>
                 <div class="card-body px-4 pb-4">
                     <div style="height: 300px;">
@@ -475,7 +313,7 @@
                 <div class="card-body p-4">
                     {% if top_preguntas %}
                         <div class="table-responsive">
-                            <table class="table table-sm table-hover">
+                            <table class="table table-sm table-hover align-middle">
                                 <thead class="table-light">
                                     <tr>
                                         <th style="width: 5%;">#</th>
@@ -489,7 +327,7 @@
                                     <tr>
                                         <td class="text-muted fw-bold">{{ forloop.counter }}</td>
                                         <td class="text-truncate" style="max-width: 300px;" title="{{ question.text }}">
-                                            <a href="{% url 'surveys:results' question.survey.id %}" class="text-decoration-none text-body show-results-loader">
+                                            <a href="{% url 'surveys:results' question.survey.id %}" class="text-decoration-none text-body-emphasis fw-medium show-results-loader">
                                                 {{ question.text }}
                                             </a>
                                             <br>
@@ -497,7 +335,7 @@
                                         </td>
                                         <td class="text-center">
                                             <span class="badge {% if question.avg_score >= 8 %}bg-success{% elif question.avg_score >= 6 %}bg-primary{% else %}bg-warning{% endif %} rounded-pill">
-                                                {{ question.avg_score|floatformat:1 }} / 10
+                                                {{ question.avg_score|floatformat:1 }}
                                             </span>
                                         </td>
                                         <td class="text-center text-muted">{{ question.num_responses }}</td>
@@ -526,7 +364,7 @@
                 <div class="card-body p-4">
                     <ul class="list-group list-group-flush">
                         {% for survey in top_surveys %}
-                        <li class="list-group-item px-0 bg-transparent border-secondary-subtle top-survey-item">
+                        <li class="list-group-item px-0 bg-transparent border-bottom border-secondary-subtle top-survey-item">
                             <div class="d-flex justify-content-between align-items-start gap-2 py-2">
                                 <div class="flex-grow-1 min-width-0">
                                     <div class="d-flex align-items-center gap-2 mb-1">
@@ -600,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var chartLabels = {{ chart_labels|default:"[]"|safe }};
         var chartData = {{ chart_data|default:"[]"|safe }};
 
-        var myLineChart = new Chart(ctx, {
+        new Chart(ctx, {
             type: 'line',
             data: {
                 labels: chartLabels,

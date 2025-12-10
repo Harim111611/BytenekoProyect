@@ -4,7 +4,7 @@
 {% block title %}Mis Encuestas | Byteneko{% endblock %}
 
 {% block app_content %}
-{# Modales del diseño original #}
+{# --- MODALES INCLUIDOS --- #}
 {% include 'surveys/modals/delete_selected_modal.html' %}
 {% include 'surveys/modals/delete_all_modal.html' %}
 {% include 'surveys/modals/delete_one_modal.html' %}
@@ -12,159 +12,222 @@
 
 <div class="modal fade" id="importModalPreview" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header border-0 pb-0 bg-body-tertiary">
-                <h5 class="modal-title fw-bold text-body-emphasis">
-                    <i class="bi bi-upload me-2"></i>Importar con Vista Previa
-                </h5>
+        <div class="modal-content border-0 shadow-lg overflow-hidden">
+            <div class="modal-header border-0 bg-body-tertiary py-3">
+                <div class="d-flex align-items-center">
+                    <div class="icon-circle bg-primary text-white me-3 shadow-sm">
+                        <i class="bi bi-cloud-arrow-up-fill"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-body-emphasis mb-0">Asistente de Importación</h5>
+                        <small class="text-muted">Sube tus datos y valida la estructura.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="btn-close-import-modal-header"></button>
             </div>
 
-            <div id="step1-upload" class="modal-body pt-4">
+            <div id="step1-upload" class="modal-body p-4 p-lg-5">
                 <div class="text-center mb-4">
-                    <div class="bg-primary-subtle text-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-                        <i class="bi bi-file-earmark-spreadsheet-fill fs-3"></i>
-                    </div>
-                    <h6 class="fw-bold text-body-emphasis mb-2">Paso 1: Selecciona tu archivo</h6>
-                    <p class="small text-muted">
-                        Sube un archivo <code>.csv</code> y te mostraremos una vista previa antes de importar.
+                    <h4 class="fw-bold text-body-emphasis">Sube tu archivo CSV</h4>
+                    <p class="text-muted col-lg-8 mx-auto">
+                        Arrastra tus archivos aquí o haz clic para explorar. <br>
+                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill mt-2">Soporta .csv UTF-8</span>
                     </p>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">
-                        <i class="bi bi-file-earmark-arrow-up me-1"></i>Archivo(s) CSV
-                    </label>
-                    <input class="form-control bg-body-tertiary form-control-lg" type="file"
-                           id="csvFileInput" accept=".csv" multiple required>
-                    <div class="form-text small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Puedes seleccionar múltiples archivos CSV. La primera fila debe contener los encabezados.
-                        <br><span class="text-danger fw-semibold">Si seleccionas más de un archivo, <u>no se mostrará vista previa</u> y la importación será directa.</span>
+                <div class="card border-dashed bg-body-tertiary mb-4 mx-auto position-relative overflow-hidden transition-all" 
+                     id="upload-drop-zone" 
+                     style="max-width: 700px; cursor: pointer; min-height: 250px;">
+                    
+                    <div class="card-body p-5 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                        <div class="mb-3 text-primary opacity-50 icon-bounce">
+                            <i class="bi bi-cloud-arrow-up" style="font-size: 3.5rem;"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2 text-body-emphasis">Arrastra y suelta aquí</h5>
+                        <p class="text-muted mb-4 small">o</p>
+                        
+                        <button type="button" class="btn btn-primary shadow-sm px-4 fw-medium" onclick="document.getElementById('csvFileInput').click()">
+                            <i class="bi bi-folder2-open me-2"></i>Explorar Archivos
+                        </button>
+                        
+                        <input class="form-control d-none" type="file" id="csvFileInput" accept=".csv" multiple required>
+
+                        <div id="fileList" class="mt-4 small text-muted fst-italic transition-all">Ningún archivo seleccionado</div>
+                        
+                        <div class="form-text mt-3 text-body-secondary">
+                            <i class="bi bi-info-circle me-1"></i> La primera fila debe contener encabezados.
+                            <div class="text-danger fw-semibold mt-1 animate-fade-in" id="multi-file-warning" style="display:none;">
+                                <i class="bi bi-exclamation-triangle"></i> Múltiples archivos: Se omitirá la vista previa.
+                            </div>
+                        </div>
                     </div>
-                    <div id="fileList" class="mt-2"></div>
+
+                    <div class="position-absolute top-0 start-0 w-100 h-100 bg-primary bg-opacity-10 d-flex align-items-center justify-content-center backdrop-blur-sm" 
+                         id="drop-zone-overlay" 
+                         style="pointer-events: none; opacity: 0; transition: all 0.2s ease; z-index: 10;">
+                        <div class="bg-body px-4 py-3 rounded-pill shadow-sm text-primary fw-bold fs-5 border border-primary">
+                            <i class="bi bi-download me-2"></i>¡Suéltalos aquí!
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">
-                        <i class="bi bi-tag me-1"></i>Nombre del Proyecto (Opcional)
-                    </label>
-                    <input type="text" class="form-control bg-body-tertiary"
-                           id="surveyTitleInput"
-                           placeholder="Ej. Satisfacción Q4 2025"
-                           maxlength="255">
-                    <div class="form-text small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Solo aplica si seleccionaste un solo archivo. Para múltiples archivos, se usa el nombre de cada archivo.
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <label class="form-label fw-bold small text-uppercase text-muted tracking-wide">
+                            Nombre del Proyecto (Opcional)
+                        </label>
+                        <input type="text" class="form-control form-control-lg bg-body-tertiary"
+                                <button type="submit" class="btn btn-outline-primary border-0 px-3" title="Buscar">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                               id="surveyTitleInput"
+                               placeholder="Ej. Análisis de Mercado 2025"
+                               maxlength="255">
                     </div>
                 </div>
 
-                <div class="alert alert-primary d-flex align-items-center" role="alert">
-                    <i class="bi bi-lightbulb fs-4 me-3"></i>
-                    <div class="small">
-                        <strong>¡Nuevo!</strong> Puedes importar múltiples surveys a la vez.  
-                        Si seleccionas varios archivos, se crearán automáticamente.
-                    </div>
+                <div class="d-flex justify-content-center gap-3 mt-5">
+                    <button type="button" class="btn btn-outline-secondary btn-lg px-4" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary btn-lg px-5 shadow-sm" id="btn-analyze" disabled>
+                        <i class="bi bi-magic me-2"></i>Analizar Archivo
+                    </button>
                 </div>
             </div>
 
-            <div id="step2-preview" class="modal-body pt-4" style="display:none;">
-                <div class="alert alert-success d-flex align-items-start mb-4">
-                    <i class="bi bi-check-circle fs-4 me-3"></i>
-                    <div>
-                        <h6 class="alert-heading mb-1">✅ Archivo validado correctamente</h6>
-                        <p class="mb-0 small">
-                            Los datos se interpretarán como se muestra abajo.
-                            Al confirmar, se creará la survey y serás redirigido al
-                            <strong>Dashboard de Resultados</strong> para explorar el análisis completo.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <div class="card bg-body-tertiary border-0">
-                            <div class="card-body text-center py-3">
-                                <div class="small text-muted fw-bold mb-1">RESPUESTAS</div>
-                                <div class="h4 fw-bold mb-0 text-primary" id="preview-total-rows">0</div>
+            <div id="step2-preview" class="modal-body p-0" style="display:none;">
+                <div class="bg-body-tertiary border-bottom px-4 py-3">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-check-circle-fill text-success fs-4"></i>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-success">Archivo Validado</h6>
+                                    <div class="small text-body-secondary text-truncate" style="max-width: 400px;" id="preview-filename">archivo.csv</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card bg-body-tertiary border-0">
-                            <div class="card-body text-center py-3">
-                                <div class="small text-muted fw-bold mb-1">PREGUNTAS</div>
-                                <div class="h4 fw-bold mb-0 text-success" id="preview-total-questions">0</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card bg-body-tertiary border-0">
-                            <div class="card-body text-center py-3">
-                                <div class="small text-muted fw-bold mb-1">ARCHIVO</div>
-                                <div class="small fw-bold text-truncate" id="preview-filename">-</div>
-                            </div>
+                        <div class="col-md-4 text-md-end">
+                             <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-back-to-upload">
+                                <i class="bi bi-arrow-left me-1"></i>Reemplazar
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-2"></i>Preguntas detectadas</h6>
-                <div class="table-responsive mb-4" style="max-height:300px; overflow-y:auto;">
-                    <table class="table table-sm table-hover">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th style="width:5%">#</th>
-                                <th style="width:35%">Columna</th>
-                                <th style="width:25%">Tipo</th>
-                                <th style="width:10%">Valores</th>
-                                <th style="width:25%">Muestra</th>
-                            </tr>
-                        </thead>
-                        <tbody id="preview-columns-table"></tbody>
-                    </table>
-                </div>
+                <div class="row g-0" style="height: 65vh; min-height: 500px;">
+                    <div class="col-lg-3 border-end bg-body-tertiary p-4 d-flex flex-column gap-3 overflow-auto">
+                        <h6 class="fw-bold text-uppercase text-muted small mb-2 tracking-wide">Resumen</h6>
+                        
+                        <div class="card border-0 shadow-sm mb-2 bg-body">
+                            <div class="card-body p-3 d-flex align-items-center gap-3">
+                                <div class="rounded-3 bg-primary-subtle text-primary-emphasis p-2">
+                                    <i class="bi bi-list-ol fs-4"></i>
+                                </div>
+                                <div>
+                                    <div class="h4 fw-bold mb-0 text-body-emphasis" id="preview-total-rows">0</div>
+                                    <div class="small text-muted">Respuestas</div>
+                                </div>
+                            </div>
+                        </div>
 
-                <h6 class="fw-bold mb-3"><i class="bi bi-table me-2"></i>Datos (primeras 5 filas)</h6>
-                <div class="table-responsive" style="max-height:250px; overflow:auto;">
-                    <table class="table table-sm table-bordered">
-                        <thead class="table-light sticky-top" id="preview-sample-header"></thead>
-                        <tbody id="preview-sample-body"></tbody>
-                    </table>
+                        <div class="card border-0 shadow-sm mb-2 bg-body">
+                            <div class="card-body p-3 d-flex align-items-center gap-3">
+                                <div class="rounded-3 bg-success-subtle text-success-emphasis p-2">
+                                    <i class="bi bi-columns fs-4"></i>
+                                </div>
+                                <div>
+                                    <div class="h4 fw-bold mb-0 text-body-emphasis" id="preview-total-questions">0</div>
+                                    <div class="small text-muted">Columnas</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info border-0 shadow-sm small mb-0 mt-auto bg-info-subtle text-info-emphasis">
+                            <i class="bi bi-lightbulb-fill me-1"></i>
+                            <strong>Tip:</strong> Verifica los tipos de datos en la pestaña "Estructura" antes de importar.
+                        </div>
+                    </div>
+
+                    <div class="col-lg-9 d-flex flex-column h-100 bg-body">
+                        <ul class="nav nav-tabs nav-fill px-3 pt-3 border-bottom-0" id="previewTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active fw-medium" id="structure-tab" data-bs-toggle="tab" data-bs-target="#structure-pane" type="button">
+                                    <i class="bi bi-diagram-3 me-2"></i>Estructura
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-medium" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-pane" type="button">
+                                    <i class="bi bi-table me-2"></i>Datos
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content flex-grow-1 overflow-hidden border-top position-relative" id="previewTabsContent">
+                            <div class="tab-pane fade show active h-100 overflow-auto p-0" id="structure-pane">
+                                <table class="table table-hover table-striped mb-0 align-middle w-100">
+                                    <thead class="sticky-top shadow-sm bg-body-tertiary">
+                                        <tr>
+                                            <th class="ps-4 bg-body-tertiary" style="width: 50px;">#</th>
+                                            <th class="bg-body-tertiary">Columna</th>
+                                            <th class="bg-body-tertiary">Tipo</th>
+                                            <th class="text-center bg-body-tertiary">Únicos</th>
+                                            <th class="bg-body-tertiary">Muestra</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="preview-columns-table"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="tab-pane fade h-100 overflow-auto p-0" id="data-pane">
+                                <div class="table-responsive h-100">
+                                    <table class="table table-sm table-bordered mb-0 spreadsheet-table">
+                                        <thead class="sticky-top bg-body-tertiary" id="preview-sample-header"></thead>
+                                        <tbody id="preview-sample-body" class="font-monospace small text-body-secondary"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="border-top p-3 bg-body-tertiary d-flex justify-content-end gap-2">
+                             <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+                            <button type="button" class="btn btn-success px-4 fw-bold shadow-sm" id="btn-import-confirm">
+                                <i class="bi bi-check-lg me-2"></i>Confirmar e Importar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div id="step-loading" class="modal-body text-center py-5" style="display:none;">
-                <div class="mb-2"></div>
-                <div class="alert alert-info mt-3" id="import-wait-message">
-                    <i class="bi bi-hourglass-split me-2"></i>
-                    Por favor espera a que termine la importación. No puedes cerrar ni minimizar esta ventana hasta que finalice el proceso.
-                </div>
-                <div class="mb-4" id="loading-animation">
-                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Loading...</span>
+                <div class="py-5">
+                    <div class="spinner-grow text-primary mb-4" style="width: 4rem; height: 4rem;" role="status"></div>
+                    <h4 class="fw-bold text-body-emphasis mb-2" id="loading-title">Procesando...</h4>
+                    <p class="text-muted mb-4" id="loading-text">Espera mientras analizamos tus datos.</p>
+                    <div class="progress mx-auto shadow-sm bg-body-secondary" style="max-width: 400px; height: 10px; border-radius: 10px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                     </div>
                 </div>
-                <h5 class="mb-3" id="loading-title">Processing Data</h5>
-                <p class="text-muted" id="loading-text">Analizando...</p>
-                <div class="progress mx-auto" style="max-width: 300px; height: 8px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
-                </div>
             </div>
 
-            <div id="step-error" class="modal-body" style="display:none;">
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    <span id="error-message"></span>
+            <div id="step-error" class="modal-body py-5 text-center" style="display:none;">
+                <div class="mb-3 text-danger"><i class="bi bi-x-circle-fill" style="font-size: 4rem;"></i></div>
+                <h4 class="fw-bold text-danger mb-3">Error en la importación</h4>
+                <div class="alert alert-danger d-inline-block text-start shadow-sm" style="max-width: 80%;">
+                    <i class="bi bi-bug me-2"></i><span id="error-message">Error desconocido</span>
                 </div>
-            </div>
-
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-primary" id="btn-analyze">
-                    <i class="bi bi-search me-2"></i>Ver Vista Previa / Importar
-                </button>
+                <div class="mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="window.location.reload()">Cerrar</button>
+                    <button type="button" class="btn btn-outline-primary" id="btn-retry-upload">Intentar de nuevo</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
 <div class="container-xl p-4 p-md-5">
 
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -174,13 +237,13 @@
         </div>
         <div class="d-flex gap-2 flex-wrap justify-content-md-end">
             <button type="button"
-                    class="btn btn-outline-secondary border-dashed fw-medium"
+                    class="btn btn-outline-secondary border-dashed fw-medium shadow-sm hover-lift"
                     data-bs-toggle="modal"
                     data-bs-target="#importModalPreview"
                     title="Importar CSV">
                 <i class="bi bi-cloud-upload me-2"></i>Importar CSV
             </button>
-            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-medium shadow-sm px-4">
+            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-medium shadow-sm px-4 hover-lift">
                 <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
             </a>
             <button type="button"
@@ -192,9 +255,8 @@
         </div>
     </div>
 
-    <div id="pageAlert" class="alert alert-success d-none mb-4" role="alert">
-        <strong id="pageAlertTitle"></strong>
-        <span id="pageAlertBody" class="ms-2"></span>
+    <div id="pageAlert" class="alert alert-success d-none mb-4 shadow-sm border-0" role="alert">
+        <strong id="pageAlertTitle"></strong><span id="pageAlertBody" class="ms-2"></span>
     </div>
     
     <div class="card border-0 shadow-sm mb-4 bg-body-tertiary">
@@ -202,14 +264,16 @@
             <form method="get" class="row g-2 align-items-center">
                 <div class="col-md-8">
                     <div class="input-group">
-                        <span class="input-group-text bg-body-tertiary border-0 text-muted"><i class="bi bi-search"></i></span>
-                           <input type="text" name="q" class="form-control border-0 bg-body-tertiary search-input" 
+                        <input type="text" name="q" class="form-control border-0 bg-body-tertiary search-input py-2" 
                                placeholder="Buscar por título..." 
                                value="{{ request.GET.q|default_if_none:'' }}">
+                        <button type="submit" class="btn btn-outline-primary border-0 px-3" title="Buscar" style="z-index:2;">
+                            <i class="bi bi-search"></i>
+                        </button>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <select name="status" class="form-select border-0 bg-body-tertiary" onchange="this.form.submit()">
+                    <select name="status" class="form-select border-0 bg-body-tertiary py-2" onchange="this.form.submit()">
                         <option value="">Todos los estados</option>
                         <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Activas</option>
                         <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Borradores</option>
@@ -222,31 +286,24 @@
     </div>
 
     <div id="bulkActionsBar"
-        class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 bulk-actions-bar-custom"
+        class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 bulk-actions-bar-custom shadow-sm"
         style="display:none !important;">
         <div class="d-flex align-items-center mb-2 mb-md-0 gap-2">
             <i class="bi bi-exclamation-triangle-fill"></i>
             <span class="small">
                 <strong><span id="selectedCountSpan">0</span> encuestas seleccionadas.</strong>
-                Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse por completo.
             </span>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAllBtn">
-                Seleccionar todas
+            <button type="button" class="btn btn-sm btn-light border" id="selectAllBtn">Todas</button>
+            <button type="button" class="btn btn-sm btn-light border" id="deselectAllBtn" style="display:none;">Nada</button>
+            <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteSelectedBtn">
+                <i class="bi bi-trash-fill me-1"></i>Eliminar Selección
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn" style="display:none;">
-                Quitar selección
+            <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteAllBtn">
+                <i class="bi bi-trash3-fill me-1"></i>Eliminar TODO
             </button>
-            <button type="button" class="btn btn-sm btn-outline-danger" id="deleteSelectedBtn">
-                <i class="bi bi-trash-fill me-1"></i>Eliminar seleccionadas
-            </button>
-            <button type="button" class="btn btn-sm btn-danger" id="deleteAllBtn">
-                <i class="bi bi-trash3-fill me-1"></i>Eliminar todas
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-dark" id="cancelSelectionBtn">
-                Salir de selección
-            </button>
+            <button type="button" class="btn btn-sm btn-dark" id="cancelSelectionBtn">Cancelar</button>
         </div>
     </div>
 
@@ -254,89 +311,107 @@
         <div class="row g-4">
             {% for survey in surveys %}
             <div class="col-md-6 col-lg-4">
-                <div class="card h-100 survey-card shadow-sm" data-survey-id="{{ survey.pk }}">
-                    <div class="card-body p-4 d-flex flex-column">
+                <div class="card h-100 survey-card border-0 shadow-sm overflow-hidden" data-survey-id="{{ survey.pk }}">
+                    
+                    <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox" style="z-index: 10; display: none;">
+                        <button type="button" class="btn btn-sm survey-select-btn js-select-survey-btn"
+                                data-survey-id="{{ survey.pk }}"
+                                style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid var(--bs-border-color);">
+                            <i class="bi bi-circle" style="font-size: 1rem;"></i>
+                        </button>
+                    </div>
 
-                        <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox"
-                             style="z-index: 10; display: none;">
-                            <button type="button"
-                                    class="btn btn-sm survey-select-btn js-select-survey-btn"
-                                    data-survey-id="{{ survey.pk }}"
-                                    style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid #dee2e6;">
-                                <i class="bi bi-circle" style="font-size: 1rem;"></i>
-                            </button>
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div class="d-flex gap-2 align-items-center">
-                                <span class="badge rounded-pill bg-body-tertiary text-secondary border border-dashed fw-normal">
-                                    {{ survey.created_at|date:"d M Y" }}
-                                </span>
-                                {% if survey.is_imported %}
-                                <span class="badge rounded-pill bg-warning-subtle text-warning border border-warning fw-normal" title="Esta encuesta fue importada desde CSV y está cerrada">
-                                    <i class="bi bi-file-earmark-lock2 me-1"></i>Importada
-                                </span>
-                                {% endif %}
-                            </div>
+                    <div class="card-body d-flex flex-column p-4">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill text-uppercase border border-primary-subtle" style="font-size: 0.7rem; letter-spacing: 0.5px; font-weight: 600;">
+                                {{ survey.category|default:"General" }}
+                            </span>
+                            
                             <div class="d-flex align-items-center small">
+                                {% if survey.is_imported %}
+                                    <span class="badge rounded-pill bg-light text-dark border me-1" title="Importada"><i class="bi bi-filetype-csv"></i></span>
+                                {% endif %}
+                        {# Render insight/context if available #}
+                        {% if survey.insight %}
+                        <div class="analysis-card p-3 border border-success-subtle bg-success-subtle rounded-3 mb-3 overflow-auto" style="max-height: 140px; min-height: 48px;">
+                            {% autoescape off %}{{ survey.insight }}{% endautoescape %}
+                        </div>
+                        {% endif %}
+
                                 {% if survey.status == 'active' %}
-                                    <span class="status-dot bg-active"></span>
-                                    <span class="text-success fw-bold" style="font-size: 0.8rem;">Activa</span>
+                                    <span class="status-dot bg-success"></span><span class="text-success-emphasis fw-bold ms-1" style="font-size:0.8rem">Activa</span>
                                 {% elif survey.status == 'paused' %}
-                                    <span class="status-dot bg-paused"></span>
-                                    <span class="text-warning" style="font-size: 0.8rem;">En pausa</span>
+                                    <span class="status-dot bg-warning"></span><span class="text-warning-emphasis fw-bold ms-1" style="font-size:0.8rem">Pausa</span>
                                 {% elif survey.status == 'draft' %}
-                                    <span class="status-dot bg-draft"></span>
-                                    <span class="text-muted" style="font-size: 0.8rem;">Borrador</span>
+                                    <span class="status-dot bg-secondary"></span><span class="text-body-secondary ms-1" style="font-size:0.8rem">Borrador</span>
                                 {% else %}
-                                    <span class="status-dot bg-closed"></span>
-                                    <span class="text-danger" style="font-size: 0.8rem;">Cerrada</span>
+                                    <span class="status-dot bg-danger"></span><span class="text-danger-emphasis ms-1" style="font-size:0.8rem">Cerrada</span>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate"
-                            title="{{ survey.title }}">
-                            <a href="{% url 'surveys:detail' survey.public_id %}"
-                               class="text-decoration-none text-body-emphasis stretched-link">
+                        <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate" title="{{ survey.title }}">
+                            <a href="{% url 'surveys:detail' survey.public_id %}" class="text-decoration-none text-reset stretched-link hover-underline-animation">
                                 {{ survey.title }}
                             </a>
                         </h5>
 
-                        <p class="card-text text-secondary small flex-grow-1 mb-4" style="line-height: 1.5;">
-                            {{ survey.description|default:"Sin descripción adicional."|truncatechars:85 }}
+                        <p class="card-text text-body-secondary small flex-grow-1 mb-4 text-truncate-2">
+                            {{ survey.description|default:"Sin descripción adicional." }}
                         </p>
 
-                        <div class="d-flex align-items-center text-secondary small mb-4
-                                    bg-body-tertiary rounded-3 p-2 border border-dashed">
-                            <div class="d-flex align-items-center me-3">
-                                <i class="bi bi-people-fill me-2 text-primary"></i>
-                                <strong class="text-body">{{ survey.total_responses }}</strong>&nbsp;respuestas
-                            </div>
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-layers-fill me-2 text-primary"></i>
-                                <strong class="text-body">{{ survey.total_questions|default:"0" }}</strong>&nbsp;preguntas
-                            </div>
+                        <div class="mb-4">
+                            {% if survey.sample_goal > 0 %}
+                                <div class="d-flex justify-content-between align-items-center mb-1 small">
+                                    <span class="text-muted fw-medium">Progreso de Muestra</span>
+                                    <span class="text-primary fw-bold">{{ survey.total_responses }} <span class="text-muted fw-normal">/ {{ survey.sample_goal }}</span></span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    {% widthratio survey.total_responses survey.sample_goal 100 as progress_percent %}
+                                    <div class="progress-bar bg-primary rounded-pill" role="progressbar" style="width: {{ progress_percent }}%" aria-valuenow="{{ survey.total_responses }}" aria-valuemin="0" aria-valuemax="{{ survey.sample_goal }}"></div>
+                                </div>
+                            {% else %}
+                                <div class="row g-2 text-center">
+                                    <div class="col-6">
+                                        <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100">
+                                            <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_responses }}</div>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">Respuestas</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100">
+                                            <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_questions|default:"0" }}</div>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">Preguntas</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
                         </div>
 
-                        <div class="d-flex gap-2 action-btn-group" style="position: relative; z-index: 2;">
-                                     <a href="{% url 'surveys:results' survey.public_id %}"
-                                         class="btn btn-sm btn-outline-primary flex-grow-1 show-results-loader">
-                                <i class="bi bi-bar-chart-fill me-1"></i> Resultados
-                            </a>
-                                     <a href="{% url 'surveys:edit' survey.public_id %}" 
-                               class="btn btn-sm btn-outline-secondary" 
-                               title="Configuración">
-                                <i class="bi bi-gear-fill"></i>
-                            </a>
-                            
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-danger js-delete-survey-btn"
-                                    data-action="delete-survey"
-                                    data-survey-id="{{ survey.pk }}"
-                                    title="Eliminar">
-                                <i class="bi bi-trash-fill"></i>
-                            </button>
+                        <div class="d-flex justify-content-between align-items-center mt-auto pt-3 border-top border-light-subtle">
+                             <div class="small text-body-secondary d-flex align-items-center" title="Fecha de creación">
+                                <i class="bi bi-calendar3 me-2 opacity-50"></i>{{ survey.created_at|date:"d M Y" }}
+                             </div>
+                             
+                             <div class="d-flex gap-2 position-relative" style="z-index: 2;">
+                                 <a href="{% url 'surveys:results' survey.public_id %}" 
+                                    class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm" 
+                                    data-bs-toggle="tooltip" title="Ver Resultados">
+                                    <i class="bi bi-bar-chart-fill"></i>
+                                </a>
+                                 <a href="{% url 'surveys:edit' survey.public_id %}" 
+                                    class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm" 
+                                    data-bs-toggle="tooltip" title="Configuración">
+                                    <i class="bi bi-gear-fill"></i>
+                                </a>
+                                <button type="button" 
+                                        class="btn btn-sm btn-light border text-danger hover-danger shadow-sm js-delete-survey-btn"
+                                        data-action="delete-survey" 
+                                        data-survey-id="{{ survey.pk }}"
+                                        data-bs-toggle="tooltip" title="Eliminar">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                             </div>
                         </div>
 
                     </div>
@@ -350,22 +425,22 @@
             <ul class="pagination justify-content-center">
                 {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link border-0 rounded-start-pill px-3" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
-                        <i class="bi bi-arrow-left me-1"></i> Anterior
+                    <a class="page-link border-0 rounded-pill px-3 me-1 shadow-sm bg-body-tertiary text-body" 
+                       href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i> Anterior
                     </a>
                 </li>
                 {% endif %}
-                
                 <li class="page-item disabled">
-                    <span class="page-link border-0 bg-transparent fw-bold mx-2">
-                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    <span class="page-link border-0 bg-transparent fw-bold mx-2 text-muted">
+                        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
                     </span>
                 </li>
-
                 {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link border-0 rounded-end-pill px-3" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
-                        Siguiente <i class="bi bi-arrow-right ms-1"></i>
+                    <a class="page-link border-0 rounded-pill px-3 ms-1 shadow-sm bg-body-tertiary text-body" 
+                       href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                        Siguiente <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
                 {% endif %}
@@ -374,62 +449,61 @@
         {% endif %}
 
     {% else %}
-        <div class="text-center py-5 my-5">
+        <div class="text-center py-5 my-5" id="surveys-empty-state">
             <div class="mb-4">
-                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
-                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
+                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed animate-float" style="width: 120px; height: 120px;">
+                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3.5rem;"></i>
                 </div>
             </div>
-            <h3 class="fw-bold text-body-emphasis mb-2">No se encontraron encuestas</h3>
+            <h3 class="fw-bold text-body-emphasis mb-2">No tienes encuestas aún</h3>
             <p class="text-muted mb-4 col-md-6 mx-auto">
                 {% if request.GET.q or request.GET.status %}
-                    Intenta ajustar los filtros de búsqueda o crea una nueva encuesta.
+                    No se encontraron resultados.
                 {% else %}
-                    Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar.
+                    Comienza creando una encuesta desde cero o importando datos existentes.
                 {% endif %}
             </p>
             <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'surveys:create' %}" class="btn btn-primary btn-lg px-4">
-                    <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+                <a href="{% url 'surveys:create' %}" class="btn btn-primary btn-lg px-4 shadow-sm hover-lift">
+                    <i class="bi bi-plus-lg me-2"></i>Crear Nueva
                 </a>
-                <button class="btn btn-outline-secondary btn-lg px-4"
-                        data-bs-toggle="modal"
-                        data-bs-target="#importModalPreview">
+                <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm hover-lift"
+                        data-bs-toggle="modal" data-bs-target="#importModalPreview">
                     Importar CSV
                 </button>
             </div>
         </div>
     {% endif %}
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// --- Barra flotante para progreso minimizado persistente ---
 function createFloatingProgressBar() {
     let bar = document.getElementById('floating-progress-bar');
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'floating-progress-bar';
+        bar.className = 'shadow-lg bg-body border';
         bar.style.position = 'fixed';
-        bar.style.bottom = '24px';
-        bar.style.right = '24px';
+        bar.style.bottom = '30px';
+        bar.style.right = '30px';
         bar.style.zIndex = '1080';
-        bar.style.background = '#fff';
-        bar.style.border = '1.5px solid #0d6efd';
-        bar.style.borderRadius = '12px';
-        bar.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
-        bar.style.padding = '12px 20px 12px 16px';
+        bar.style.borderRadius = '16px';
+        bar.style.padding = '16px 24px';
         bar.style.display = 'flex';
         bar.style.alignItems = 'center';
-        bar.style.gap = '12px';
+        bar.style.gap = '16px';
         bar.innerHTML = `
-            <span id="floating-progress-title" class="fw-bold text-primary">Importando...</span>
-            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            <span id="floating-progress-text" class="text-muted small">Procesando datos...</span>
-            <button type="button" class="btn btn-sm btn-outline-primary" id="restore-progress-modal" title="Restaurar">
-                <i class="bi bi-arrow-up-square"></i>
+            <div class="d-flex align-items-center gap-3">
+                <div class="spinner-border text-primary" role="status" style="width: 1.5rem; height: 1.5rem;"></div>
+                <div>
+                    <div id="floating-progress-title" class="fw-bold text-body-emphasis" style="font-size:0.95rem">Importando...</div>
+                    <div id="floating-progress-text" class="text-body-secondary small">Procesando en segundo plano</div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary ms-2" id="restore-progress-modal" title="Maximizar">
+                <i class="bi bi-arrows-angle-expand"></i>
             </button>
         `;
         document.body.appendChild(bar);
@@ -437,11 +511,10 @@ function createFloatingProgressBar() {
     return bar;
 }
 
-// Guardar y restaurar estado de progreso minimizado
 function saveFloatingProgressState(title, text) {
     localStorage.setItem('import_progress_minimized', '1');
     localStorage.setItem('import_progress_title', title || 'Importando...');
-    localStorage.setItem('import_progress_text', text || 'Procesando datos...');
+    localStorage.setItem('import_progress_text', text || 'Procesando...');
 }
 function clearFloatingProgressState() {
     localStorage.removeItem('import_progress_minimized');
@@ -452,92 +525,51 @@ function restoreFloatingProgressIfNeeded() {
     if (localStorage.getItem('import_progress_minimized') === '1') {
         const bar = createFloatingProgressBar();
         document.getElementById('floating-progress-title').textContent = localStorage.getItem('import_progress_title') || 'Importando...';
-        document.getElementById('floating-progress-text').textContent = localStorage.getItem('import_progress_text') || 'Procesando datos...';
+        document.getElementById('floating-progress-text').textContent = localStorage.getItem('import_progress_text') || 'Procesando...';
         bar.style.display = 'flex';
     }
 }
-    // --- Minimizar/Restaurar modal de progreso ---
-    let progressModalInstance = null;
-    let lastLoadingTitle = '';
-    let lastLoadingText = '';
-    function minimizeProgressModal() {
-        // Guardar estado en localStorage
-        saveFloatingProgressState(lastLoadingTitle, lastLoadingText);
-        const modalEl = document.getElementById('importModalPreview');
-        if (!progressModalInstance) {
-            progressModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-        }
-        // Guardar textos actuales
-        lastLoadingTitle = document.getElementById('loading-title')?.textContent || '';
-        lastLoadingText = document.getElementById('loading-text')?.textContent || '';
-        // Ocultar modal
-        progressModalInstance.hide();
-        // Mostrar barra flotante
-        const bar = createFloatingProgressBar();
-        document.getElementById('floating-progress-title').textContent = lastLoadingTitle || 'Importando...';
-        document.getElementById('floating-progress-text').textContent = lastLoadingText || 'Procesando datos...';
-        bar.style.display = 'flex';
+let progressModalInstance = null;
+function restoreProgressModal() {
+    const modalEl = document.getElementById('importModalPreview');
+    if (!progressModalInstance) progressModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    progressModalInstance.show();
+    const bar = document.getElementById('floating-progress-bar');
+    if (bar) bar.style.display = 'none';
+    clearFloatingProgressState();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const importModalEl = document.getElementById('importModalPreview');
+    if (importModalEl) {
+        bootstrap.Modal.getOrCreateInstance(importModalEl, {backdrop: 'static', keyboard: false});
     }
-    function restoreProgressModal() {
-        const modalEl = document.getElementById('importModalPreview');
-        if (!progressModalInstance) {
-            progressModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-        }
-        // Restaurar modal
-        progressModalInstance.show();
-        // Ocultar barra flotante
-        const bar = document.getElementById('floating-progress-bar');
-        if (bar) bar.style.display = 'none';
-        // Limpiar estado de localStorage
-        clearFloatingProgressState();
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-            // Forzar que el modal de importación no se cierre por click fuera ni por teclado
-            const importModalEl = document.getElementById('importModalPreview');
-            if (importModalEl) {
-                const importModal = bootstrap.Modal.getOrCreateInstance(importModalEl, {
-                    backdrop: 'static',
-                    keyboard: false
-                });
-            }
-        // Restaurar barra flotante si estaba minimizada
-        restoreFloatingProgressIfNeeded();
-        const minBtn = document.getElementById('minimize-progress-modal');
-        if (minBtn) {
-            minBtn.addEventListener('click', minimizeProgressModal);
-        }
-        document.body.addEventListener('click', function(e) {
-            if (e.target.closest && e.target.closest('#restore-progress-modal')) {
-                restoreProgressModal();
-            }
-        });
+    restoreFloatingProgressIfNeeded();
+    document.body.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('#restore-progress-modal')) restoreProgressModal();
     });
-/**
- * UTILIDADES GLOBALES
- */
+    
+    // Initialize tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+});
+
+// Utils
 let pageAlertTimeoutId = null;
-
 function showPageAlert(type, title, body, durationMs) {
-    const box   = document.getElementById('pageAlert');
-    const tEl   = document.getElementById('pageAlertTitle');
-    const bEl   = document.getElementById('pageAlertBody');
-    if (!box || !tEl || !bEl) return;
-
-    box.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
-    box.classList.add('alert-' + (type || 'info'));
+    const box = document.getElementById('pageAlert');
+    const tEl = document.getElementById('pageAlertTitle');
+    const bEl = document.getElementById('pageAlertBody');
+    if (!box) return;
+    
+    box.className = `alert alert-${type || 'info'} d-flex align-items-center mb-4 shadow-sm border-0`;
+    box.classList.remove('d-none');
     tEl.textContent = title || '';
     bEl.textContent = body || '';
 
-    if (pageAlertTimeoutId) {
-        clearTimeout(pageAlertTimeoutId);
-        pageAlertTimeoutId = null;
-    }
-
-    const timeout = (typeof durationMs === 'number') ? durationMs : 5000;
-    if (timeout > 0) {
-        pageAlertTimeoutId = setTimeout(function () {
-            box.classList.add('d-none');
-        }, timeout);
+    if (pageAlertTimeoutId) clearTimeout(pageAlertTimeoutId);
+    if (durationMs !== 0) {
+        pageAlertTimeoutId = setTimeout(() => box.classList.add('d-none'), durationMs || 5000);
     }
 }
 
@@ -556,93 +588,46 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Global polling functions
+// Polling
 window.pollDeleteTask = async function(taskId) {
-    const statusUrlTemplate = "{% url 'surveys:delete_task_status' 'TASK_ID_PLACEHOLDER' %}";
-    const statusUrl = statusUrlTemplate.replace('TASK_ID_PLACEHOLDER', taskId);
-    const maxWaitMs = 120000; // 2 minutes
+    const statusUrl = "{% url 'surveys:delete_task_status' 'TASK_ID_PLACEHOLDER' %}".replace('TASK_ID_PLACEHOLDER', taskId);
     const start = Date.now();
-    while (Date.now() - start < maxWaitMs) {
+    while (Date.now() - start < 120000) {
         try {
             const res = await fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!res.ok) break;
             const info = await res.json();
-            if (info.ready && (info.status === 'SUCCESS' || info.status === 'success')) {
-                return info;
-            }
-            if (info.error || (info.ready && info.status !== 'SUCCESS' && info.status !== 'success')) {
-                console.error('Delete failed:', info.error);
-                return info; // return info so caller can inspect error
-            }
-        } catch (e) {
-            console.warn('Delete polling error', e);
-        }
+            if (info.ready && (info.status === 'SUCCESS' || info.status === 'success')) return info;
+            if (info.error || (info.ready && info.status !== 'SUCCESS')) return info;
+        } catch (e) { console.warn('Polling error', e); }
         await new Promise(r => setTimeout(r, 1500));
     }
     return false;
 };
 
 window.pollImportJob = async function(jobId) {
-    const statusUrlTemplate = "{% url 'surveys:import_job_status' 0 %}";
-    const statusUrl = statusUrlTemplate.replace('/0/', `/${jobId}/`);
-    const maxWaitMs = 300000; // 5 minutes
+    const statusUrl = "{% url 'surveys:import_job_status' 0 %}".replace('/0/', `/${jobId}/`);
     const start = Date.now();
-    while (Date.now() - start < maxWaitMs) {
+    while (Date.now() - start < 300000) {
         try {
             const res = await fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!res.ok) break;
             const info = await res.json();
-            if (info.status === 'completed') {
-                return true;
-            }
-            if (info.status === 'failed' || info.error_message) {
-                console.error('Import failed:', info.error_message || info.error);
-                return false;
-            }
-        } catch (e) {
-            console.warn('Polling error', e);
-        }
+            if (info.status === 'completed') return true;
+            if (info.status === 'failed' || info.error_message) return false;
+        } catch (e) { console.warn('Polling error', e); }
         await new Promise(r => setTimeout(r, 1500));
     }
     return false;
 };
-</script>
 
-<script>
-// Cuando el usuario vuelve con back/forward el navegador puede usar bfcache
-// y mostrar una versión en caché de la página. Forzamos una recarga ligera
-// para garantizar que la lista refleje el estado real del servidor.
 window.addEventListener('pageshow', function(event) {
-    try {
-        // event.persisted === true indica bfcache en muchos navegadores
-        if (event.persisted) {
-            window.location.reload();
-            return;
-        }
-
-        // Algunos navegadores no setean persisted; comprobamos tipo de navegación
-        // si está disponible en PerformanceNavigationTiming
-        if (performance && performance.getEntriesByType) {
-            const entries = performance.getEntriesByType('navigation');
-            if (entries && entries.length) {
-                const nav = entries[0];
-                if (nav.type === 'back_forward') {
-                    window.location.reload();
-                    return;
-                }
-            }
-        }
-    } catch (e) {
-        // En caso de error no bloquear la navegación
-        console.error('pageshow handler error', e);
-    }
+    if (event.persisted) window.location.reload();
 });
 </script>
 
 <script>
-// -----------------------------------------
-// Selección múltiple y borrado en bloque
-// -----------------------------------------
+// JS: Selección Múltiple
 document.addEventListener('DOMContentLoaded', function () {
     const toggleSelectionBtn = document.getElementById('toggleSelectionBtn');
     const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
@@ -653,22 +638,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const deleteSelectedBtn  = document.getElementById('deleteSelectedBtn');
     const deleteAllBtn       = document.getElementById('deleteAllBtn');
 
-    function getSelectBtns() {
-        return Array.from(document.querySelectorAll('.js-select-survey-btn'));
-    }
-    function getCards() {
-        return Array.from(document.querySelectorAll('.survey-card'));
-    }
+    function getSelectBtns() { return Array.from(document.querySelectorAll('.js-select-survey-btn')); }
+    function getCards() { return Array.from(document.querySelectorAll('.survey-card')); }
 
-    if (!toggleSelectionBtn || !cancelSelectionBtn || !bulkActionsBar || !selectedCountSpan || !deleteSelectedBtn) {
-        return;
-    }
-
-    // Ocultar la barra de acciones de selección por defecto
-    bulkActionsBar.style.display = 'none';
-    bulkActionsBar.classList.add('d-none');
-
-    // Si NO hay encuestas, deshabilitar selección
+    if (!toggleSelectionBtn || !bulkActionsBar) return;
     if (getCards().length === 0) {
         toggleSelectionBtn.disabled = true;
         toggleSelectionBtn.classList.add('disabled', 'opacity-50');
@@ -678,29 +651,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectedSurveys = new Set();
     let selectionMode = false;
     let skipConfirmBulk = false;
-    let isDeleteAllAction = false;
 
     function updateSelectionUI() {
         const selectBtns = getSelectBtns();
         const count = selectedSurveys.size;
         selectedCountSpan.textContent = count;
+        
         if (selectionMode) {
-            bulkActionsBar.classList.add('is-active');
+            bulkActionsBar.style.display = 'flex';
             bulkActionsBar.classList.remove('d-none');
-            bulkActionsBar.style.display = '';
-            // Mostrar checkboxes
-            document.querySelectorAll('.selection-checkbox').forEach(el => {
-                el.style.display = 'block';
-            });
+            document.querySelectorAll('.selection-checkbox').forEach(el => el.style.display = 'block');
         } else {
-            bulkActionsBar.classList.remove('is-active');
-            bulkActionsBar.classList.add('d-none');
             bulkActionsBar.style.display = 'none';
-            // Ocultar checkboxes
-            document.querySelectorAll('.selection-checkbox').forEach(el => {
-                el.style.display = 'none';
-            });
+            bulkActionsBar.classList.add('d-none');
+            document.querySelectorAll('.selection-checkbox').forEach(el => el.style.display = 'none');
         }
+
         const allSelected = (selectBtns.length > 0) && (count === selectBtns.length);
         if (selectAllBtn && deselectAllBtn) {
             selectAllBtn.style.display   = allSelected ? 'none' : 'inline-block';
@@ -708,25 +674,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function clearSelectionVisuals() {
-        getSelectBtns().forEach(btn => {
-            btn.classList.remove('btn-primary', 'text-white');
-            btn.style.border = '2px solid #dee2e6';
-            const icon = btn.querySelector('i');
-            if (icon) icon.className = 'bi bi-circle';
-        });
-    }
-
     function toggleSelectionMode(forceOff = false) {
-        if (forceOff) {
-            selectionMode = false;
-        } else {
-            selectionMode = true;
-        }
+        selectionMode = forceOff ? false : true;
         document.body.classList.toggle('survey-selection-mode', selectionMode);
         if (!selectionMode) {
             selectedSurveys.clear();
-            clearSelectionVisuals();
+            getSelectBtns().forEach(btn => {
+                btn.classList.remove('selected', 'btn-primary');
+                btn.querySelector('i').className = 'bi bi-circle';
+            });
         }
         updateSelectionUI();
     }
@@ -734,16 +690,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function toggleSurveySelection(surveyId, btn) {
         if (selectedSurveys.has(surveyId)) {
             selectedSurveys.delete(surveyId);
-            btn.classList.remove('btn-primary', 'text-white');
-            btn.style.border = '2px solid #dee2e6';
-            const icon = btn.querySelector('i');
-            if (icon) icon.className = 'bi bi-circle';
+            btn.classList.remove('selected', 'btn-primary');
+            btn.querySelector('i').className = 'bi bi-circle';
         } else {
             selectedSurveys.add(surveyId);
-            btn.classList.add('btn-primary', 'text-white');
-            btn.style.border = '2px solid var(--bk-primary)';
-            const icon = btn.querySelector('i');
-            if (icon) icon.className = 'bi bi-check-circle-fill';
+            btn.classList.add('selected', 'btn-primary');
+            btn.querySelector('i').className = 'bi bi-check-circle-fill';
         }
         updateSelectionUI();
     }
@@ -751,558 +703,306 @@ document.addEventListener('DOMContentLoaded', function () {
     toggleSelectionBtn.addEventListener('click', () => toggleSelectionMode(false));
     cancelSelectionBtn.addEventListener('click', () => toggleSelectionMode(true));
 
-    function attachSelectBtnListeners() {
-        // Permitir seleccionar tocando toda la tarjeta en modo selección
-        getCards().forEach(card => {
-            card.onclick = function (e) {
-                if (!selectionMode) return;
-                // Evitar doble toggle si el click fue en el botón
-                if (e.target.closest('.js-select-survey-btn')) return;
-                // Si el click fue en un enlace dentro de la tarjeta, prevenir navegación
-                const link = e.target.closest('a');
-                if (link && card.contains(link)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-                const btn = card.querySelector('.js-select-survey-btn');
-                if (!btn) return;
-                const surveyId = btn.dataset.surveyId;
-                if (!surveyId) return;
-                toggleSurveySelection(surveyId, btn);
-            };
-        });
-        // El botón sigue funcionando igual
-        getSelectBtns().forEach(btn => {
-            btn.onclick = function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                const surveyId = this.dataset.surveyId;
-                if (!surveyId) return;
-                toggleSurveySelection(surveyId, this);
-            };
-        });
-    }
-    attachSelectBtnListeners();
+    getCards().forEach(card => {
+        card.onclick = function (e) {
+            if (!selectionMode) return;
+            if (e.target.closest('.js-select-survey-btn')) return;
+            if (e.target.closest('a') && card.contains(e.target.closest('a'))) {
+                e.preventDefault(); e.stopPropagation();
+            }
+            const btn = card.querySelector('.js-select-survey-btn');
+            if (btn && btn.dataset.surveyId) toggleSurveySelection(btn.dataset.surveyId, btn);
+        };
+    });
+    getSelectBtns().forEach(btn => {
+        btn.onclick = function (e) {
+            e.preventDefault(); e.stopPropagation();
+            if (this.dataset.surveyId) toggleSurveySelection(this.dataset.surveyId, this);
+        };
+    });
 
     if (selectAllBtn) {
         selectAllBtn.onclick = function () {
             getSelectBtns().forEach(btn => {
-                const surveyId = btn.dataset.surveyId;
-                if (!surveyId) return;
-                if (!selectedSurveys.has(surveyId)) {
-                    selectedSurveys.add(surveyId);
-                }
-                btn.classList.add('btn-primary', 'text-white');
-                btn.style.border = '2px solid var(--bk-primary)';
-                const icon = btn.querySelector('i');
-                if (icon) icon.className = 'bi bi-check-circle-fill';
+                const sid = btn.dataset.surveyId;
+                if (!selectedSurveys.has(sid)) selectedSurveys.add(sid);
+                btn.classList.add('selected', 'btn-primary');
+                btn.querySelector('i').className = 'bi bi-check-circle-fill';
             });
             updateSelectionUI();
         };
     }
-
     if (deselectAllBtn) {
         deselectAllBtn.onclick = function () {
             selectedSurveys.clear();
-            clearSelectionVisuals();
+            getSelectBtns().forEach(btn => {
+                btn.classList.remove('selected', 'btn-primary');
+                btn.querySelector('i').className = 'bi bi-circle';
+            });
             updateSelectionUI();
         };
     }
 
     deleteSelectedBtn.onclick = async function () {
-        if (selectedSurveys.size === 0) {
-            showPageAlert('warning', 'Nada para eliminar', 'No hay encuestas seleccionadas.', 4000);
-            return;
-        }
-        const count = selectedSurveys.size;
+        if (selectedSurveys.size === 0) return showPageAlert('warning', 'Atención', 'Selecciona al menos una encuesta.', 4000);
+        
         if (!skipConfirmBulk) {
             const deleteSelectedModal = document.getElementById('deleteSelectedModal');
-            const deleteSelectedCount = document.getElementById('deleteSelectedCount');
-            const confirmDeleteSelectedBtn = document.getElementById('confirmDeleteSelectedBtn');
-            if (!deleteSelectedModal || !confirmDeleteSelectedBtn) {
-                const message = count === 1
-                    ? '¿Estás seguro de que deseas eliminar esta encuesta?'
-                    : `¿Estás seguro de que deseas eliminar ${count} encuestas?`;
-                if (!confirm(message + ' Esta acción no se puede deshacer.')) {
-                    return;
-                }
+            if (!deleteSelectedModal) {
+                if (!confirm(`¿Eliminar ${selectedSurveys.size} encuestas?`)) return;
             } else {
-                if (deleteSelectedCount) deleteSelectedCount.textContent = count;
+                document.getElementById('deleteSelectedCount').textContent = selectedSurveys.size;
                 const modal = new bootstrap.Modal(deleteSelectedModal);
-                const userConfirmed = await new Promise((resolve) => {
-                    const onConfirm = () => {
-                        confirmDeleteSelectedBtn.removeEventListener('click', onConfirm);
-                        deleteSelectedModal.removeEventListener('hidden.bs.modal', onCancel);
-                        modal.hide();
-                        resolve(true);
-                    };
-                    const onCancel = () => {
-                        confirmDeleteSelectedBtn.removeEventListener('click', onConfirm);
-                        deleteSelectedModal.removeEventListener('hidden.bs.modal', onCancel);
-                        resolve(false);
-                    };
-                    confirmDeleteSelectedBtn.addEventListener('click', onConfirm);
-                    deleteSelectedModal.addEventListener('hidden.bs.modal', onCancel);
+                const confirmed = await new Promise(resolve => {
+                    const btn = document.getElementById('confirmDeleteSelectedBtn');
+                    const handler = () => { modal.hide(); resolve(true); btn.removeEventListener('click', handler); };
+                    btn.addEventListener('click', handler);
+                    deleteSelectedModal.addEventListener('hidden.bs.modal', () => resolve(false), {once:true});
                     modal.show();
                 });
-                if (!userConfirmed) return;
+                if (!confirmed) return;
             }
         }
+        
         skipConfirmBulk = false;
-        const originalBtnHtml = deleteSelectedBtn.innerHTML;
+        const originalHtml = deleteSelectedBtn.innerHTML;
         deleteSelectedBtn.disabled = true;
-        deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Eliminando...';
+        deleteSelectedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>';
+
         const ids = Array.from(selectedSurveys);
-        const cardsToDelete = [];
-        ids.forEach(id => {
-            const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
-            if (card) {
-                card.classList.add('survey-card--deleting');
-                cardsToDelete.push(card);
-            }
-        });
+        const cardsToDelete = ids.map(id => document.querySelector(`.survey-card[data-survey-id="${id}"]`)).filter(c=>c);
+        cardsToDelete.forEach(c => c.classList.add('survey-card--deleting'));
+
         try {
             const formData = new FormData();
             formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
             ids.forEach(id => formData.append('survey_ids', id));
-            const response = await fetch("{% url 'surveys:bulk_delete' %}", {
-                method: 'POST',
-                body: formData,
+            
+            const res = await fetch("{% url 'surveys:bulk_delete' %}", { 
+                method: 'POST', 
+                body: formData, 
                 headers: {
-                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}'
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             });
-            if (!response.ok) {
-                const txt = await response.text();
-                throw new Error(txt || ('Error HTTP ' + response.status));
-            }
-            let data = {};
-            try { data = await response.json(); } catch (e) { data = { success: true }; }
-            if (data.success === false) {
-                throw new Error(data.error || 'No se pudieron eliminar las encuestas.');
-            }
-            const taskId = data.task_id;
-            let taskResultInfo = null;
-            if (taskId) {
-                taskResultInfo = await pollDeleteTask(taskId);
-                if (!taskResultInfo || taskResultInfo.error) throw new Error('La tarea de eliminación falló o expiró.');
-            }
-            const colsToDelete = cardsToDelete.map(card => card.closest('.col-md-6'));
-            colsToDelete.forEach(col => { if (col) col.classList.add('col-removing'); });
-            setTimeout(() => {
-                colsToDelete.forEach(col => { if (col) col.remove(); });
-                selectedSurveys.clear();
-                updateSelectionUI();
-                const remainingCards = document.querySelectorAll('.survey-card');
-                if (remainingCards.length === 0) {
-                    if (!isDeleteAllAction) {
-                        setTimeout(() => { window.location.reload(); }, 300);
-                    } else {
-                        const surveyGrid = document.querySelector('.row.g-4');
-                        if (surveyGrid) surveyGrid.remove();
-                        const pagination = document.querySelector('nav[aria-label="Page navigation"]');
-                        if (pagination) pagination.remove();
-                        if (bulkActionsBar) {
-                            bulkActionsBar.style.display = 'none';
-                            bulkActionsBar.classList.add('d-none');
-                        }
-                        if (toggleSelectionBtn) {
-                            toggleSelectionBtn.disabled = true;
-                            toggleSelectionBtn.classList.add('disabled', 'opacity-50');
-                        }
-                        const container = document.querySelector('.container-xl');
-                        if (container) {
-                            const existingEmpty = document.getElementById('surveys-empty-state');
-                            if (!existingEmpty) {
-                                const empty = document.createElement('div');
-                                empty.id = 'surveys-empty-state';
-                                // Copia la estructura y clases del estado vacío original
-                                empty.innerHTML = `
-                                    <div class="text-center py-5 my-5">
-                                        <div class="mb-4">
-                                            <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
-                                                <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3rem;"></i>
-                                            </div>
-                                        </div>
-                                        <h3 class="fw-bold text-body-emphasis mb-2">No se encontraron encuestas</h3>
-                                        <p class="text-muted mb-4 col-md-6 mx-auto">
-                                            Crea tu primera survey desde cero o importa un archivo CSV existente para comenzar.
-                                        </p>
-                                        <div class="d-flex justify-content-center gap-3">
-                                            <a href=\"{% url 'surveys:create' %}\" class=\"btn btn-primary btn-lg px-4\">
-                                                <i class=\"bi bi-plus-lg me-2\"></i>Crear Encuesta
-                                            </a>
-                                            <button class=\"btn btn-outline-secondary btn-lg px-4\" data-bs-toggle=\"modal\" data-bs-target=\"#importModalPreview\">
-                                                Importar CSV
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                                const refNode = document.querySelector('.card.border-0.shadow-sm.mb-4') || container.firstChild;
-                                if (refNode && refNode.parentNode) {
-                                    refNode.parentNode.insertBefore(empty, refNode.nextSibling);
-                                } else {
-                                    container.appendChild(empty);
-                                }
-                            }
-                        }
-                        isDeleteAllAction = false;
-                    }
-                }
-                if (selectionMode) {
-                    toggleSelectionMode(true);
-                }
-                const announcementToast = document.getElementById('announcementModal');
-                const announcementBody = document.getElementById('announcementModalBody');
-                if (announcementToast && announcementBody) {
-                    const deletedCount = (taskResultInfo && (taskResultInfo.deleted_surveys || taskResultInfo.deleted || (taskResultInfo.result && (taskResultInfo.result.deleted_surveys || taskResultInfo.result.deleted)))) || data.deleted || 0;
-                    if (deletedCount > 0) {
-                        announcementBody.textContent = deletedCount === 1 ? 'Eliminada correctamente' : `Se eliminaron ${deletedCount} encuesta(s).`;
-                    } else {
-                        announcementBody.textContent = data.message || 'Las encuestas seleccionadas se eliminaron correctamente.';
-                    }
-                    const toast = new bootstrap.Toast(announcementToast, { autohide: false });
-                    toast.show();
-                }
-            }, 300);
-        } catch (error) {
-            console.error('Error eliminando encuestas:', error);
-            cardsToDelete.forEach(card => card.classList.remove('survey-card--deleting'));
-            showPageAlert('danger', 'Error al eliminar encuestas', error.message || 'Ocurrió un error al eliminar las encuestas.', 6000);
+            
+            if (!res.ok) throw new Error(await res.text());
+            
+            const data = await res.json();
+            if (data.success === false) throw new Error(data.error);
+            if (data.task_id) await pollDeleteTask(data.task_id);
+
+            cardsToDelete.forEach(c => c.closest('.col-md-6').classList.add('col-removing'));
+            setTimeout(() => window.location.reload(), 500);
+        } catch (err) {
+            console.error(err);
+            cardsToDelete.forEach(c => c.classList.remove('survey-card--deleting'));
+            showPageAlert('danger', 'Error', 'Falló la eliminación en lote.', 5000);
         } finally {
             deleteSelectedBtn.disabled = false;
-            deleteSelectedBtn.innerHTML = originalBtnHtml;
+            deleteSelectedBtn.innerHTML = originalHtml;
         }
     };
 
     if (deleteAllBtn) {
-        deleteAllBtn.onclick = function () {
-            const cards = getCards();
-            const total = cards.length;
-            if (!total) {
-                showPageAlert('info', 'No hay encuestas', 'No hay encuestas en la lista para eliminar.', 4000);
-                return;
-            }
-            document.getElementById('deleteAllCount').textContent = `${total}`;
-            const heavyNotice = document.getElementById('deleteAllHeavyNotice');
-            if (total >= 5) {
-                heavyNotice.textContent = 'Las encuestas con muchos registros pueden tardar algunos segundos en eliminarse.';
-                heavyNotice.style.display = '';
-            } else {
-                heavyNotice.style.display = 'none';
-            }
+        deleteAllBtn.onclick = function() {
+            const total = getCards().length;
+            document.getElementById('deleteAllCount').textContent = total;
             const modal = new bootstrap.Modal(document.getElementById('deleteAllModal'));
             modal.show();
-            const confirmBtn = document.getElementById('confirmDeleteAllBtn');
-            const handler = function () {
-                selectedSurveys.clear();
-                getSelectBtns().forEach(btn => {
-                    const surveyId = btn.dataset.surveyId;
-                    if (!surveyId) return;
-                    selectedSurveys.add(surveyId);
-                    btn.classList.add('btn-primary', 'text-white');
-                    btn.style.border = '2px solid var(--bk-primary)';
-                });
-                updateSelectionUI();
-                isDeleteAllAction = true;
+            document.getElementById('confirmDeleteAllBtn').onclick = function() {
+                selectAllBtn.click();
                 skipConfirmBulk = true;
-                deleteSelectedBtn.click();
                 modal.hide();
-                confirmBtn.removeEventListener('click', handler);
+                setTimeout(() => deleteSelectedBtn.click(), 200);
             };
-            confirmBtn.addEventListener('click', handler);
         };
     }
-
-    bulkActionsBar.style.display = 'none';
-    updateSelectionUI();
 });
-</script>
 
-<script>
-// -----------------------------------------
-// Borrado individual con estado "eliminando" persistente
-// -----------------------------------------
-document.addEventListener('DOMContentLoaded', function() {
-    const DELETING_KEY = 'surveys_deleting_ids';
+// Single Delete
+document.addEventListener('click', async function(e) {
+    const btn = e.target.closest('[data-action="delete-survey"]');
+    if (!btn) return;
+    e.preventDefault();
+    const surveyId = btn.dataset.surveyId;
 
-    function getDeletingIds() {
-        try { return JSON.parse(localStorage.getItem(DELETING_KEY) || '[]'); } catch { return []; }
-    }
-    function setDeletingIds(ids) {
-        localStorage.setItem(DELETING_KEY, JSON.stringify(ids));
-    }
-    function addDeletingId(id) {
-        const ids = getDeletingIds();
-        if (!ids.includes(id)) {
-            ids.push(id);
-            setDeletingIds(ids);
-        }
-    }
-    function removeDeletingId(id) {
-        setDeletingIds(getDeletingIds().filter(x => x !== id));
-    }
-
-    getDeletingIds().forEach(id => {
-        const card = document.querySelector('.survey-card[data-survey-id="' + id + '"]');
-        if (card) card.classList.add('survey-card--deleting');
-    });
-
-    document.addEventListener('click', async function(event) {
-        const btn = event.target.closest('[data-action="delete-survey"]');
-        if (!btn) return;
-        event.preventDefault();
-
-        const surveyId = btn.getAttribute('data-survey-id');
-        if (!surveyId) return;
-
-        let confirmDelete = await new Promise((resolve) => {
-            const deleteOneModal = document.getElementById('deleteOneModal');
-            const confirmDeleteOneBtn = document.getElementById('confirmDeleteOneBtn');
-            if (!deleteOneModal || !confirmDeleteOneBtn) {
-                resolve(false);
-                return;
-            }
-            const modal = bootstrap.Modal.getOrCreateInstance(deleteOneModal);
-            deleteOneModal.setAttribute('aria-hidden', 'false');
-            const onHide = function () {
-                confirmDeleteOneBtn.removeEventListener('click', onConfirm);
-                deleteOneModal.removeEventListener('hidden.bs.modal', onHide);
-                deleteOneModal.setAttribute('aria-hidden', 'true');
-                resolve(false);
-            };
-            const onConfirm = function () {
-                confirmDeleteOneBtn.removeEventListener('click', onConfirm);
-                deleteOneModal.removeEventListener('hidden.bs.modal', onHide);
-                modal.hide();
-                deleteOneModal.setAttribute('aria-hidden', 'true');
-                resolve(true);
-            };
-            deleteOneModal.addEventListener('hidden.bs.modal', onHide);
-            confirmDeleteOneBtn.addEventListener('click', onConfirm);
-            modal.show();
-        });
-        if (!confirmDelete) return;
-
+    const modal = new bootstrap.Modal(document.getElementById('deleteOneModal'));
+    modal.show();
+    
+    document.getElementById('confirmDeleteOneBtn').onclick = async function() {
+        modal.hide();
         const card = btn.closest('.survey-card');
-        if (card) card.classList.add('survey-card--deleting');
-        addDeletingId(surveyId);
-
+        card.classList.add('survey-card--deleting');
+        
         try {
             const formData = new URLSearchParams();
             formData.append('survey_ids', surveyId);
-
-            const csrftoken = getCookie('csrftoken') || '{{ csrf_token }}';
-            const response = await fetch("{% url 'surveys:bulk_delete' %}", {
+            const res = await fetch("{% url 'surveys:bulk_delete' %}", {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrftoken,
-                    'X-Requested-With': 'XMLHttpRequest',
+                headers: { 
+                    'X-CSRFToken': getCookie('csrftoken'), 
                     'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: formData.toString(),
+                body: formData.toString()
             });
-
-            if (!response.ok) throw new Error('Error HTTP ' + response.status);
-
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'No se pudo eliminar.');
-
-            const taskId = data.task_id;
-            let taskResultInfo = null;
-            if (taskId) {
-                taskResultInfo = await pollDeleteTask(taskId);
-                if (!taskResultInfo || taskResultInfo.error) throw new Error('La tarea de eliminación falló o expiró.');
-            }
-
-            if (card) {
-                const col = card.closest('.col-md-6');
-                if (col) {
-                    col.classList.add('col-removing');
-                    // Esperar a que termine la animación antes de remover
-                    setTimeout(() => col.remove(), 300);
-                }
-            }
-            removeDeletingId(surveyId);
-
-            // Si el DOM está vacío después de remover, recargar INMEDIATAMENTE (sin overlay)
+            const data = await res.json();
+            if (data.task_id) await pollDeleteTask(data.task_id);
+            
+            card.closest('.col-md-6').classList.add('col-removing');
             setTimeout(() => {
-                if (document.querySelectorAll('.survey-card').length === 0) {
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 300);
-                }
-            }, 350);
-
-            // Mostrar notificación toast con conteo real si está disponible
-            const announcementToast = document.getElementById('announcementModal');
-            const announcementBody = document.getElementById('announcementModalBody');
-            if (announcementToast && announcementBody) {
-                const deletedCount = (taskResultInfo && (taskResultInfo.deleted_surveys || taskResultInfo.deleted || (taskResultInfo.result && (taskResultInfo.result.deleted_surveys || taskResultInfo.result.deleted)))) || data.deleted || 0;
-                if (deletedCount > 0) {
-                    announcementBody.textContent = deletedCount === 1 ? 'Eliminada correctamente' : `Se eliminaron ${deletedCount} encuesta(s).`;
-                } else {
-                    announcementBody.textContent = data.message || 'Eliminado correctamente';
-                }
-                const toast = new bootstrap.Toast(announcementToast, { autohide: false });
-                toast.show();
-            }
-
+                if (document.querySelectorAll('.survey-card').length <= 1) window.location.reload();
+                else card.closest('.col-md-6').remove();
+            }, 300);
         } catch (err) {
-            console.error('Error eliminando:', err);
-            if (card) card.classList.remove('survey-card--deleting');
-            removeDeletingId(surveyId);
-            showPageAlert('danger', 'Error', err.message, 6000);
+            card.classList.remove('survey-card--deleting');
+            showPageAlert('danger', 'Error', 'No se pudo eliminar.', 3000);
         }
-    });
+    };
 });
 </script>
 
 <script>
-// -------------------------------------------------------------
-// IMPORTACIÓN CSV (Lógica antigua visual + funcionalidad actual)
-// -------------------------------------------------------------
+// JS: Importación CSV (CON DRAG & DROP LOGIC)
 document.addEventListener('DOMContentLoaded', function() {
     const modalElement = document.getElementById('importModalPreview');
     if (!modalElement) return;
 
-    const fileInput      = document.getElementById('csvFileInput');
-    const titleInput     = document.getElementById('surveyTitleInput');
-    const btnAnalyze     = document.getElementById('btn-analyze');
-    const btnConfirm     = document.getElementById('btn-confirm-import');
-    const btnBack        = document.getElementById('btn-back-to-upload');
-    const stepUpload     = document.getElementById('step1-upload');
-    const stepPreview    = document.getElementById('step2-preview');
-    const stepLoading    = document.getElementById('step-loading');
+    const fileInput = document.getElementById('csvFileInput');
+    const titleInput = document.getElementById('surveyTitleInput');
+    const btnAnalyze = document.getElementById('btn-analyze');
+    const btnConfirm = document.getElementById('btn-import-confirm');
+    const btnBack = document.getElementById('btn-back-to-upload');
+    const btnRetry = document.getElementById('btn-retry-upload');
+    const multiWarning = document.getElementById('multi-file-warning');
+    const fileListDisplay = document.getElementById('fileList');
     
-    const stepError      = document.getElementById('step-error');
-    const errorEl        = document.getElementById('error-message');
-    
-    // Elementos de preview
-    const totalRowsEl        = document.getElementById('preview-total-rows');
-    const totalQuestionsEl   = document.getElementById('preview-total-questions');
-    const filenameEl         = document.getElementById('preview-filename');
-    const columnsTable       = document.getElementById('preview-columns-table');
-    const sampleHeaderEl     = document.getElementById('preview-sample-header');
-    const sampleBodyEl       = document.getElementById('preview-sample-body');
+    // Drop Zone Elements
+    const dropZone = document.getElementById('upload-drop-zone');
+    const dropOverlay = document.getElementById('drop-zone-overlay');
 
-    let previewData = null;
+    const totalRowsEl = document.getElementById('preview-total-rows');
+    const totalColsEl = document.getElementById('preview-total-questions');
+    const filenameEl = document.getElementById('preview-filename');
+    const columnsTable = document.getElementById('preview-columns-table');
+    const sampleHeaderEl = document.getElementById('preview-sample-header');
+    const sampleBodyEl = document.getElementById('preview-sample-body');
 
-    function getCsrfToken() {
-        const match = document.cookie.match(/csrftoken=([^;]+)/);
-        return match ? match[1] : '{{ csrf_token }}';
-    }
+    // --- Drag & Drop Logic ---
+    if (dropZone) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
 
-    function showStep(step) {
-        stepUpload.style.display  = (step === 'upload')  ? 'block' : 'none';
-        stepPreview.style.display = (step === 'preview') ? 'block' : 'none';
-        stepLoading.style.display = (step === 'loading') ? 'block' : 'none';
-        stepError.style.display   = (step === 'error')   ? 'block' : 'none';
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
 
-        if(btnAnalyze) btnAnalyze.style.display = (step === 'upload') ? 'inline-block' : 'none';
-        if(btnBack)    btnBack.style.display    = (step === 'preview' || step === 'error') ? 'inline-block' : 'none';
-        if(btnConfirm) btnConfirm.style.display = (step === 'preview') ? 'inline-block' : 'none';
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
 
-        // Si se muestra el paso loading, bloquear el modal y mostrar detalles
-        if (step === 'loading') {
-            // Bloquear interacción con backdrop
-            if (modalElement) {
-                modalElement.classList.add('modal-blocked');
-                modalElement.querySelectorAll('button, input, select, textarea').forEach(el => {
-                    if (!el.classList.contains('btn-close')) el.disabled = true;
-                });
-            }
-            restoreProgressModal();
-        }
-        // Si termina la importación (se vuelve a upload, preview o error), desbloquear modal
-        if (step === 'upload' || step === 'preview' || step === 'error') {
-            if (modalElement) {
-                modalElement.classList.remove('modal-blocked');
-                modalElement.querySelectorAll('button, input, select, textarea').forEach(el => {
-                    el.disabled = false;
-                });
-            }
-        }
-            // Al cargar la vista, si no hay importación activa, oculta la barra flotante y limpia localStorage
-            if (!localStorage.getItem('import_progress_minimized')) {
-                localStorage.removeItem('import_progress_title');
-                localStorage.removeItem('import_progress_text');
-                const bar = document.getElementById('floating-progress-bar');
-                if (bar) bar.style.display = 'none';
-            }
-            // Escuchar evento global para restaurar modal desde cualquier vista SOLO UNA VEZ
-            window.addEventListener('restore-import-modal', function() {
-                // Solo restaurar si el modal de importación existe en la vista actual
-                const modalEl = document.getElementById('importModalPreview');
-                if (modalEl) {
-                    // Solo mostrar loading si hay importación activa
-                    if (localStorage.getItem('import_progress_minimized') === '1') {
-                        restoreProgressModal();
-                        showStep('loading');
-                    } else {
-                        // Si no hay importación activa, oculta barra y modal
-                        if (window.clearFloatingProgressState) window.clearFloatingProgressState();
-                        const bar = document.getElementById('floating-progress-bar');
-                        if (bar) bar.style.display = 'none';
-                        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                        modal.hide();
-                    }
-                }
-            });
-        // Escuchar evento global para restaurar modal desde cualquier vista SOLO UNA VEZ
-        window.addEventListener('restore-import-modal', function() {
-            // Solo restaurar si el modal de importación existe en la vista actual
-            const modalEl = document.getElementById('importModalPreview');
-            if (modalEl) {
-                restoreProgressModal();
-                showStep('loading');
+        dropZone.addEventListener('drop', handleDrop, false);
+        dropZone.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'I') {
+                fileInput.click();
             }
         });
     }
 
-    function showError(message) {
-        if(errorEl) errorEl.textContent = message || 'Error desconocido.';
-        showStep('error');
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
     }
 
-    // Al abrir el modal, reset
-    modalElement.addEventListener('show.bs.modal', function() {
-        if(fileInput) fileInput.value = '';
-        if(titleInput) titleInput.value = '';
-        showStep('upload');
+    function highlight(e) {
+        dropZone.classList.add('border-primary', 'bg-body-secondary');
+        if (dropOverlay) dropOverlay.style.opacity = '1';
+    }
+
+    function unhighlight(e) {
+        dropZone.classList.remove('border-primary', 'bg-body-secondary');
+        if (dropOverlay) dropOverlay.style.opacity = '0';
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            const event = new Event('change', { bubbles: true });
+            fileInput.dispatchEvent(event);
+        }
+    }
+
+    function showStep(stepName) {
+        ['step1-upload', 'step2-preview', 'step-loading', 'step-error'].forEach(id => {
+            document.getElementById(id).style.display = (id === stepName) ? 'block' : 'none';
+        });
+        modalElement.classList.toggle('modal-blocked', stepName === 'step-loading');
+    }
+
+    function showError(msg) {
+        document.getElementById('error-message').textContent = msg;
+        showStep('step-error');
+    }
+
+    modalElement.addEventListener('show.bs.modal', () => {
+        fileInput.value = '';
+        titleInput.value = '';
+        fileListDisplay.textContent = 'Ningún archivo seleccionado';
+        btnAnalyze.disabled = true;
+        showStep('step1-upload');
     });
 
     fileInput.addEventListener('change', function() {
-        if (fileInput.files.length > 1) {
-            btnAnalyze.innerHTML = '<i class="bi bi-upload me-2"></i>Importar Múltiples';
+        const count = this.files.length;
+        if (count > 0) {
+            fileListDisplay.textContent = count === 1 ? this.files[0].name : `${count} archivos seleccionados`;
+            fileListDisplay.className = 'mt-4 small fw-bold text-primary animate-fade-in';
+            btnAnalyze.disabled = false;
         } else {
-            btnAnalyze.innerHTML = '<i class="bi bi-search me-2"></i>Ver Vista Previa';
+            fileListDisplay.textContent = 'Ningún archivo seleccionado';
+            fileListDisplay.className = 'mt-4 small text-muted fst-italic';
+            btnAnalyze.disabled = true;
+        }
+        
+        if (count > 1) {
+            btnAnalyze.innerHTML = '<i class="bi bi-cloud-upload me-2"></i>Importar Todos';
+            multiWarning.style.display = 'block';
+        } else {
+            btnAnalyze.innerHTML = '<i class="bi bi-magic me-2"></i>Analizar Archivo';
+            multiWarning.style.display = 'none';
         }
     });
 
     function renderPreview(data) {
-        if(!totalRowsEl) return;
         totalRowsEl.textContent = data.total_rows ?? 0;
-        totalQuestionsEl.textContent = (data.columns || []).filter(c => !c.is_metadata).length;
-        filenameEl.textContent = data.filename || '-';
+        totalColsEl.textContent = (data.columns || []).filter(c => !c.is_metadata).length;
+        filenameEl.textContent = data.filename || 'Archivo CSV';
 
-        // Render columnas
         columnsTable.innerHTML = '';
         (data.columns || []).forEach((col, idx) => {
+            let typeBadge = '<span class="badge bg-secondary-subtle text-secondary-emphasis border">Texto</span>';
+            if (col.type === 'number' || col.type === 'integer') typeBadge = '<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Numérico</span>';
+            if (col.type === 'date') typeBadge = '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Fecha</span>';
+
             columnsTable.innerHTML += `
                 <tr>
-                    <td class="text-center">${idx + 1}</td>
-                    <td><code class="small">${col.name}</code></td>
-                    <td>${col.type}</td>
-                    <td class="text-center">${col.unique_values || '-'}</td>
-                    <td class="small text-muted">${(col.sample_values || []).join(', ')}</td>
+                    <td class="text-center text-body-secondary small">${idx + 1}</td>
+                    <td class="fw-medium text-body-emphasis">${col.name}</td>
+                    <td>${typeBadge}</td>
+                    <td class="text-center"><span class="badge bg-body-secondary text-body-secondary border">${col.unique_values || '-'}</span></td>
+                    <td class="text-body-secondary small text-truncate" style="max-width: 200px;">${(col.sample_values || []).join(', ')}</td>
                 </tr>
             `;
         });
-        
-        // Render sample data
-        if(data.columns && data.sample_rows) {
-            sampleHeaderEl.innerHTML = '<tr>' + data.columns.map(c => `<th>${c.display_name}</th>`).join('') + '</tr>';
+
+        if (data.columns && data.sample_rows) {
+            sampleHeaderEl.innerHTML = '<tr>' + data.columns.map(c => `<th class="bg-body-tertiary text-body-secondary text-uppercase" style="font-size:0.75rem;">${c.display_name}</th>`).join('') + '</tr>';
             sampleBodyEl.innerHTML = '';
             data.sample_rows.forEach(row => {
                 const tds = row.map(val => `<td>${val ?? ''}</td>`).join('');
@@ -1311,250 +1011,77 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Botón principal: Preview o Importar
-    btnAnalyze.addEventListener('click', async function() {
-        const files = fileInput.files;
-        if (!files || files.length === 0) return;
-
-        showStep('loading');
-        // Mostrar detalles iniciales
-        const loadingText = document.getElementById('loading-text');
-        if (loadingText) loadingText.textContent = 'Subiendo archivos y preparando importación...';
+    btnAnalyze.addEventListener('click', async () => {
+        if (!fileInput.files.length) return;
+        
+        showStep('step-loading');
+        document.getElementById('loading-title').textContent = "Procesando...";
+        
         const formData = new FormData();
-        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
 
-        // Si hay múltiples archivos, usamos la lógica de importación masiva directa
-        if (files.length > 1) {
-            for (let i = 0; i < files.length; i++) formData.append('csv_files', files[i]);
-            
+        if (fileInput.files.length > 1) {
+            for (let i = 0; i < fileInput.files.length; i++) formData.append('csv_files', fileInput.files[i]);
             try {
-                // Usamos el endpoint actualizado para múltiples
-                const response = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
-                    method: 'POST', body: formData, headers: {'X-CSRFToken': getCsrfToken()}
+                const res = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
+                    method: 'POST', body: formData, headers: {'X-CSRFToken': getCookie('csrftoken')}
                 });
-                const data = await response.json();
-                if (data.success) {
-                    const jobs = data.jobs || [];
-                    if (jobs.length > 0) {
-                        showStep('loading');
-                        const loadingText = document.getElementById('loading-text');
-                        const loadingTitle = document.getElementById('loading-title');
-                        if (loadingTitle) loadingTitle.textContent = `Importando ${jobs.length} archivo(s)...`;
-                        if (loadingText) loadingText.textContent = 'Procesando datos, por favor espera...';
-                        // Monitorear progreso de jobs - ESPERAR A TODOS
-                        let completedCount = 0;
-                        const allPromises = jobs.map((job, idx) => 
-                            pollImportJob(job.job_id).then((success) => {
-                                completedCount++;
-                                if (loadingText) {
-                                    loadingText.textContent = `Completado: ${completedCount}/${jobs.length} archivo(s)`;
-                                }
-                                return success;
-                            })
-                        );
-                        // ESPERAR A QUE TODOS LOS JOBS TERMINEN
-                        Promise.all(allPromises).then((results) => {
-                            if (loadingText) loadingText.textContent = 'Todos los archivos procesados';
-                            const allSuccessful = results.every(r => r === true);
-                            setTimeout(() => {
-                                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-                                modal.hide();
-                                window.location.reload();
-                            }, 2000); // Delay de 2 segundos SIEMPRE
-                            if (!allSuccessful) {
-                                showError('Algunos archivos no se importaron correctamente');
-                            }
-                        }).catch((err) => {
-                            console.error('Polling error:', err);
-                            showError('Error esperando importación');
-                        });
-                    } else {
-                        window.location.reload();
-                    }
+                const data = await res.json();
+                if (data.success && data.jobs) {
+                    document.getElementById('loading-text').textContent = "Importando múltiples archivos...";
+                    await Promise.all(data.jobs.map(j => pollImportJob(j.job_id)));
+                    window.location.reload();
                 } else {
-                    showError(data.error);
+                    showError(data.error || 'Error en importación masiva');
                 }
             } catch (e) { showError(e.message); }
             return;
         }
 
-        // Si es un solo archivo, intentamos obtener PREVIEW
-        formData.append('csv_file', files[0]);
+        formData.append('csv_file', fileInput.files[0]);
         try {
-            // Nota: Se asume que la vista de preview (import_preview) existe. 
-            // Si fue eliminada, fallará y mostrará error.
-            const response = await fetch("{% url 'surveys:import_preview' %}", {
-                method: 'POST', body: formData, headers: {'X-CSRFToken': getCsrfToken()}
+            const res = await fetch("{% url 'surveys:import_preview' %}", {
+                method: 'POST', body: formData, headers: {'X-CSRFToken': getCookie('csrftoken')}
             });
-            const data = await response.json();
+            const data = await res.json();
             if (data.success) {
-                previewData = data;
                 renderPreview(data);
-                showStep('preview');
+                showStep('step2-preview');
             } else {
-                showError(data.error || 'Error al analizar archivo');
+                showError(data.error || 'No se pudo leer el archivo.');
             }
-        } catch (e) {
-            console.error(e);
-            showError("Error de conexión al generar vista previa.");
-        }
+        } catch (e) { showError("Error de conexión."); }
     });
 
-    // Botón Confirmar (desde Preview)
-    btnConfirm.addEventListener('click', async function() {
-        showStep('loading');
+    btnConfirm.addEventListener('click', async () => {
+        showStep('step-loading');
+        document.getElementById('loading-title').textContent = "Importando...";
+        
         const formData = new FormData();
         formData.append('csv_file', fileInput.files[0]);
         if (titleInput.value) formData.append('survey_title', titleInput.value);
-        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken') || '{{ csrf_token }}');
 
         try {
-            const response = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
-                method: 'POST', body: formData, headers: {'X-CSRFToken': getCsrfToken()}
+            const res = await fetch("{% url 'surveys:import_survey_csv_async' %}", {
+                method: 'POST', body: formData, headers: {'X-CSRFToken': getCookie('csrftoken')}
             });
-            const data = await response.json();
+            const data = await res.json();
             if (data.success) {
-                const jobId = data.job_id || data.import_job_id || data.id;
+                const jobId = data.job_id || data.import_job_id;
                 if (jobId) {
-                    showStep('loading');
-                    const loadingText = document.getElementById('loading-text');
-                    const loadingTitle = document.getElementById('loading-title');
-                    if (loadingTitle) loadingTitle.textContent = 'Importando encuesta...';
-                    if (loadingText) loadingText.textContent = 'Procesando datos, por favor espera...';
-                    // Iniciar polling y esperar a que complete antes de cerrar modal
-                    pollImportJob(jobId).then((success) => {
-                        if (success) {
-                            if (loadingText) loadingText.textContent = 'Importación completada';
-                            setTimeout(() => {
-                                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-                                modal.hide();
-                                window.location.reload();
-                            }, 2000); // Delay de 2 segundos SIEMPRE
-                        } else {
-                            showError('Error al importar la encuesta');
-                        }
-                    }).catch((err) => {
-                        console.error('Polling error:', err);
-                        showError('Error esperando importación');
-                    });
-                } else {
-                    window.location.href = '{% url "surveys:list" %}';
-                }
-            } else {
-                showError(data.error);
-            }
+                    const success = await pollImportJob(jobId);
+                    if (success) window.location.reload();
+                    else showError("La importación falló.");
+                } else window.location.reload();
+            } else showError(data.error);
         } catch (e) { showError(e.message); }
     });
 
-    if(btnBack) btnBack.addEventListener('click', () => showStep('upload'));
+    if (btnBack) btnBack.addEventListener('click', () => showStep('step1-upload'));
+    if (btnRetry) btnRetry.addEventListener('click', () => showStep('step1-upload'));
 });
 </script>
 
-<style>
-.survey-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid var(--card-border-color, #e5e7eb);
-    background-color: var(--card-bg, var(--bs-body-bg));
-}
-.survey-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.15) !important;
-    border-color: var(--bk-primary);
-}
-[data-bs-theme="dark"] .survey-card:hover {
-    box-shadow: none !important;
-    border-color: var(--bk-primary);
-}
-
-.status-dot {
-    height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
-}
-.bg-active { background-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
-.bg-paused { background-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); }
-.bg-draft { background-color: #9ca3af; }
-.bg-closed { background-color: #ef4444; }
-
-.action-btn-group .btn { border-radius: 8px; }
-
-.survey-select-btn {
-    transition: all 0.2s ease;
-    background: var(--card-bg);
-    cursor: pointer;
-    border: 2px solid #dee2e6;
-    color: var(--bs-secondary-color, #6c757d);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-.survey-select-btn:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-    border-color: var(--bk-primary);
-    color: var(--bk-primary);
-}
-.survey-select-btn.btn-primary, .survey-select-btn.selected {
-    background: linear-gradient(135deg, var(--bk-primary) 60%, var(--bk-primary-light) 100%);
-    border-color: var(--bk-primary);
-    color: #fff !important;
-    box-shadow: 0 0 0 3px var(--bk-primary-10);
-}
-.survey-select-btn.btn-primary i, .survey-select-btn.selected i {
-    color: #fff !important;
-    text-shadow: 0 2px 8px rgba(13,110,253,0.15);
-}
-[data-bs-theme="dark"] .survey-select-btn {
-    background: var(--card-bg); border: 2px solid #30363d; color: #b3b3b3;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-}
-[data-bs-theme="dark"] .survey-select-btn:hover {
-    border-color: var(--bk-primary); color: var(--bk-primary); background: #23272f;
-}
-.selection-checkbox { animation: fadeIn 0.2s ease-in; }
-@keyframes fadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
-@keyframes fadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.8); } }
-
-/* Search input adjustments so it respects dark mode variables */
-.search-input {
-    background-color: var(--input-bg) !important;
-    color: var(--input-text) !important;
-    border-radius: 0.45rem;
-}
-.search-input::placeholder { color: var(--input-placeholder) !important; }
-
-.survey-card--deleting {
-    opacity: 0.5; filter: grayscale(0.8); pointer-events: none; position: relative;
-}
-.survey-card--deleting::after {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255,255,255,0.7) url('{% static "img/loading.gif" %}') center center no-repeat;
-    background-size: 48px 48px; z-index: 10; border-radius: inherit;
-}
-
-/* Animación suave de colapso para la columna completa */
-.col-removing {
-    transition: all 0.3s ease-out;
-    opacity: 0;
-    transform: scale(0.8);
-    max-width: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin: 0 !important;
-    overflow: hidden;
-}
-.bulk-actions-bar-custom {
-    border: 1.5px solid var(--bs-warning-border-subtle, #facc15);
-    background: var(--bs-warning-bg-subtle, #f59e42);
-    color: var(--bs-warning-text-emphasis, #fffbe6);
-}
-[data-bs-theme="dark"] .bulk-actions-bar-custom {
-    background: #2d2600 !important; color: #ffe066 !important; border-color: #ffe066 !important;
-}
-[data-bs-theme="dark"] .bulk-actions-bar-custom .btn,
-[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-outline-secondary {
-    background: #232323; color: #ffe066; border-color: #ffe066;
-}
-[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-outline-danger {
-    background: #2d0000; color: #ff6b6b; border-color: #ff6b6b;
-}
-[data-bs-theme="dark"] .bulk-actions-bar-custom .btn-danger {
-    background: #ff6b6b; color: #fff; border-color: #ff8787;
-}
+<link rel="stylesheet" href="{% static 'css/byteneko.css' %}">
 {% endblock %}

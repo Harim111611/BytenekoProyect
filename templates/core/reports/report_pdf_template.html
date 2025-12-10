@@ -1,39 +1,55 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <title>Reporte Ejecutivo - {{ survey.title }}</title>
     <style>
         /* ==========================================================================
-           BYTENEKO CORPORATE REPORT THEME - PDF MASTER
-           Optimizado para WeasyPrint
+           BYTENEKO EXECUTIVE PDF THEME v2
+           - Optimizado para WeasyPrint / A4
            ========================================================================== */
-        
+
         @page {
             size: A4;
             margin: 1.5cm;
             background-color: #ffffff;
-            
+
             @bottom-right {
                 content: "Pág " counter(page) " de " counter(pages);
-                font-family: 'Helvetica', sans-serif;
+                font-family: "Helvetica", sans-serif;
                 font-size: 9pt;
                 color: #6b7280;
             }
             @bottom-left {
                 content: "Byteneko Analytics • {{ survey.title|truncatechars:40 }}";
-                font-family: 'Helvetica', sans-serif;
+                font-family: "Helvetica", sans-serif;
                 font-size: 9pt;
                 color: #9ca3af;
             }
         }
 
-        /* Fallback de variables para versiones antiguas de renderizadores */
         :root {
             --c-primary: #0d6efd;
-            --c-dark: #1f2937;
+            --c-primary-soft: #e0edff;
+            --c-primary-soft-strong: #d0e2ff;
+            --c-dark: #111827;
             --c-text: #4b5563;
+            --c-muted: #6b7280;
             --c-border: #e5e7eb;
+            --c-border-strong: #d1d5db;
+            --c-bg-soft: #f3f4f6;
+            --c-bg-alt: #f9fafb;
+
+            --c-success: #16a34a;
+            --c-warning: #eab308;
+            --c-danger:  #dc2626;
+
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 10px;
+
+            --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.08);
         }
 
         html {
@@ -44,48 +60,375 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
             font-size: 11pt;
             line-height: 1.5;
-            color: #4b5563; /* var(--c-text) */
+            color: var(--c-text);
             background-color: #ffffff;
         }
 
-        h1, h2, h3 { color: #1f2937; /* var(--c-dark) */ }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
 
-        /* Utilidades de salto de página */
-        .page-break { page-break-before: always; }
-        .no-break { page-break-inside: avoid; }
-        
-        /* Asegurar que las imágenes no se corten */
+        .report-shell {
+            padding-top: 0.25cm;
+            padding-bottom: 0.25cm;
+        }
+
+        .report-body {
+            max-width: 17.5cm;
+            margin: 0 auto;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        .no-break {
+            page-break-inside: avoid;
+        }
+
         img {
             max-width: 100%;
             height: auto;
             page-break-inside: avoid;
         }
 
-        /* Tablas compactas para PDF */
+        hr {
+            border: none;
+            border-top: 1px solid var(--c-border);
+            margin: 0.6cm 0;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--c-dark);
+            margin: 0;
+            page-break-after: avoid;
+        }
+
+        h1 {
+            font-size: 22pt;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-bottom: 0.1cm;
+        }
+
+        h2 {
+            font-size: 16pt;
+            font-weight: 600;
+            margin-top: 0.6cm;
+            margin-bottom: 0.15cm;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        h3 {
+            font-size: 13pt;
+            font-weight: 600;
+            margin-top: 0.5cm;
+            margin-bottom: 0.1cm;
+        }
+
+        h4 {
+            font-size: 11.5pt;
+            font-weight: 600;
+            margin-top: 0.4cm;
+            margin-bottom: 0.05cm;
+        }
+
+        p {
+            margin: 0 0 0.25cm 0;
+        }
+
+        small,
+        .text-small {
+            font-size: 9pt;
+        }
+
+        .text-muted { color: var(--c-muted); }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .text-uppercase { text-transform: uppercase; }
+
+        .mb-0  { margin-bottom: 0 !important; }
+        .mb-xs { margin-bottom: 0.15cm !important; }
+        .mb-sm { margin-bottom: 0.3cm !important; }
+        .mb-md { margin-bottom: 0.6cm !important; }
+        .mb-lg { margin-bottom: 1cm !important; }
+
+        .mt-0  { margin-top: 0 !important; }
+        .mt-sm { margin-top: 0.3cm !important; }
+        .mt-md { margin-top: 0.6cm !important; }
+        .mt-lg { margin-top: 1cm !important; }
+
+        .section {
+            margin-bottom: 0.9cm;
+            page-break-inside: avoid;
+        }
+
+        .section-header {
+            border-bottom: 1px solid var(--c-border);
+            padding-bottom: 0.15cm;
+            margin-bottom: 0.35cm;
+        }
+
+        .section-subtitle {
+            font-size: 9pt;
+            color: var(--c-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .card {
+            border: 1px solid var(--c-border);
+            border-radius: var(--radius-md);
+            padding: 0.4cm 0.5cm;
+            background-color: #ffffff;
+            box-shadow: var(--shadow-soft);
+            page-break-inside: avoid;
+        }
+
+        .card-soft {
+            background-color: var(--c-bg-alt);
+            border-color: var(--c-border-strong);
+        }
+
+        .card-header {
+            margin-bottom: 0.25cm;
+        }
+
+        .card-title {
+            font-size: 11.5pt;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .card-subtitle {
+            font-size: 9pt;
+            color: var(--c-muted);
+        }
+
+        .kpi-grid {
+            width: 100%;
+            margin: 0.1cm 0 0.3cm 0;
+        }
+
+        .kpi-grid-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0.25cm 0.2cm;
+        }
+
+        .kpi-card {
+            border-radius: var(--radius-md);
+            border: 1px solid var(--c-border);
+            padding: 0.3cm 0.4cm;
+            background-color: #ffffff;
+            page-break-inside: avoid;
+        }
+
+        .kpi-label {
+            font-size: 9pt;
+            color: var(--c-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.1cm;
+        }
+
+        .kpi-value {
+            font-size: 18pt;
+            font-weight: 700;
+            color: var(--c-dark);
+            margin-bottom: 0.05cm;
+        }
+
+        .kpi-trend {
+            font-size: 9pt;
+        }
+
+        .kpi-trend.up   { color: var(--c-success); }
+        .kpi-trend.down { color: var(--c-danger); }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 999px;
+            font-size: 8pt;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border: 1px solid transparent;
+        }
+
+        .badge-primary {
+            background-color: var(--c-primary-soft);
+            color: var(--c-primary);
+            border-color: var(--c-primary-soft-strong);
+        }
+
+        .badge-success {
+            background-color: #dcfce7;
+            color: var(--c-success);
+            border-color: #86efac;
+        }
+
+        .badge-warning {
+            background-color: #fef9c3;
+            color: var(--c-warning);
+            border-color: #fde047;
+        }
+
+        .badge-danger {
+            background-color: #fee2e2;
+            color: var(--c-danger);
+            border-color: #fecaca;
+        }
+
+        ul,
+        ol {
+            margin: 0 0 0.3cm 0.5cm;
+        }
+
+        li {
+            margin-bottom: 0.08cm;
+        }
+
+        dl { margin: 0; }
+        dt {
+            font-weight: 600;
+            margin-top: 0.15cm;
+        }
+        dd {
+            margin: 0 0 0.15cm 0;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5cm;
             page-break-inside: auto;
-        }
-        tr { page-break-inside: avoid; page-break-after: auto; }
-        th, td {
-            padding: 8px;
-            border-bottom: 1px solid #e5e7eb;
-            text-align: left;
-        }
-        th {
-            background-color: #f9fafb;
-            font-weight: 600;
             font-size: 10pt;
         }
+
+        thead { page-break-inside: avoid; }
+
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+
+        th,
+        td {
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--c-border);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background-color: var(--c-bg-alt);
+            font-weight: 600;
+            font-size: 9.5pt;
+            color: var(--c-dark);
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fdfdfd;
+        }
+
+        tbody tr.highlight-row {
+            background-color: var(--c-primary-soft);
+        }
+
+        .table-compact th,
+        .table-compact td {
+            padding: 4px 6px;
+            font-size: 9pt;
+        }
+
+        .table-metric-number {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .table-metric-positive { color: var(--c-success); }
+        .table-metric-negative { color: var(--c-danger); }
+
+        .callout {
+            border-left: 3px solid var(--c-primary);
+            padding: 0.3cm 0.5cm;
+            background-color: var(--c-primary-soft);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            page-break-inside: avoid;
+        }
+
+        .callout-warning {
+            border-left-color: var(--c-warning);
+            background-color: #fffbeb;
+        }
+
+        .callout-danger {
+            border-left-color: var(--c-danger);
+            background-color: #fef2f2;
+        }
+
+        .callout-title {
+            font-weight: 600;
+            margin-bottom: 0.08cm;
+        }
+
+        .row {
+            width: 100%;
+            display: table;
+            table-layout: fixed;
+            border-spacing: 0;
+        }
+
+        .col-2,
+        .col-3,
+        .col-4 {
+            display: table-cell;
+            vertical-align: top;
+        }
+
+        .col-2 { width: 50%; padding-right: 0.25cm; }
+        .col-3 { width: 33.33%; padding-right: 0.25cm; }
+        .col-4 { width: 25%; padding-right: 0.25cm; }
+
+        .col-last { padding-right: 0; }
+
+        .no-split {
+            page-break-inside: avoid;
+        }
+
+        /* ======================================================
+           1 PREGUNTA POR PÁGINA (DETALLE POR PREGUNTA)
+           ====================================================== */
+
+        /**
+         * Aplica esta clase al contenedor principal de CADA pregunta
+         * en el detalle. Forzará que cada pregunta empiece en una
+         * nueva página y que su contenido no se corte.
+         */
+        .question-page {
+            page-break-before: always;
+            page-break-inside: avoid;
+        }
+
+        /* Opcional: si quieres un poco más de aire en cada página de pregunta */
+        .question-page-inner {
+            margin-top: 0.3cm;
+        }
+
     </style>
 </head>
 <body>
-    {# Inclusión del contenido dinámico #}
-    {% include "core/reports/_report_preview_content.html" %}
+    <div class="report-shell">
+        <main class="report-body">
+            {% include "core/reports/_report_preview_content.html" %}
+        </main>
+    </div>
 </body>
 </html>

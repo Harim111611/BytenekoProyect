@@ -1,4 +1,4 @@
-# surveys/models.py
+"""surveys/models.py"""
 from django.db import models
 from django.db.models import Max
 from django.contrib.auth.models import User
@@ -84,12 +84,12 @@ class Survey(models.Model):
         if new_status not in valid_statuses:
             raise ValidationError(f"Estado inválido: {new_status}")
             
-        # --- LÓGICA SAAS: Verificar límites antes de activar ---
+        # Lógica SaaS: Verificar límites antes de activar
         if new_status == self.STATUS_ACTIVE:
             # Verificamos si el usuario tiene una suscripción válida
             if hasattr(self.author, 'subscription') and self.author.subscription.is_valid():
                 plan = self.author.subscription.plan
-                # Contamos cuántas encuestas tiene activas YA (excluyendo esta misma)
+                # Contamos cuántas encuestas tiene activas ya (excluyendo esta misma)
                 active_surveys_count = Survey.objects.filter(
                     author=self.author,
                     status=self.STATUS_ACTIVE
@@ -240,14 +240,6 @@ class SurveyResponse(models.Model):
     is_anonymous = models.BooleanField(default=False, verbose_name='Anonymous')
 
     def save(self, *args, **kwargs):
-        # Validación SaaS al recibir respuesta (Opcional, pero recomendada)
-        if not self.pk:  # Solo al crear
-            if hasattr(self.survey.author, 'subscription'):
-                plan = self.survey.author.subscription.plan
-                current_count = self.survey.responses.count()
-                if current_count >= plan.max_responses_per_survey:
-                    # Aquí podrías lanzar error o marcar como "quota exceeded"
-                    pass
         super().save(*args, **kwargs)
 
     def __str__(self):

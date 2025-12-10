@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- IMPORTACIÓN CSV ---
     const importForm = document.getElementById('importCsvForm');
     if(importForm) {
-        importForm.addEventListener('submit', async function(e) {
+        if(importForm) importForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const btn = importForm.querySelector('button[type="submit"]');
             btn.disabled = true;
@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- BULK DELETE ---
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     if(bulkDeleteBtn) {
-        bulkDeleteBtn.addEventListener('click', async function() {
+        if(bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', async function() {
             if(this.disabled) return;
             const checked = Array.from(document.querySelectorAll('.survey-checkbox:checked')).map(cb => cb.value);
             if(!checked.length) return showToast('Selecciona al menos una encuesta', 'warning');
@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const typeSelect = clone.querySelector('.question-type');
         const optsDiv = clone.querySelector('.options-container');
 
-        typeSelect.addEventListener('change', function() {
+        if(typeSelect) typeSelect.addEventListener('change', function() {
             if(['single', 'multi'].includes(this.value)) {
                 optsDiv.classList.remove('d-none');
                 setTimeout(() => optsDiv.querySelector('input').focus(), 100);
@@ -255,7 +255,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Botón Eliminar
-        clone.querySelector('.btn-close').addEventListener('click', function() {
+        const btnClose = clone.querySelector('.btn-close');
+        if(btnClose) btnClose.addEventListener('click', function() {
             this.closest('.question-item').remove();
         });
 
@@ -335,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const typeSelect = clone.querySelector('.question-type');
         const optsDiv = clone.querySelector('.options-container');
 
-        typeSelect.addEventListener('change', function() {
+        if(typeSelect) typeSelect.addEventListener('change', function() {
             if(['single', 'multi'].includes(this.value)) {
                 optsDiv.classList.remove('d-none');
                 setTimeout(() => optsDiv.querySelector('input').focus(), 100);
@@ -345,7 +346,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Botón Eliminar
-        clone.querySelector('.btn-close').addEventListener('click', function() {
+        const btnClose2 = clone.querySelector('.btn-close');
+        if(btnClose2) btnClose2.addEventListener('click', function() {
             this.closest('.question-item').remove();
         });
 
