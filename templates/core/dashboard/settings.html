@@ -90,6 +90,28 @@
                 </div>
             </div>
 
+            <!-- INTEGRACIÓN STRIPE: SUSCRIPCIÓN -->
+            <div class="card settings-card mt-4">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-credit-card me-2 text-primary"></i>Suscripción y Pagos
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-3">Gestiona tu suscripción y accede a funciones premium.</p>
+                    <form id="stripe-checkout-form" method="post" action="/api/create-checkout/basic/">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-cart-check me-1"></i>Gestionar Suscripción
+                        </button>
+                    </form>
+                    <div class="mt-3">
+                        <span class="badge bg-info-subtle text-info">Estado: <b>Activo/Pendiente</b></span>
+                        <small class="text-muted ms-2">(Simulación, conectar con backend para estado real)</small>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>

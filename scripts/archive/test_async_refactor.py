@@ -81,14 +81,7 @@ if failed_jobs > 0:
     for job in ImportJob.objects.filter(status='failed').order_by('-updated_at')[:3]:
         print(f"      - Job #{job.id}: {job.error_message[:80]}")
 
-# 5. Verificar que cpp_csv está disponible
-print("\n🚀 Verificando módulo cpp_csv (optimización crítica):")
-try:
-    import cpp_csv
-    print("   ✅ cpp_csv DISPONIBLE - Importaciones serán 100x más rápidas")
-except ImportError:
-    print("   ⚠️  cpp_csv NO DISPONIBLE - Usando pandas (más lento)")
-    print("      Para instalar: python setup_cpp_csv.py build_ext --inplace")
+## Código relacionado con cpp_csv eliminado (código muerto)
 
 # 6. Resumen de optimizaciones activas
 print("\n" + "=" * 70)

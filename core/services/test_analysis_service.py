@@ -61,10 +61,11 @@ def test_question_analyzer_text_question_runs():
     class DummyQuestion:
         survey = DummySurvey()
         id = 1
-    try:
-        analysis_service.QuestionAnalyzer.analyze_text_question(DummyQuestion(), DummyQS())
-    except Exception:
-        pass
+        try:
+            analysis_service.QuestionAnalyzer.analyze_text_question(DummyQuestion(), DummyQS())
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"test_text_question_analysis_runs: Exception: {e}")
 
 def test_nps_calculator_calculate_nps_runs():
     class DummyQS:

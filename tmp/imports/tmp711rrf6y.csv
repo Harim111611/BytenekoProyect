@@ -1,0 +1,26 @@
+Empleado_ID,Nombre_Completo,Area,Clima_Laboral,Liderazgo,Recursos,Balance_Vida,Desarrollo_Profesional,Comunicacion,Recomendaria_Empresa,Sugerencias,Fecha
+EMP001,Ana Patricia Lopez,Ventas,8,9,7,8,8,9,9,Implementar más capacitaciones,2025-11-15
+EMP002,Carlos Eduardo Martinez,IT,9,9,9,7,9,8,9,Mejorar balance vida-trabajo,2025-11-15
+EMP003,Maria Fernanda Gonzalez,Recursos Humanos,10,10,10,9,10,10,10,Excelente ambiente de trabajo,2025-11-15
+EMP004,Jorge Luis Ramirez,Operaciones,7,8,6,7,7,7,7,Necesitamos mejores herramientas,2025-11-16
+EMP005,Laura Sofia Herrera,Marketing,9,9,8,8,9,9,9,Muy buen equipo de trabajo,2025-11-16
+EMP006,Ricardo Andres Torres,Finanzas,8,8,8,8,8,8,8,Todo funciona bien,2025-11-16
+EMP007,Daniela Alejandra Silva,Ventas,6,7,5,6,6,6,6,Falta comunicación entre áreas,2025-11-17
+EMP008,Miguel Angel Rojas,IT,10,9,10,8,9,9,10,Excelentes recursos tecnológicos,2025-11-17
+EMP009,Gabriela Valentina Diaz,Recursos Humanos,9,9,9,9,9,9,9,Gran ambiente y desarrollo,2025-11-17
+EMP010,Fernando Jose Morales,Operaciones,7,7,7,7,7,7,7,Podría mejorar la comunicación,2025-11-18
+EMP011,Camila Andrea Vargas,Marketing,8,9,8,8,8,8,8,Buen equilibrio en general,2025-11-18
+EMP012,Alejandro David Cruz,Finanzas,9,8,9,8,9,8,9,Satisfecho con mi desarrollo,2025-11-18
+EMP013,Paula Andrea Jimenez,Ventas,10,10,9,10,10,10,10,Mejor empresa en la que he trabajado,2025-11-19
+EMP014,Roberto Carlos Mendoza,IT,8,8,8,7,8,8,8,Buen ambiente pero mucho trabajo,2025-11-19
+EMP015,Natalia Isabel Reyes,Recursos Humanos,7,8,7,8,7,7,7,En general satisfecha,2025-11-19
+EMP016,Andres Felipe Castillo,Operaciones,9,9,8,8,9,8,9,Buena gestión y liderazgo,2025-11-20
+EMP017,Carolina Maria Gomez,Marketing,8,8,8,8,8,8,8,Equilibrio adecuado,2025-11-20
+EMP018,Luis Fernando Ortiz,Finanzas,6,7,6,6,6,6,6,Necesitamos más recursos,2025-11-20
+EMP019,Sandra Patricia Ruiz,Ventas,9,9,9,9,9,9,9,Excelente equipo y liderazgo,2025-11-21
+EMP020,Pablo Esteban Flores,IT,10,10,10,9,10,10,10,Perfectas condiciones de trabajo,2025-11-21
+EMP021,Monica Alejandra Sanchez,Recursos Humanos,8,8,8,8,8,8,8,Satisfecha con mi rol,2025-11-21
+EMP022,Javier Antonio Alvarez,Operaciones,7,7,7,7,7,7,7,Cumple las expectativas,2025-11-22
+EMP023,Claudia Marcela Rios,Marketing,9,9,8,9,9,9,9,Muy buen ambiente creativo,2025-11-22
+EMP024,Hector Manuel Pena,Finanzas,8,8,8,8,8,8,8,Buen lugar para trabajar,2025-11-22
+EMP025,Diana Carolina Vega,Ventas,10,10,10,10,10,10,10,Increíble cultura organizacional,2025-11-23

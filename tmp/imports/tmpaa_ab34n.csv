@@ -1,0 +1,26 @@
+Reserva_ID,Nombre_Huesped,Nacionalidad,Tipo_Habitacion,Limpieza_Habitacion,Confort_Cama,Atencion_Recepcion,Servicio_Habitaciones,Restaurante,Relacion_Calidad_Precio,Ubicacion,WiFi,Calificacion_General,Volveria,Comentarios,Fecha_CheckOut
+RES001,Michael Anderson,USA,Suite,10,10,9,9,8,8,10,10,9,Si,Excellent location and service,2025-11-18
+RES002,Sophie Dubois,Francia,Doble,8,8,8,7,7,7,9,8,8,Si,Bon hôtel dans l'ensemble,2025-11-18
+RES003,Yuki Tanaka,Japon,Individual,9,9,9,8,9,8,10,9,9,Si,Very clean and comfortable,2025-11-19
+RES004,Hans Mueller,Alemania,Suite,10,10,10,10,9,9,10,10,10,Si,Perfekt! Alles war ausgezeichnet,2025-11-19
+RES005,Maria Gonzalez,España,Doble,7,7,7,7,6,7,8,7,7,Si,Correcto pero mejorable,2025-11-19
+RES006,John Smith,Reino Unido,Individual,8,8,9,8,8,8,9,9,8,Si,Good value for money,2025-11-20
+RES007,Ana Carolina Santos,Brasil,Suite,9,9,9,9,8,8,9,9,9,Si,Ótimo hotel recomendo,2025-11-20
+RES008,Pierre Leclerc,Francia,Doble,8,8,8,8,7,8,9,8,8,Si,Très bien situé,2025-11-20
+RES009,Emma Wilson,Australia,Individual,10,10,10,10,10,9,10,10,10,Si,Best hotel in the city!,2025-11-21
+RES010,Giuseppe Rossi,Italia,Suite,9,9,9,8,9,8,9,9,9,Si,Bellissimo hotel molto pulito,2025-11-21
+RES011,Chen Wei,China,Doble,7,7,8,7,7,7,8,8,7,Si,Good hotel nice staff,2025-11-21
+RES012,Lars Svensson,Suecia,Individual,8,9,8,8,8,8,9,9,8,Si,Bra hotell bra läge,2025-11-22
+RES013,Patricia Miller,Canada,Suite,10,10,9,10,9,9,10,10,10,Si,Outstanding service throughout,2025-11-22
+RES014,Dimitri Volkov,Rusia,Doble,6,7,7,6,6,6,8,7,7,No,Нормально но дорого,2025-11-22
+RES015,Isabella Romano,Italia,Individual,9,9,9,9,8,8,9,9,9,Si,Ottimo rapporto qualità prezzo,2025-11-23
+RES016,Oliver Brown,Reino Unido,Suite,10,10,10,10,10,10,10,10,10,Si,Absolutely perfect in every way,2025-11-23
+RES017,Marie Laurent,Francia,Doble,8,8,8,8,7,8,9,8,8,Si,Bon rapport qualité prix,2025-11-23
+RES018,Takeshi Yamamoto,Japon,Individual,9,10,9,9,9,9,10,10,9,Si,Excellent hotel highly recommend,2025-11-24
+RES019,Laura Martinez,Argentina,Suite,8,8,8,8,8,8,9,8,8,Si,Muy lindo hotel bien ubicado,2025-11-24
+RES020,James Taylor,USA,Doble,7,7,7,7,7,7,8,8,7,Si,Decent hotel for the price,2025-11-24
+RES021,Ingrid Schmidt,Alemania,Individual,10,10,9,10,9,9,10,10,10,Si,Fantastisch würde wiederkommen,2025-11-25
+RES022,Carlos Fernandez,Mexico,Suite,9,9,9,9,8,8,9,9,9,Si,Excelente hotel muy recomendable,2025-11-25
+RES023,Emily Davis,Australia,Doble,8,8,8,8,8,8,9,9,8,Si,Great location good service,2025-11-25
+RES024,Francois Martin,Francia,Individual,7,8,7,7,7,7,8,8,7,Si,Bien mais pas exceptionnel,2025-11-25
+RES025,Lisa Anderson,Canada,Suite,10,10,10,10,10,10,10,10,10,Si,Perfect hotel perfect stay,2025-11-26

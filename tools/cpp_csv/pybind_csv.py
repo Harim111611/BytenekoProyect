@@ -6,7 +6,7 @@ def read_csv_as_dicts(filename, delimiter=','):
     Lee un CSV usando el módulo C++ y regresa una lista de diccionarios.
     La primera fila del archivo se usa como encabezado.
     """
-    return cpp_csv.read_csv_dicts(filename, delimiter)
+    raise NotImplementedError("cpp_csv ha sido eliminado del proyecto.")
 
 
 def read_and_validate_csv(filename, schema, delimiter=','):
@@ -35,4 +35,4 @@ def read_and_validate_csv(filename, schema, delimiter=','):
         - 'scale': Número dentro de un rango (min/max)
         - 'single': Valor que debe estar en una lista de opciones válidas
     """
-    return cpp_csv.read_and_validate_csv(filename, schema, delimiter)
+    raise NotImplementedError("cpp_csv ha sido eliminado del proyecto.")

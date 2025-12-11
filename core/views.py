@@ -4,7 +4,6 @@ Módulo de vistas principales para el dashboard, reportes y análisis.
 Refactorizado para consistencia de datos entre Web, PDF y PPTX.
 """
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
@@ -16,7 +15,7 @@ from django.utils.dateparse import parse_date
 from django.contrib.auth.decorators import login_required
 from django.template.loader import render_to_string
 from django.core.cache import cache
-from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Case, When, IntegerField, Max
+from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Max
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, Question
@@ -213,6 +212,7 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
 # 2. ANALYTICS & RESULTS
 # ==========================================
 
+
 @login_required
 def dashboard_results_view(request: HttpRequest) -> HttpResponse:
     """
@@ -221,10 +221,17 @@ def dashboard_results_view(request: HttpRequest) -> HttpResponse:
     try:
         # Obtenemos los datos completos calculados
         data = _get_analytics_summary(request.user, request.GET)
-        
+        from surveys.models_analytics import AnalysisSegment
+        from surveys.models import Question, Survey
+        # Segmentos guardados
+        analysis_segments = AnalysisSegment.objects.filter(user=request.user)
+        # Preguntas para crosstab
+        survey_questions = Question.objects.filter(survey__author=request.user)
         context = {
             'page_name': 'resultados',
-            **data  # Desempaquetamos todo el diccionario de datos
+            **data,
+            'analysis_segments': analysis_segments,
+            'survey_questions': survey_questions,
         }
         return render(request, 'core/dashboard/results_dashboard.html', context)
     except Exception as e:

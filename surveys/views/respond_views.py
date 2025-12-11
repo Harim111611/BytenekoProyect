@@ -1,5 +1,6 @@
 # surveys/views/respond_views.py
 import logging
+import json
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -21,13 +22,12 @@ def respond_survey_view(request, public_id):
     """
     Vista pública para responder una encuesta.
 
-    - Valida que la encuesta esté activa.
-    - Crea un SurveyResponse asociado al usuario (si está autenticado) o anónimo.
-    - Crea QuestionResponse en bulk.
-    - Si hay sample_goal (> 0) y se alcanza o supera al guardar esta respuesta,
-      pausa automáticamente la encuesta (status = PAUSED).
+    Cambios implementados:
+    - Se genera 'logic_map' JSON para manejar preguntas condicionales en el template.
+    - Se pasa 'logic_map_json' al contexto.
     """
     try:
+        # Optimizamos la query para traer preguntas y opciones en una sola vuelta
         survey = get_object_or_404(
             Survey.objects.select_related("author").prefetch_related("questions__options"),
             public_id=public_id,
@@ -47,6 +47,25 @@ def respond_survey_view(request, public_id):
             f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
         )
 
+    # --- LÓGICA CONDICIONAL PARA EL FRONTEND (NUEVO) ---
+    # Construimos un mapa JSON para que JavaScript sepa qué ocultar/mostrar
+    questions = survey.questions.all().order_by('order')  # Asegurar orden
+    logic_map = {}
+    
+    for q in questions:
+        if q.depends_on:
+            logic_map[q.id] = {
+                'parent_id': q.depends_on.id,
+                'trigger_option_id': q.visible_if_option.id if q.visible_if_option else None,
+                'condition': 'equals'  # Por defecto validamos igualdad de opción
+            }
+    
+    context = {
+        "survey": survey,
+        "logic_map_json": json.dumps(logic_map) 
+    }
+    # ----------------------------------------------------
+
     if request.method == "POST":
         try:
             with transaction.atomic():
@@ -59,7 +78,8 @@ def respond_survey_view(request, public_id):
                     is_anonymous=(user_obj is None),
                 )
 
-                questions_cached = list(survey.questions.all())
+                # Usamos la lista de preguntas ya cargada en memoria
+                questions_cached = list(questions)
 
                 # --- FASE 1: recolectar IDs de opciones seleccionadas ---
                 all_raw_option_ids = []
@@ -72,6 +92,7 @@ def respond_survey_view(request, public_id):
                         if val:
                             all_raw_option_ids.append(val)
 
+                # Traemos todas las opciones involucradas en una sola query
                 options_map = {
                     str(op.id): op
                     for op in AnswerOption.objects.filter(id__in=all_raw_option_ids)
@@ -82,6 +103,9 @@ def respond_survey_view(request, public_id):
 
                 for q in questions_cached:
                     field = f"pregunta_{q.id}"
+
+                    # Nota: Aquí se podría validar logic_map para no guardar respuestas de preguntas ocultas.
+                    # Por robustez, procesamos lo que envía el formulario.
 
                     # Selección múltiple
                     if q.type == "multi":
@@ -118,6 +142,7 @@ def respond_survey_view(request, public_id):
                                     QuestionResponse(
                                         survey_response=survey_response,
                                         question=q,
+                                        selected_option=opt, # Guardamos la FK para facilitar análisis
                                         text_value=opt.text,
                                     )
                                 )
@@ -146,8 +171,7 @@ def respond_survey_view(request, public_id):
                                     )
                                 )
                             except ValidationError:
-                                # Si no es válido simplemente no se guarda
-                                pass
+                                pass # Ignoramos valores inválidos
 
                     # Texto libre / otros tipos
                     else:
@@ -166,10 +190,6 @@ def respond_survey_view(request, public_id):
                 QuestionResponse.objects.bulk_create(responses_to_create)
 
                 # --- Auto pausa por meta de respuestas -------------------------
-                # Si sample_goal > 0 y se alcanza o supera, pausamos la encuesta.
-                # Guardamos el estado original para que la vista de 'thanks'
-                # muestre el mensaje de agradecimiento en la última respuesta,
-                # incluso si la encuesta se pasa a PAUSED tras guardar.
                 original_status = survey.status
                 if getattr(survey, "sample_goal", 0) and survey.sample_goal > 0:
                     total_responses = SurveyResponse.objects.filter(survey=survey).count()
@@ -181,19 +201,16 @@ def respond_survey_view(request, public_id):
                         survey.status = Survey.STATUS_PAUSED
                         survey.save(update_fields=["status"])
                         logger.info(
-                            "Encuesta %s pausada automáticamente al alcanzar la meta "
-                            "de %s respuestas (total=%s)",
+                            "Encuesta %s pausada automáticamente al alcanzar la meta de %s respuestas",
                             survey.id,
                             survey.sample_goal,
-                            total_responses,
                         )
 
                 logger.info("Respuesta registrada encuesta %s", survey.id)
 
-                # Usar el estado original en la redirección para que el mensaje
-                # final muestre 'gracias' cuando la respuesta fue válida, aun
-                # cuando la encuesta se pause automáticamente al alcanzar la meta.
-                final_status = original_status if 'original_status' in locals() else survey.status
+                # Mantenemos el status original para el mensaje de éxito
+                final_status = original_status
+                
                 return redirect(
                     f"{reverse('surveys:thanks')}?"
                     f"public_id={survey.public_id}&status={final_status}&success=1"
@@ -203,5 +220,5 @@ def respond_survey_view(request, public_id):
             logger.exception("Error respondiendo encuesta %s: %s", public_id, e)
             messages.error(request, "Error guardando respuesta. Intenta nuevamente.")
 
-    # GET → mostrar formulario público de la encuesta
-    return render(request, "surveys/responses/fill.html", {"survey": survey})
+    # GET → mostrar formulario con el contexto actualizado
+    return render(request, "surveys/responses/fill.html", context)

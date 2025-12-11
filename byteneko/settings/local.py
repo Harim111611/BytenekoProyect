@@ -28,27 +28,25 @@ MIDDLEWARE = [
 
 # 1. CONFIGURACIÓN PARA HTTP EN DESARROLLO (usando manage.py runserver)
 # Deshabilitar HTTPS en desarrollo - runserver solo soporta HTTP
-SESSION_COOKIE_SECURE = False  # Permitir cookies en HTTP
-CSRF_COOKIE_SECURE = False  # Permitir CSRF en HTTP
-SECURE_SSL_REDIRECT = False  # No forzar redirección a HTTPS
+SESSION_COOKIE_SECURE = False 
+CSRF_COOKIE_SECURE = False 
+SECURE_SSL_REDIRECT = False  
 
 # AUTORIZAR HTTP LOCAL (para runserver)
-# Incluimos múltiples puertos por si hay problemas con HSTS
 CSRF_TRUSTED_ORIGINS = [
-    'http://127.0.0.1:8000',  # HTTP puerto 8000
+    'http://127.0.0.1:8000',
     'http://localhost:8000',
-    'http://127.0.0.1:8001',  # HTTP puerto 8001 (alternativo)
+    'http://127.0.0.1:8001',
     'http://localhost:8001',
-    'http://127.0.0.1:8080',  # HTTP puerto 8080 (alternativo)
+    'http://127.0.0.1:8080',
     'http://localhost:8080',
-    'http://127.0.0.1:8010',  # HTTP puerto 8010 (desarrollo actual)
+    'http://127.0.0.1:8010',
     'http://localhost:8010',
     f'http://{LOCAL_LAN_IP}:8000',
-    f'http://{LOCAL_LAN_IP}:8010',  # LAN IP en puerto 8010
+    f'http://{LOCAL_LAN_IP}:8010', 
 ]
 
 # 2. OPTIMIZACIÓN DE ARCHIVOS ESTÁTICOS
-# En local usamos el almacenamiento simple para evitar errores de "Manifest missing"
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # 3. BASE DE DATOS OPTIMIZADA
@@ -63,18 +61,16 @@ DATABASES = {
         'OPTIONS': {
             'client_encoding': 'UTF8',
         },
-        # Mantiene la conexión viva para eliminar el lag de 500ms por query
         'CONN_MAX_AGE': 600, 
     }
 }
 
 # 4. CONFIGURACIÓN DE PLANTILLAS
-# Uso simple sin cached loader en desarrollo para que los cambios sean visibles
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,  # Permite encontrar templates en app_name/templates/
+        'APP_DIRS': True, 
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
@@ -149,7 +145,6 @@ LOGGING = {
         },
     },
     'loggers': {
-        # Django core loggers
         'django': {
             'handlers': ['console', 'file_app', 'file_server'],
             'level': 'INFO',
@@ -170,7 +165,6 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': False,
         },
-        # Application loggers
         'core': {
             'handlers': ['console', 'file_app', 'file_error'],
             'level': 'DEBUG',
@@ -200,25 +194,24 @@ LOGGING = {
 # ============================================================
 # PARIDAD DE PRODUCCIÓN PARA IMPORTACIÓN
 # ============================================================
-# Usar COPY para insertar QuestionResponse en Postgres (máximo rendimiento)
 SURVEY_IMPORT_USE_COPY_QR = True
 
-# Chunk size grande para reducir overhead por lote
+# Tamaño del lote para inserción de datos (bulk_create / chunking de Pandas)
 SURVEY_IMPORT_CHUNK_SIZE = 5000
 
-# Flag de trazabilidad de cpp_csv ya se registra en import_views
-# ... aquí van tus otras configuraciones de local.py ...
-# por ejemplo: DATABASES, LOGGING, etc.
+# Tamaño de la muestra para detección de tipo de columna
+SURVEY_IMPORT_SAMPLE_SIZE = 10000
+
+# CRÍTICO: Tamaño del lote para eliminación masiva (chunked deletion)
+SURVEY_DELETE_CHUNK_SIZE = 5000
 
 # ============================================================
 # CELERY (Modo asíncrono con worker real)
 # ============================================================
-# Comentado para usar worker real en background
-# Descomenta si quieres volver a modo síncrono (sin necesidad de worker)
-# CELERY_TASK_ALWAYS_EAGER = True
-# CELERY_TASK_EAGER_PROPAGATES = True
-# CELERY_BROKER_URL = 'memory://'
-# CELERY_RESULT_BACKEND = 'cache+memory://'
+# El broker URL se toma de base.py
 
-# Para desarrollo con worker real (usa las configuraciones de base.py)
-# Redis debe estar corriendo y también el worker de Celery
+# Configuraciones de Celery Development
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1 
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000 
+CELERY_TASK_TIME_LIMIT = 300  # 5 min
+CELERY_TASK_SOFT_TIME_LIMIT = 240 # 4 min

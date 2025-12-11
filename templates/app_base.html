@@ -120,6 +120,17 @@
             </div>
         </div>
 
+        <!-- Fix: Ocultar modal loader si queda visible tras volver con el botón atrás -->
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var modalEl = document.getElementById('globalResultsLoaderModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.hide();
+            }
+        });
+        </script>
+
         <script>
         document.addEventListener('click', function(e) {
                 var el = e.target.closest && e.target.closest('a.show-results-loader');

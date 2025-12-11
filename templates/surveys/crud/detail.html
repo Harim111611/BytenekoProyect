@@ -1,5 +1,86 @@
 {% extends 'app_base.html' %}
 {% load static %}
+<!-- Fragmento funcional: Importar CSV con Polling Celery -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">Importar CSV</div>
+    <div class="card-body">
+        <form id="import-form" action="{% url 'surveys:survey_import_start' survey.public_id %}" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label">Archivo CSV</label>
+                <input type="file" name="survey_file" class="form-control" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="btn-import-submit">
+                Subir e Importar
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="importProgressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+            <div class="modal-header border-0 justify-content-center">
+                <h5 class="modal-title fw-bold text-primary">Importación en curso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="display:none;"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="fw-bold text-primary">Subiendo archivo...</p>
+                <div class="progress mt-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="{% static 'surveys/js/async_actions.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const importForm = document.getElementById('import-form');
+    const modalEl = document.getElementById('importProgressModal');
+    const surveyPublicId = "{{ survey.public_id }}";
+
+    if (importForm && modalEl) {
+        importForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            const formData = new FormData(importForm);
+            const btn = document.getElementById('btn-import-submit');
+            btn.disabled = true;
+            fetch(importForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    AsyncManager.startImportPolling(data.task_id, modalEl, surveyPublicId);
+                } else {
+                    alert("Error al iniciar: " + data.error);
+                    btn.disabled = false;
+                    modal.hide();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error de conexión al subir archivo.");
+                btn.disabled = false;
+                modal.hide();
+            });
+        });
+    }
+});
+</script>
+{% endblock %}
 
 {% block app_content %}
 {% csrf_token %}
@@ -83,12 +164,6 @@
             <div class="d-flex flex-wrap gap-2">
                 <a href="{% url 'surveys:edit' survey.public_id %}" class="btn btn-white border shadow-sm text-body fw-medium">
                     <i class="bi bi-pencil me-2"></i>Editar
-                </a>
-                <a href="{% url 'surveys:export' survey.public_id %}" class="btn btn-white border shadow-sm text-body fw-medium" title="Descargar CSV">
-                    <i class="bi bi-download me-2"></i>Exportar
-                </a>
-                <a href="{% url 'surveys:results' survey.public_id %}" class="btn btn-primary shadow-sm fw-medium show-results-loader">
-                    <i class="bi bi-bar-chart-fill me-2"></i>Ver Resultados
                 </a>
             </div>
         </div>
@@ -247,29 +322,16 @@
                                         <i class="bi bi-lock fs-4 me-3"></i>
                                         <div>
                                             <div class="fw-bold mb-1">⚠️ Encuesta {{ survey.get_status_display }}</div>
-                                            <small class="text-muted">Las preguntas no pueden modificarse fuera del estado borrador. Desde activa solo puedes pausar o cerrar; el estado cerrado es definitivo.</small>
+                                            <small class="text-muted">
+                                                Las preguntas no pueden modificarse fuera del estado borrador. Desde activa solo puedes pausar o cerrar; el estado cerrado es definitivo.<br>
+                                                <strong>Para cambiar el estado de la encuesta, ve a la opción <i class='bi bi-pencil'></i> Editar.</strong>
+                                            </small>
                                         </div>
                                     </div>
                                 </div>
                                 {% endif %}
-                                <select class="form-select"
-                                        id="estadoSelect"
-                                        data-current-status="{{ survey.status }}"
-                                        data-change-url="{% url 'surveys:change_status' survey.public_id %}"
-                                        data-public-id="{{ survey.public_id }}"
-                                        {% if survey.status == 'closed' %}disabled{% endif %}
-                                        onchange="cambiarEstado(this)">
-                                    <option value="draft"
-                                            {% if survey.status == 'draft' %}selected{% endif %}
-                                            {% if survey.status != 'draft' %}disabled{% endif %}>📝 Borrador</option>
-                                    <option value="active"
-                                            {% if survey.status == 'active' %}selected{% endif %}
-                                            {% if survey.status == 'closed' %}disabled{% endif %}>✅ Activa</option>
-                                    <option value="paused"
-                                            {% if survey.status == 'paused' %}selected{% endif %}
-                                            {% if survey.status == 'draft' or survey.status == 'closed' %}disabled{% endif %}>⏸️ En pausa</option>
-                                    <option value="closed" {% if survey.status == 'closed' %}selected{% endif %}>🔒 Cerrada</option>
-                                </select>
+                                <!-- Edición de estado solo visible en el formulario de edición -->
+                                <span class="badge bg-body-tertiary text-body border border-dashed">{{ survey.get_status_display }}</span>
                             {% endif %}
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -330,11 +392,7 @@
                             {% endfor %}
                         </ul>
                         {% if survey.responses.count > 0 %}
-                        <div class="card-footer bg-transparent text-center border-0 py-2">
-                            <a href="{% url 'surveys:results' survey.public_id %}" class="text-decoration-none small fw-bold icon-link icon-link-hover show-results-loader">
-                                    Ver todos los resultados <i class="bi bi-arrow-right"></i>
-                            </a>
-                        </div>
+                        <!-- Botón de ver todos los resultados eliminado -->
                         {% endif %}
                     </div>
                 </div>

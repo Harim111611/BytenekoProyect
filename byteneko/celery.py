@@ -59,4 +59,5 @@ app.conf.task_routes = {
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
     """Debug task to test Celery configuration."""
-    print(f'Request: {self.request!r}')
+    import logging
+    logging.getLogger(__name__).info(f'Request: {self.request!r}')

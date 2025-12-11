@@ -1,9 +1,8 @@
-# surveys/urls.py
-
 from django.urls import path
 
+# Importamos las vistas
 from .views import import_views, report_views, respond_views, question_views
-from .views import crud_views
+from .views import crud_views, template_views
 from .views.crud_views import (
     SurveyListView,
     SurveyCreateView,
@@ -17,45 +16,58 @@ from .views.crud_views import (
 app_name = "surveys"
 
 urlpatterns = [
-    # CRUD básico de encuestas
+    # =================================================
+    # RUTAS DE IMPORTACIÓN (NUEVAS Y CORRECTAS)
+    # =================================================
+    # 1. Importar en encuesta existente (Detalle)
+    path('<str:public_id>/import/start/', import_views.csv_upload_start_import, name='survey_import_start'),
+    
+    # 2. Crear NUEVA encuesta desde CSV (Listado) - SOLUCIONA EL ERROR NoReverseMatch
+    path('import/new/preview/', import_views.csv_create_preview_view, name='import_preview'), 
+    path('import/new/start/', import_views.csv_create_start_import, name='import_survey_csv_async'), # Mantenemos el nombre que busca el template
+    
+    # 3. Polling de Estado (Para ambos casos)
+    path('task_status/<str:task_id>/', import_views.get_task_status_view, name='task_status'),
+    # Alias para compatibilidad con código JS antiguo si es necesario
+    path('import-job/<str:task_id>/status/', import_views.get_task_status_view, name='import_job_status'),
+
+    # =================================================
+    # RUTAS CRUD
+    # API endpoints for survey templates
+    path("templates/list/", template_views.list_templates, name="template_list"),
+    path("templates/create/", template_views.create_template, name="template_create"),
+    # =================================================
     path("", SurveyListView.as_view(), name="list"),
     path("create/", SurveyCreateView.as_view(), name="create"),
+    path("create_survey/", crud_views.api_create_survey_from_json, name="create_survey_api"),
 
-    # Operaciones CRUD de preguntas (inline desde detail view)
+    # Preguntas
     path("questions/<int:pk>/update/", question_views.update_question_view, name="question_update"),
     path("questions/<int:pk>/delete/", question_views.delete_question_view, name="question_delete"),
+    path("<str:public_id>/questions/add/", question_views.add_question_view, name="question_add"),
 
-    # Vista previa de CSV
-    path("import-preview/", import_views.import_csv_preview_view, name="import_preview"),
-
-    # Borrado masivo
+    # Acciones Masivas
     path("bulk-delete/", bulk_delete_surveys_view, name="bulk_delete"),
-
-    # Pantalla de agradecimiento
-    path("thanks/", report_views.survey_thanks_view, name="thanks"),
-
-    # MODO TRYHARD AWS: IMPORT ASYNC
-    path("import-async/", import_views.import_survey_csv_async, name="import_survey_csv_async"),
-    path("import-job/<int:job_id>/status/", import_views.import_job_status, name="import_job_status"),
     path("delete-task/<str:task_id>/status/", crud_views.delete_task_status, name="delete_task_status"),
 
-    # Rutas legadas
-    path("<int:pk>/<path:legacy_path>/", legacy_survey_redirect_view, name="legacy_survey_with_path"),
-    path("<int:pk>/", legacy_survey_redirect_view, name="legacy_survey"),
-
-    # Rutas modernas con identificador público
-    path("<str:public_id>/", SurveyDetailView.as_view(), name="detail"),
-    path("<str:public_id>/edit/", SurveyUpdateView.as_view(), name="edit"),
-    path("<str:public_id>/delete/", SurveyDeleteView.as_view(), name="delete"),
+    # Acciones Varias
+    path("thanks/", report_views.survey_thanks_view, name="thanks"),
     path("<str:public_id>/change-status/", report_views.change_survey_status, name="change_status"),
-    path("<str:public_id>/questions/add/", question_views.add_question_view, name="question_add"),
-    path("<str:public_id>/import/", import_views.import_responses_view, name="import"),
+    
+    # Responder
     path("<str:public_id>/respond/", respond_views.respond_survey_view, name="respond"),
+    
+    # Resultados
     path("<str:public_id>/results/", report_views.survey_results_view, name="results"),
     path("<str:public_id>/results/debug/", report_views.debug_analysis_view, name="results_debug"),
-    path("<str:public_id>/export/", report_views.export_survey_csv_view, name="export"),
-    path("list-count/", crud_views.survey_list_count, name="list_count"),
+    path("<str:public_id>/export/", report_views.export_survey_csv_view, name="export_csv"),
+    path("<str:public_id>/api/crosstab/", report_views.api_crosstab_view, name="api_crosstab"),
     
-    # NUEVA RUTA PARA DECISIÓN DE META
+    # Detalle (Al final)
+    path("<str:public_id>/", SurveyDetailView.as_view(), name="detail"),
+    path("survey/<int:pk>/", legacy_survey_redirect_view, name="legacy_detail"),
+    path("<str:public_id>/edit/", SurveyUpdateView.as_view(), name="edit"),
+    path("<str:public_id>/delete/", SurveyDeleteView.as_view(), name="delete"),
+    path("list-count/", crud_views.survey_list_count, name="list_count"),
     path("<str:public_id>/goal-decision/", crud_views.handle_goal_decision, name="handle_goal_decision"),
 ]

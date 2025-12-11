@@ -1,3 +1,5 @@
+# Importa modelos adicionales definidos fuera de models.py
+from .models_reports import *
 # BytenekoProyect/core/models.py
 from django.db import models
 from django.contrib.auth.models import User

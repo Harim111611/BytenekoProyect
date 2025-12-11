@@ -20,27 +20,28 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
 
     # Apps (Core)
+
     path("dashboard/", core_views.dashboard_view, name="dashboard"),
-    path("resultados/", core_views.dashboard_results_view, name="dashboard_results"),
-    path("resultados/pdf/", core_views.global_results_pdf_view, name="global_results_pdf"),
-    path("reportes/", core_views.reports_page_view, name="reports"),
+    path("results/", core_views.dashboard_results_view, name="dashboard_results"),
+    path("results/pdf/", core_views.global_results_pdf_view, name="global_results_pdf"),
+    path("reports/", core_views.reports_page_view, name="reports"),
 
-    # --- NUEVA RUTA AGREGADA AQUÍ ---
-    path("configuracion/", core_views.settings_view, name="settings"),
+    # --- NEW ROUTE ADDED HERE ---
+    path("settings/", core_views.settings_view, name="settings"),
 
-    # Reportes Específicos
+    # Specific Reports
     path(
         "report/pdf/",
         core_views.report_pdf_view,
         name="report_pdf",
     ),
     path(
-        "reportes/powerpoint/",
+        "reports/powerpoint/",
         core_views.report_powerpoint_view,
         name="report_pptx",
     ),
     path(
-        "reportes/preview/<str:public_id>/",
+        "reports/preview/<str:public_id>/",
         core_views.report_preview_ajax,
         name="report_preview",
     ),

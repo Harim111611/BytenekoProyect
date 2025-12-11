@@ -1,3 +1,64 @@
+    // --- NUEVO: POLLING DE IMPORTACIÓN POR TASK_ID (Celery) ---
+    startImportPolling: function(taskId, modalElement, surveyPublicId) {
+        console.log(`[AsyncManager] Iniciando polling para tarea: ${taskId}`);
+        const statusText = modalElement.querySelector('.modal-body .fw-bold');
+        const progressBar = modalElement.querySelector('.progress-bar');
+        const spinner = modalElement.querySelector('.spinner-border');
+        const closeBtn = modalElement.querySelector('.btn-close');
+
+        if (statusText) statusText.innerText = "Procesando archivo en el servidor...";
+        if (progressBar) {
+            progressBar.style.width = "100%";
+            progressBar.classList.add('progress-bar-animated');
+            progressBar.classList.remove('bg-danger', 'bg-success');
+        }
+
+        const pollInterval = setInterval(() => {
+            fetch(`/surveys/task_status/${taskId}/`)
+                .then(response => {
+                    if (!response.ok) throw new Error("Error de red al consultar estado");
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(`[AsyncManager] Estado tarea: ${data.status}`);
+                    if (data.status === 'success') {
+                        clearInterval(pollInterval);
+                        if (statusText) {
+                            statusText.innerText = `✅ ¡Listo! Se importaron ${data.result.imported_count} registros.`;
+                            statusText.classList.replace('text-primary', 'text-success');
+                        }
+                        if (progressBar) {
+                            progressBar.classList.replace('bg-primary', 'bg-success');
+                            progressBar.classList.remove('progress-bar-animated');
+                        }
+                        if (spinner) spinner.style.display = 'none';
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else if (data.status === 'failure' || data.status === 'revoked') {
+                        clearInterval(pollInterval);
+                        if (statusText) {
+                            statusText.innerText = "❌ Error en la importación";
+                            statusText.classList.replace('text-primary', 'text-danger');
+                        }
+                        if (progressBar) {
+                            progressBar.classList.replace('bg-primary', 'bg-danger');
+                            progressBar.classList.remove('progress-bar-animated');
+                        }
+                        if (spinner) spinner.style.display = 'none';
+                        const errorMsg = data.error_message || "Ocurrió un error desconocido.";
+                        const errorContainer = document.createElement('div');
+                        errorContainer.className = "alert alert-danger mt-3";
+                        errorContainer.innerText = errorMsg;
+                        modalElement.querySelector('.modal-body').appendChild(errorContainer);
+                        if (closeBtn) closeBtn.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error("Error en polling:", error);
+                });
+        }, 2000);
+    },
 /**
  * Motor de acciones asíncronas para Byteneko
  * Maneja Importación Múltiple y Borrado sin recargar la página.
@@ -126,14 +187,32 @@ const AsyncManager = {
 
             if (data.status === 'completed') {
                 clearInterval(interval);
-                statusText.innerText = '✅ Completado';
+                statusText.innerText = '✅ ¡Importación completada!';
                 statusText.classList.add('text-success');
                 progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
                 progressBar.classList.add('bg-success');
-                
-                // Opcional: Recargar página si todos completados
+
+                // Si todos los imports están completados, mostrar mensaje y cerrar tras 2s
                 if (document.querySelectorAll('.bg-success').length === document.querySelectorAll('.progress-bar').length) {
-                    setTimeout(() => window.location.href = "/surveys/", 1000);
+                    // Mostrar mensaje global de éxito
+                    const container = document.getElementById('import-success-message');
+                    if (container) {
+                        container.style.display = 'block';
+                    } else {
+                        // Si no existe, lo creamos arriba de las barras
+                        const resultContainer = document.getElementById('import-result-container') || document.body;
+                        const msg = document.createElement('div');
+                        msg.id = 'import-success-message';
+                        msg.className = 'alert alert-success text-center fw-bold my-3';
+                        msg.innerHTML = '<i class="bi bi-check-circle me-2"></i>¡Importación completada exitosamente!';
+                        resultContainer.prepend(msg);
+                    }
+                    setTimeout(() => {
+                        // Ocultar mensaje y redirigir
+                        const msg = document.getElementById('import-success-message');
+                        if (msg) msg.style.display = 'none';
+                        window.location.href = "/surveys/";
+                    }, 2000);
                 }
 
             } else if (data.status === 'failed') {

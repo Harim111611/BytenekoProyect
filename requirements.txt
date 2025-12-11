@@ -26,8 +26,10 @@ brotli==1.2.0
 django-ratelimit==4.1.0
 cryptography==46.0.3
 
+
 # Monitoring & Error Tracking
 sentry-sdk==2.46.0
+psutil==5.9.8
 
 # WSGI Server
 gunicorn==23.0.0

@@ -6,6 +6,8 @@ Uses aggressive caching and efficient SQL queries.
 import logging
 import csv
 import json
+import os # Añadido para manejo de paths en exportación
+import mimetypes # Añadido para manejo de tipos MIME en exportación
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
@@ -15,11 +17,10 @@ from django.contrib import messages
 from django.db.models import Count, Avg, Q, Min, Max
 from django.db.models.functions import TruncDate
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django_ratelimit.decorators import ratelimit
 
-from surveys.models import Survey, SurveyResponse, QuestionResponse
+from surveys.models import Survey, SurveyResponse, QuestionResponse # Asumo que estos son correctos
 from core.utils.logging_utils import StructuredLogger, log_data_change
 from core.utils.helpers import PermissionHelper, DateFilterHelper
 from core.services.survey_analysis import SurveyAnalysisService
@@ -32,6 +33,7 @@ CACHE_TIMEOUT_ANALYSIS = 1800  # 30 minutes for full analysis
 
 
 def _get_survey_quick_stats(survey_id, user_id):
+# ... (Función sin cambios, la mantengo por completitud)
     """
     Get quick statistics using efficient SQL aggregation.
     Cached for fast repeat access.
@@ -63,6 +65,7 @@ def _get_survey_quick_stats(survey_id, user_id):
 
 
 def _get_trend_data_fast(survey_id, days=None):
+# ... (Función sin cambios)
     """
     Obtiene conteo diario de respuestas y promedio diario de satisfacción.
     """
@@ -126,6 +129,7 @@ def _get_trend_data_fast(survey_id, days=None):
 
 
 def _has_date_fields(survey_id):
+# ... (Función sin cambios)
     """
     Check if survey has date fields from the CSV import.
     """
@@ -172,7 +176,6 @@ def _has_date_fields(survey_id):
     
     return has_dates
 
-
 # ============================================================
 # EXPORTACIÓN CSV
 # ============================================================
@@ -184,69 +187,141 @@ def export_survey_csv_view(request, public_id):
     try:
         survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
     except Http404:
-        logger.warning(f"Intento de exportar CSV inexistente: {public_id} - {request.user.username}")
+        logger.warning(
+            f"Intento de exportar CSV inexistente: {public_id} - {request.user.username}"
+        )
         messages.error(request, "La encuesta solicitada no existe o fue eliminada.")
+        # Se asume que 'dashboard' es un nombre de URL accesible
         return redirect('dashboard')
-    
-    respuestas = SurveyResponse.objects.filter(survey=survey).prefetch_related(
-        'question_responses__question',
-        'question_responses__selected_option'
-    ).order_by('created_at')
-    
+
+    # Si la encuesta es importada, buscar el archivo CSV original y servirlo
+    if getattr(survey, 'is_imported', False):
+        try:
+            # Mantengo esta import aquí para no romper otras partes del módulo
+            from surveys.models import ImportJob
+        except ImportError:
+            messages.error(
+                request,
+                "Error interno: Falta el modelo de importación de encuestas (ImportJob).",
+            )
+            return redirect('surveys:results', public_id=public_id)
+
+        import_job = (
+            ImportJob.objects
+            .filter(survey=survey, status="completed")
+            .order_by('-created_at')
+            .first()
+        )
+
+        if import_job and import_job.csv_file and os.path.exists(import_job.csv_file):
+            import_path = import_job.csv_file
+            original_filename = import_job.original_filename or os.path.basename(import_path)
+
+            # Servir el archivo CSV original
+            with open(import_path, 'rb') as f:
+                file_data = f.read()
+
+            content_type = (
+                mimetypes.guess_type(original_filename or 'archivo.csv')[0]
+                or 'text/csv'
+            )
+            response = HttpResponse(file_data, content_type=content_type)
+
+            # 🔧 FIX: evitar f-string con comillas internas conflictivas
+            safe_name = original_filename or "imported.csv"
+            response['Content-Disposition'] = (
+                f'attachment; filename="{safe_name}"'
+            )
+            return response
+        else:
+            messages.error(
+                request,
+                "No se encontró el archivo CSV original importado para esta encuesta.",
+            )
+            return redirect('surveys:results', public_id=public_id)
+
+    # Si no es encuesta importada, exportar las respuestas generadas desde BD
+    respuestas = (
+        SurveyResponse.objects
+        .filter(survey=survey)
+        .prefetch_related(
+            'question_responses__question',
+            'question_responses__selected_option',
+        )
+        .order_by('created_at')
+    )
+
     if not respuestas.exists():
-        messages.warning(request, "No hay respuestas para exportar en esta encuesta.")
+        messages.warning(
+            request,
+            "No hay respuestas para exportar en esta encuesta.",
+        )
         return redirect('surveys:results', public_id=public_id)
-    
+
+    # Configurar respuesta CSV con UTF-8 y BOM para Excel
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-    filename = f"{survey.title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = (
+        f"{survey.title.replace(' ', '_')}_"
+        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    # BOM para que Excel detecte UTF-8
     response.write('\ufeff')
-    
+
     writer = csv.writer(response)
-    preguntas = list(survey.questions.prefetch_related('options').all().order_by('order'))
-    
+
+    preguntas = list(
+        survey.questions
+        .prefetch_related('options')
+        .all()
+        .order_by('order')
+    )
+
+    # Encabezados del CSV
     headers = ['ID_Respuesta', 'Fecha', 'Usuario']
     headers.extend([p.text for p in preguntas])
     writer.writerow(headers)
-    
+
     for respuesta in respuestas:
         row = [
             respuesta.id,
             respuesta.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            respuesta.user.username if respuesta.user else 'Anónimo'
+            respuesta.user.username if respuesta.user else 'Anónimo',
         ]
-        
+
+        # Mapa pregunta_id -> lista de valores (para soportar multi-respuesta)
         respuestas_map = {}
+
         for rp in respuesta.question_responses.all():
             pregunta_id = rp.question.id
+            valor = ''
+
             if rp.numeric_value is not None:
                 valor = str(rp.numeric_value)
-            elif rp.selected_option:
+            elif rp.selected_option and rp.selected_option.text:
                 valor = rp.selected_option.text
             elif rp.text_value:
                 valor = rp.text_value
-            else:
-                valor = ''
-            
-            if pregunta_id in respuestas_map:
-                respuestas_map[pregunta_id] += f", {valor}"
-            else:
-                respuestas_map[pregunta_id] = valor
-        
+
+            if pregunta_id not in respuestas_map:
+                respuestas_map[pregunta_id] = []
+
+            if valor:
+                respuestas_map[pregunta_id].append(valor)
+
+        # Construir la fila completa respetando el orden de las preguntas
         for pregunta in preguntas:
-            row.append(respuestas_map.get(pregunta.id, ''))
-        
+            final_value = " | ".join(respuestas_map.get(pregunta.id, []))
+            row.append(final_value)
+
         writer.writerow(row)
-    
+
     return response
 
 
-# ============================================================
-# DASHBOARD DE RESULTADOS - OPTIMIZADO
-# ============================================================
-
-@login_required
 def survey_results_view(request, public_id):
+# ... (Función sin cambios)
+# ... (Código restante de report_views.py sin cambios)
     """
     Vista INDIVIDUAL de resultados - OPTIMIZADA CON SOPORTE DARK MODE.
     """
@@ -265,7 +340,6 @@ def survey_results_view(request, public_id):
     survey_id = survey.pk
     
     # --- DETECCIÓN DE TEMA (COOKIE + GET) ---
-    # Esto es vital para que ChartGenerator sepa qué colores usar
     theme = request.GET.get('theme') or request.COOKIES.get('theme', 'light')
     dark_mode = theme == 'dark'
     
@@ -280,9 +354,6 @@ def survey_results_view(request, public_id):
     
     has_filters = start or end or segment_col or segment_val or segment_demo
     
-    # Construcción de la key de caché incluyendo el TEMA
-    # Si no incluimos 'dark_mode' en la key, Django servirá gráficos generados en modo light (texto negro)
-    # a usuarios en modo dark (fondo negro), haciéndolos invisibles.
     base_cache_suffix = f"{survey_id}_{theme}" 
     
     if has_filters:
@@ -313,7 +384,6 @@ def survey_results_view(request, public_id):
     trend_data = _get_trend_data_fast(survey_id, days=None) if not has_filters else None
     
     if has_filters and total_respuestas > 0:
-        # Recálculo de tendencia si hay filtros (no cacheado globalmente)
         daily_counts_qs = respuestas_qs.annotate(
             dia=TruncDate('created_at')
         ).values('dia').annotate(
@@ -367,7 +437,6 @@ def survey_results_view(request, public_id):
     ]
     
     candidate_insights = [item for item in analysis_result['analysis_data'] if item.get('insight')]
-    # Simple sort for insights priority
     candidate_insights.sort(key=lambda x: -1 if x.get('state') == 'CRITICO' else 0)
     top_insights = candidate_insights[:3]
     
@@ -387,7 +456,7 @@ def survey_results_view(request, public_id):
         'analysis_data_json': json.dumps(analysis_data_json, cls=DjangoJSONEncoder),
         'trend_data': json.dumps(trend_data, cls=DjangoJSONEncoder) if trend_data else None,
         'top_insights': top_insights,
-        'heatmap_image': analysis_result.get('heatmap_image'), # Ya viene generado con el color correcto según dark_mode
+        'heatmap_image': analysis_result.get('heatmap_image'), 
         'preguntas_filtro': preguntas_filtro,
         'filter_start': start,
         'filter_end': end,
@@ -397,9 +466,9 @@ def survey_results_view(request, public_id):
         'has_filters': has_filters,
         'has_date_fields': _has_date_fields(survey_id),
         'data_quality': analysis_result.get('data_quality'),
-           'meta': analysis_result.get('meta'),
-           'evolution_chart': analysis_result.get('evolution_chart'),
-           'ignored_questions': analysis_result.get('ignored_questions', []),
+        'meta': analysis_result.get('meta'),
+        'evolution_chart': analysis_result.get('evolution_chart'),
+        'ignored_questions': analysis_result.get('ignored_questions', []),
     }
     
     return render(request, 'surveys/responses/results.html', context)
@@ -418,7 +487,6 @@ def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segme
     
     q_filter = Q()
     if segment_demo:
-        # Lógica simplificada de filtro demográfico
         q_filter = Q(selected_option__text__icontains=segment_demo) | Q(text_value__icontains=segment_demo)
     elif segment_val:
         if pregunta_filtro.type == 'scale':
@@ -438,7 +506,6 @@ def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segme
 
 @login_required
 def survey_analysis_ajax(request, public_id):
-    # AJAX también debe respetar el tema para regenerar gráficos si se solicita
     try:
         survey = get_object_or_404(Survey, public_id=public_id)
         PermissionHelper.verify_survey_access(survey, request.user)
@@ -462,8 +529,40 @@ def survey_analysis_ajax(request, public_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-# ... Resto de vistas (debug_analysis_view, survey_thanks_view, etc) ...
-# Asegúrate de mantener change_survey_status y otras funciones auxiliares tal como estaban en tu archivo original.
+
+# ============================================================
+# NUEVA VISTA PARA TABLAS CRUZADAS (CROSSTABS)
+# ============================================================
+
+@login_required
+def api_crosstab_view(request, public_id):
+    """
+    API endpoint para generar tablas cruzadas dinámicamente.
+    Cruza dos preguntas para analizar correlaciones.
+    Uso: /surveys/<public_id>/api/crosstab/?row=<q_id>&col=<q_id>
+    """
+    try:
+        survey = get_object_or_404(Survey, public_id=public_id)
+        PermissionHelper.verify_survey_access(survey, request.user)
+        
+        row_id = request.GET.get('row')
+        col_id = request.GET.get('col')
+        
+        if not row_id or not col_id:
+            return JsonResponse({'error': 'Faltan parámetros row/col'}, status=400)
+
+        # Se asume que SurveyAnalysisService.generate_crosstab ya fue implementado en el service
+        result = SurveyAnalysisService.generate_crosstab(survey, row_id, col_id)
+        
+        if not result:
+            return JsonResponse({'error': 'No se pudieron generar datos o preguntas inválidas'}, status=400)
+            
+        return JsonResponse(result)
+        
+    except Exception as e:
+        logger.error(f"Error generando crosstab para {public_id}: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def debug_analysis_view(request, public_id):

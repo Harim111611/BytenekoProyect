@@ -5,7 +5,7 @@ Este ejemplo demuestra cómo usar la nueva función de validación
 para procesar archivos CSV con validación de tipos y rangos.
 """
 
-from tools.cpp_csv import pybind_csv
+## Código relacionado con cpp_csv eliminado (código muerto)
 
 
 def example_basic_validation():

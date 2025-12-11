@@ -1,3 +1,5 @@
+# BytenekoProyect/surveys/views/__init__.py (Código Corregido)
+
 # surveys/views/__init__.py
 """
 Survey views package.
@@ -19,14 +21,15 @@ from .crud_views import (
     SurveyUpdateView,
     SurveyDeleteView,
     bulk_delete_surveys_view,
+    delete_task_status, # <--- ¡Añadida para exportar correctamente la vista de estado!
 )
 
-# Re-export function-based views from import_views
+# Re-export function-based views from import_views (CORREGIDO)
 from .import_views import (
-    import_survey_csv_async,
-    import_job_status,
-    import_csv_preview_view,
-    import_responses_view,
+    csv_upload_start_import,  # <-- Nuevo nombre
+    get_task_status_view,     # <-- Nueva función para polling
+    csv_preview_view,         
+    import_responses_view,    
 )
 
 # Re-export function-based views from report_views
@@ -57,11 +60,12 @@ __all__ = [
     'SurveyUpdateView',
     'SurveyDeleteView',
     'bulk_delete_surveys_view',
+    'delete_task_status', # <--- Añadido a __all__
     
     # Import views
-    'import_survey_csv_async',
-    'import_job_status',
-    'import_csv_preview_view',
+    'csv_upload_start_import',
+    'get_task_status_view',
+    'csv_preview_view',
     'import_responses_view',
     
     # Report views

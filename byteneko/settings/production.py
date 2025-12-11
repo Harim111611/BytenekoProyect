@@ -10,8 +10,15 @@ from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-# Tamaño de chunk para importación masiva (Ajustado para balancear RAM/CPU por worker)
-SURVEY_IMPORT_CHUNK_SIZE = 2000 
+# ============================================================
+# OPTIMIZACIÓN DE IMPORTACIÓN MASIVA
+# ============================================================
+
+# Tamaño de chunk para bulk_create (Aumentado para optimizar DB COPY)
+SURVEY_IMPORT_CHUNK_SIZE = 5000 
+
+# Tamaño de la muestra para la detección rápida de tipos de columna (en tasks.py)
+SURVEY_IMPORT_SAMPLE_SIZE = 10000
 
 # ============================================================
 # SECURITY SETTINGS
@@ -23,7 +30,7 @@ SECRET_KEY = config('SECRET_KEY')
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 
-# HTTPS/SSL Settings (AWS Load Balancer suele manejar SSL, pero Django debe saberlo)
+# HTTPS/SSL Settings
 SECURE_SSL_REDIRECT = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
@@ -35,7 +42,7 @@ SECURE_HSTS_PRELOAD = True
 # Cookie Security
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax' # 'Strict' puede romper flujos de OAuth o enlaces externos a veces
+SESSION_COOKIE_SAMESITE = 'Lax' 
 SESSION_COOKIE_AGE = 86400
 
 CSRF_COOKIE_SECURE = True
@@ -58,14 +65,10 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD'),
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT', default='5432'),
-        # Optimización AWS: Menor tiempo de vida de conexión para evitar
-        # problemas con re-deployments o escalado de contenedores.
         'CONN_MAX_AGE': 60,  
         'CONN_HEALTH_CHECKS': True,
         'OPTIONS': {
             'connect_timeout': 5,
-            # IMPORTANTE: Statement timeout aumentado para tareas pesadas de análisis
-            # pero mantenido seguro para evitar bloqueos eternos.
             'options': '-c statement_timeout=60000', 
         },
         'ATOMIC_REQUESTS': True,
@@ -76,7 +79,6 @@ DATABASES = {
 # CACHE & CELERY CONFIGURATION - Redis (AWS ElastiCache)
 # ============================================================
 
-# Usar una sola variable REDIS_URL para simplificar la configuración en AWS
 REDIS_URL = config('REDIS_URL', default='redis://127.0.0.1:6379')
 
 CACHES = {
@@ -87,8 +89,6 @@ CACHES = {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'SOCKET_CONNECT_TIMEOUT': 5,
             'SOCKET_TIMEOUT': 5,
-            # Connection Pool ajustado: 4 workers * 4 threads = ~16 conexiones por contenedor.
-            # 50 es suficiente margen de seguridad sin saturar Redis.
             'CONNECTION_POOL_KWARGS': {
                 'max_connections': 50,
                 'retry_on_timeout': True,
@@ -113,11 +113,12 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Worker Optimizations for 4 Workers
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1 # Fair dispatch. Evita que un worker acapare tareas largas.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1 
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_TIME_LIMIT = 1800  # 30 min
 CELERY_TASK_SOFT_TIME_LIMIT = 1500 # 25 min
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 500 # Reiniciar worker frecuentemente para liberar memoria (pandas leaks)
+# CRÍTICO: Reducido a 100 para forzar el reinicio del worker y limpiar la memoria retenida (fugas de Pandas).
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100 
 
 # ============================================================
 # STATIC & MEDIA FILES
@@ -146,8 +147,6 @@ else:
 # LOGGING & SENTRY
 # ============================================================
 
-# ... (Configuración de Logging y Sentry se mantiene igual, está bien estructurada)
-# Asegurarse que Sentry ignore errores de cancelación de tareas intencionales
 if config('SENTRY_DSN', default=None):
     sentry_sdk.init(
         dsn=config('SENTRY_DSN'),
@@ -157,7 +156,6 @@ if config('SENTRY_DSN', default=None):
         environment=config('ENVIRONMENT', default='production'),
     )
 
-# Email configs... (Mantener igual)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)

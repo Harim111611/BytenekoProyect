@@ -73,8 +73,17 @@ const AsyncManager = {
                 'X-Requested-With': 'XMLHttpRequest',
             },
         })
-        .then(resp => resp.json())
-        .then(data => {
+        .then(async resp => {
+            let data;
+            try {
+                data = await resp.json();
+            } catch (e) {
+                // Si la respuesta no es JSON, mostrar error claro
+                resultDiv.innerHTML = '<div class="text-danger">Error inesperado: la respuesta del servidor no es JSON.<br>Revisa los logs del servidor o la consola para más detalles.</div>';
+                btn.disabled = false;
+                btn.innerHTML = 'Importar';
+                return;
+            }
             if (data.jobs) {
                 resultDiv.innerHTML = '<ul id="importJobList"></ul>';
                 data.jobs.forEach(job => {

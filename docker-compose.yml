@@ -1,0 +1,72 @@
+# version key removed as it is obsolete
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: byteneko_db
+    environment:
+      # CRÍTICO: Usar las credenciales de su local.py
+      POSTGRES_DB: byteneko_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Seiyadepegaso16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    ports:
+      # Opcional: Solo si necesita acceder directamente a la DB desde su host
+      - "5432:5432" 
+    mem_limit: 1g
+
+  redis:
+    image: redis:6-alpine
+    container_name: byteneko_redis
+    ports:
+      - "6379:6379"
+    mem_limit: 256m
+
+  django:
+    build: .
+    container_name: byteneko_app
+    # CRÍTICO: Usar el settings de desarrollo (local.py) y las variables internas de Docker
+    environment:
+      # Variables de Django/DB
+      DJANGO_SETTINGS_MODULE: byteneko.settings.local
+      DB_HOST: db # Nombre del servicio de Docker Compose para la DB
+      DB_NAME: byteneko_db
+      DB_USER: postgres
+      DB_PASSWORD: Seiyadepegaso16
+      # URL de Redis para Celery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    mem_limit: 1.5g
+
+  celery_worker:
+    build: .
+    container_name: byteneko_celery
+    # CRÍTICO: El pool de ejecución en Linux es estable, permite Prefork y Concurrencia
+    # Esto habilita el paralelismo real de los 4 workers.
+    command: celery -A byteneko worker --loglevel=info --concurrency=8
+    environment:
+      DJANGO_SETTINGS_MODULE: byteneko.settings.local
+      DB_HOST: db
+      DB_NAME: byteneko_db
+      DB_USER: postgres
+      DB_PASSWORD: Seiyadepegaso16
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    mem_limit: 1.25g
+    volumes:
+      - .:/usr/src/app
+    depends_on:
+      - redis
+      - db
+
+volumes:
+  postgres_data:

@@ -98,9 +98,15 @@ def delete_question_view(request, pk):
         }, status=403)
     
     try:
-        survey_id = question.survey.id
+        survey = question.survey
         question.delete()
-        logger.info(f"Pregunta {pk} eliminada de encuesta {survey_id} por usuario {request.user.username}")
+        # Reordenar las preguntas restantes
+        questions = survey.questions.order_by('order')
+        for idx, q in enumerate(questions, start=1):
+            if q.order != idx:
+                q.order = idx
+                q.save(update_fields=["order"])
+        logger.info(f"Pregunta {pk} eliminada de encuesta {survey.id} por usuario {request.user.username} y preguntas reordenadas")
         return JsonResponse({'success': True})
         
     except Exception as e:
@@ -134,15 +140,14 @@ def add_question_view(request, public_id):
     try:
         data = json.loads(request.body)
         
-        # Obtener el orden máximo actual
-        max_order = survey.questions.count()
-        
+        # Asignar el siguiente orden secuencial (empezando en 1)
+        next_order = survey.questions.count() + 1
         question = Question.objects.create(
             survey=survey,
             text=data.get('text', 'Nueva pregunta')[:500],
             type=data.get('type', 'text'),
             is_required=data.get('is_required', False),
-            order=max_order
+            order=next_order
         )
         
         logger.info(f"Nueva pregunta {question.id} creada en encuesta {public_id} por usuario {request.user.username}")

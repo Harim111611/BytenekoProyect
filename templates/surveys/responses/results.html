@@ -17,7 +17,7 @@
                 <p class="text-muted mb-0">Explora los datos y segmenta tu audiencia.</p>
             </div>
             <div class="d-flex gap-2">
-                <a href="{% url 'surveys:export' survey.public_id %}" class="btn btn-outline-primary">
+                <a href="{% url 'surveys:export_csv' public_id=survey.public_id %}"class="btn btn-outline-primary">
                     <i class="bi bi-download me-1"></i> Exportar
                 </a>
             </div>
@@ -64,7 +64,7 @@
             </div>
         </div>
     {% else %}
-        {# Bloque Resumen Ejecutivo y métricas principales en una sola card #}
+        {# Bloque Resumen Ejecutivo y métricas principales #}
         {% if meta %}
         <div class="card shadow-lg rounded-4 mb-4 border-0" style="background:rgba(30,32,40,0.98);">
             <div class="card-body p-4">
@@ -152,8 +152,8 @@
 
         <div class="row g-4 mb-5">
             <div class="col-lg-8">
-                <div class="card h-100">
-                    <div class="card-header py-3"><h6 class="m-0">Evolución Temporal</h6></div>
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-transparent border-0 py-3"><h6 class="m-0 fw-bold">Evolución Temporal</h6></div>
                     <div class="card-body p-4">
                         <div style="height: 300px; width: 100%; position: relative;">
                             <canvas id="trendLineChart"></canvas>
@@ -162,11 +162,11 @@
                 </div>
             </div>
             <div class="col-lg-4">
-                <div class="card h-100">
-                    <div class="card-header py-3"><h6 class="m-0">Correlaciones</h6></div>
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-header bg-transparent border-0 py-3"><h6 class="m-0 fw-bold">Correlaciones</h6></div>
                     <div class="card-body p-4 text-center d-flex align-items-center justify-content-center">
                         {% if heatmap_image %}
-                            <img src="data:image/png;base64,{{ heatmap_image }}" class="img-fluid rounded" style="max-height: 220px; width: auto;">
+                            <img src="data:image/png;base64,{{ heatmap_image }}" class="img-fluid rounded shadow-sm" style="max-height: 220px; width: auto;">
                         {% else %}
                             <p class="text-muted small">Se requieren más datos numéricos.</p>
                         {% endif %}
@@ -175,14 +175,57 @@
             </div>
         </div>
 
-        <h4 class="fw-bold mb-4 mt-5 border-bottom pb-2">Análisis Detallado</h4>
+        {# NUEVA SECCIÓN: Tablas Cruzadas (Crosstabs) #}
+        <div class="card shadow-sm rounded-4 mb-5 border-0">
+            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex align-items-center">
+                <i class="bi bi-grid-3x3-gap-fill fs-4 text-primary me-2"></i>
+                <div>
+                    <h5 class="fw-bold mb-0">Análisis Cruzado (Cross-tabs)</h5>
+                    <p class="text-muted small mb-0">Cruza dos variables para identificar patrones y relaciones ocultas.</p>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small text-muted">Fila (Variable 1)</label>
+                        <select id="crosstabRow" class="form-select bg-body-tertiary border-0 py-2">
+                            <option value="">Selecciona una pregunta...</option>
+                            {% for p in preguntas_filtro %}
+                                <option value="{{ p.id }}">{{ p.text|truncatechars:60 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small text-muted">Columna (Variable 2)</label>
+                        <select id="crosstabCol" class="form-select bg-body-tertiary border-0 py-2">
+                            <option value="">Selecciona una pregunta...</option>
+                            {% for p in preguntas_filtro %}
+                                <option value="{{ p.id }}">{{ p.text|truncatechars:60 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button onclick="loadCrosstab()" class="btn btn-primary w-100 fw-bold py-2 shadow-sm">
+                            <i class="bi bi-lightning-fill me-1"></i> Analizar
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="crosstabContainer" class="mt-4 table-responsive rounded-3 border border-dashed p-4 d-none text-center bg-body-tertiary">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
+                </div>
+                <div id="crosstabError" class="mt-3 alert alert-warning d-none small"></div>
+            </div>
+        </div>
+
+        <h4 class="fw-bold mb-4 mt-5 border-bottom pb-2">Análisis Detallado por Pregunta</h4>
         <div class="accordion" id="questionsAccordion">
             {% for item in analysis_data %}
                 {% if item.is_active|default:True %}
-                <div class="accordion-item mb-4 shadow-sm rounded overflow-hidden">
+                <div class="accordion-item mb-4 shadow-sm rounded overflow-hidden border-0">
                     <h2 class="accordion-header">
-                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ item.id }}">
-                            <span class="fw-bold me-2 opacity-50">{{ item.order }}.</span> {{ item.text }}
+                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ item.id }}">
+                            <span class="fw-bold me-2 text-primary opacity-75">{{ item.order }}.</span> {{ item.text }}
                         </button>
                     </h2>
                     <div id="collapse{{ item.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#questionsAccordion">
@@ -190,26 +233,47 @@
                             <div class="row g-4">
                                 <div class="col-md-8 border-end border-secondary-subtle">
                                     {% if item.type == 'text' %}
-                                        <ul class="list-group list-group-flush">
-                                            {% for texto in item.samples_texto %}
-                                                <li class="list-group-item bg-transparent"><i class="bi bi-chat-left-text me-2 text-muted"></i>{{ texto }}</li>
-                                            {% empty %}<li class="list-group-item bg-transparent text-muted">Sin respuestas.</li>{% endfor %}
-                                        </ul>
+                                        <div class="p-3 bg-body-tertiary rounded-3" style="max-height: 300px; overflow-y: auto;">
+                                            <ul class="list-group list-group-flush">
+                                                {% for texto in item.samples_texto %}
+                                                    <li class="list-group-item bg-transparent border-bottom-0 py-2"><i class="bi bi-chat-left-dots me-2 text-muted"></i>{{ texto }}</li>
+                                                {% empty %}<li class="list-group-item bg-transparent text-muted">Sin respuestas textuales.</li>{% endfor %}
+                                            </ul>
+                                        </div>
                                     {% elif item.chart_image %}
-                                        {# Gráfico Estático Matplotlib (Pie/Barras horizontales) #}
+                                        {# Gráfico Estático Matplotlib #}
                                         <div class="text-center">
                                             <img src="data:image/png;base64,{{ item.chart_image }}" class="img-fluid rounded" style="max-height: 300px;">
                                         </div>
                                     {% else %}
-                                        {# Gráfico Interactivo Chart.js con scroll si hay muchas respuestas #}
+                                        {# Gráfico Interactivo Chart.js #}
                                         <div class="chart-scroll-wrapper" id="chart-wrapper-{{ item.id }}" style="height: 300px;">
                                             <canvas id="chart_q_{{ item.id }}"></canvas>
                                         </div>
                                     {% endif %}
                                 </div>
                                 <div class="col-md-4">
+                                    <h6 class="fw-bold text-uppercase small text-muted mb-3">Insights Detectados</h6>
                                     {% if item.insight %}
-                                        {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                                        <div class="p-3 rounded-3 bg-info-subtle border border-info-subtle text-info-emphasis">
+                                            {% autoescape off %}{{ item.insight }}{% endautoescape %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted small">Sin insights suficientes.</p>
+                                    {% endif %}
+                                    
+                                    {% if item.top_options %}
+                                        <div class="mt-4">
+                                            <h6 class="fw-bold text-uppercase small text-muted mb-2">Top Opciones</h6>
+                                            <ul class="list-group list-group-flush small">
+                                                {% for opt in item.top_options %}
+                                                    <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                                                        <span>{{ opt.label|truncatechars:30 }}</span>
+                                                        <span class="badge bg-secondary-subtle text-body-emphasis rounded-pill">{{ opt.percent|floatformat:0 }}%</span>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -227,11 +291,61 @@
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
-    // Configuración Inicial
+    // --- LÓGICA CROSSTABS (Tablas Cruzadas) ---
+    async function loadCrosstab() {
+        const rowId = document.getElementById('crosstabRow').value;
+        const colId = document.getElementById('crosstabCol').value;
+        const container = document.getElementById('crosstabContainer');
+        const errorBox = document.getElementById('crosstabError');
+
+        // Reset
+        container.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>';
+        container.classList.remove('d-none');
+        errorBox.classList.add('d-none');
+
+        if (!rowId || !colId) {
+            container.classList.add('d-none');
+            errorBox.innerText = "Por favor selecciona ambas preguntas para generar el cruce.";
+            errorBox.classList.remove('d-none');
+            return;
+        }
+
+        try {
+            // URL dinámica usando el public_id de la encuesta actual
+            const url = `{% url 'surveys:api_crosstab' survey.public_id %}?row=${rowId}&col=${colId}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Inyectar HTML generado por Pandas
+            container.innerHTML = `
+                <h6 class="fw-bold mb-3">${data.row_label} <span class="text-muted fw-normal">vs</span> ${data.col_label}</h6>
+                <div class="table-responsive bg-body">
+                    ${data.html_table}
+                </div>
+            `;
+            
+            // Estilizar tabla inyectada
+            const table = container.querySelector('table');
+            if(table) {
+                table.classList.add('table', 'table-bordered', 'table-hover', 'mb-0');
+                table.style.width = '100%';
+            }
+
+        } catch (err) {
+            container.classList.add('d-none');
+            errorBox.innerText = "Error generando análisis: " + err.message;
+            errorBox.classList.remove('d-none');
+        }
+    }
+
+    // --- CONFIGURACIÓN GRÁFICOS CHART.JS ---
     const chartConfig = {
         trendData: {{ trend_data|default:"null"|safe }},
         analysisData: {{ analysis_data_json|default:"[]"|safe }},
-        // Paleta sincronizada con Backend (20 colores)
         colors: [
             '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', 
             '#f43f5e', '#84cc16', '#3b82f6', '#f97316', '#14b8a6', '#d946ef', 
@@ -241,7 +355,6 @@
     };
     let activeCharts = [];
 
-    // Helper para obtener colores del CSS (Dark Mode support)
     function getThemeStyles() {
         const style = getComputedStyle(document.body);
         return {
@@ -250,16 +363,12 @@
         };
     }
 
-    // Inicialización
     document.addEventListener('DOMContentLoaded', function() {
-        // Enviar tema actual en el form de filtros
         const currentTheme = document.documentElement.getAttribute('data-bs-theme');
         if(currentTheme) document.getElementById('themeInput').value = currentTheme;
 
-        // Inicializar gráficos
-        setTimeout(initCharts, 100); // Pequeño delay para asegurar carga de estilos CSS
+        setTimeout(initCharts, 100);
         
-        // Observar cambios de tema para gráficos interactivos
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((m) => {
                 if (m.type === 'attributes' && m.attributeName === 'data-bs-theme') {
@@ -291,7 +400,7 @@
     function initCharts() {
         const theme = getThemeStyles();
 
-        // 1. Gráfico de Tendencia (línea con degradado y fondo transparente)
+        // 1. Gráfico de Tendencia
         const trendCtx = document.getElementById('trendLineChart');
         if (trendCtx && chartConfig.trendData && chartConfig.trendData.labels) {
             let gradient = trendCtx.getContext('2d').createLinearGradient(0, 0, 0, 300);
@@ -326,7 +435,7 @@
             }));
         }
 
-        // 2. Gráficos Interactivos por Pregunta (donas y barras con bordes y colores vivos)
+        // 2. Gráficos Interactivos
         chartConfig.analysisData.forEach(item => {
             const ctx = document.getElementById('chart_q_' + item.id);
             if (!ctx || !item.chart_data || item.chart_data.length === 0) return;
@@ -336,7 +445,6 @@
             let chartType = isDonut ? 'doughnut' : 'bar';
             let indexAxis = 'x';
 
-            // Scroll container para más de 15 respuestas
             if (!isDonut && dataLength > 15) {
                 indexAxis = 'y';
                 const newHeight = Math.max(300, dataLength * 40);

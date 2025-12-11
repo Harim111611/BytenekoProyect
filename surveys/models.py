@@ -5,6 +5,73 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
+class SurveyTemplate(models.Model):
+    """
+    [Faltante Anteproyecto]: Sistema de plantillas reutilizables.
+    Permite instanciar nuevas encuestas basándose en diseños predefinidos.
+    """
+    title = models.CharField(max_length=255, verbose_name="Nombre de la Plantilla")
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=100, default='General')
+    # JSONField para guardar la estructura de preguntas y opciones
+    structure = models.JSONField(verbose_name="Estructura JSON", help_text="Definición de preguntas y lógica")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    def clean(self):
+        """Valida que la estructura tenga el formato correcto"""
+        super().clean()
+        if not isinstance(self.structure, list):
+            raise ValidationError({'structure': 'La estructura debe ser una lista de preguntas.'})
+        # Opcional: Validar que cada pregunta tenga 'text' y 'type'
+        for q in self.structure:
+            if 'text' not in q or 'type' not in q:
+                raise ValidationError({'structure': 'Cada pregunta en la estructura debe tener "text" y "type".'})
+
+    # --- MÉTODO PARA INSTANCIAR ---
+    def create_survey_instance(self, author):
+        """
+        Crea una nueva Survey funcional basada en esta plantilla.
+        Copia preguntas y opciones desde el JSON 'structure'.
+        """
+        # 1. Crear la Encuesta Base
+        new_survey = Survey.objects.create(
+            title=f"Copia de {self.title}",
+            description=self.description,
+            category=self.category,
+            status=Survey.STATUS_DRAFT,
+            author=author
+        )
+
+        # 2. Recrear estructura desde el JSON
+        if not self.structure:
+            return new_survey
+
+        for i, q_data in enumerate(self.structure):
+            question = Question.objects.create(
+                survey=new_survey,
+                text=q_data.get('text', 'Pregunta sin título'),
+                type=q_data.get('type', 'text'),
+                order=i + 1,  # Siempre secuencial, empezando en 1
+                is_required=q_data.get('required', False)
+            )
+            
+            # Crear opciones si existen
+            options_list = q_data.get('options', [])
+            if options_list and isinstance(options_list, list):
+                for j, opt_text in enumerate(options_list):
+                    if opt_text.strip():
+                        AnswerOption.objects.create(
+                            question=question,
+                            text=opt_text.strip(),
+                            order=j
+                        )
+        
+        return new_survey
+
+
 class Survey(models.Model):
     """Survey model - Encuesta"""
 
@@ -74,22 +141,17 @@ class Survey(models.Model):
         return self.title
 
     def get_allowed_status_transitions(self, from_status=None):
-        """Return the allowed status transitions from the provided status."""
         current_status = from_status or self.status
         return self.ALLOWED_TRANSITIONS.get(current_status, {current_status})
 
     def validate_status_transition(self, new_status, *, from_status=None):
-        """Validate if a transition towards `new_status` is allowed with SaaS checks."""
         valid_statuses = {code for code, _ in self.STATUS_CHOICES}
         if new_status not in valid_statuses:
             raise ValidationError(f"Estado inválido: {new_status}")
             
-        # Lógica SaaS: Verificar límites antes de activar
         if new_status == self.STATUS_ACTIVE:
-            # Verificamos si el usuario tiene una suscripción válida
             if hasattr(self.author, 'subscription') and self.author.subscription.is_valid():
                 plan = self.author.subscription.plan
-                # Contamos cuántas encuestas tiene activas ya (excluyendo esta misma)
                 active_surveys_count = Survey.objects.filter(
                     author=self.author,
                     status=self.STATUS_ACTIVE
@@ -97,10 +159,8 @@ class Survey(models.Model):
                 
                 if active_surveys_count >= plan.max_surveys:
                     raise ValidationError(
-                        f"Has alcanzado el límite de {plan.max_surveys} encuestas activas permitido por tu plan '{plan.name}'. "
-                        "Pausa otra encuesta o mejora tu plan para continuar."
+                        f"Has alcanzado el límite de {plan.max_surveys} encuestas activas permitido por tu plan '{plan.name}'."
                     )
-        # --------------------------------------------------------
 
         if new_status not in self.get_allowed_status_transitions(from_status):
             raise ValidationError("La transición solicitada no está permitida.")
@@ -119,7 +179,6 @@ class Survey(models.Model):
         ]
 
     def _ensure_public_identifier(self):
-        """Assigns author_sequence and public_id if they are missing."""
         if not self.author_id:
             return
 
@@ -173,11 +232,27 @@ class Question(models.Model):
     is_demographic = models.BooleanField(default=False, verbose_name='Is Demographic', db_index=True)
     demographic_type = models.CharField(max_length=50, choices=DEMOGRAPHIC_TYPES, null=True, blank=True, verbose_name='Demographic Type')
     
-    # Campo para análisis avanzado
     is_analyzable = models.BooleanField(
         default=True, 
         verbose_name='Is Analyzable',
         help_text='Indica si esta pregunta debe incluirse en los reportes estadísticos automáticos'
+    )
+
+    depends_on = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='dependent_questions',
+        verbose_name="Depende de la pregunta"
+    )
+    visible_if_option = models.ForeignKey(
+        'AnswerOption',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Visible si selecciona",
+        related_name="visible_in_questions"
     )
 
     def __str__(self):
@@ -217,6 +292,7 @@ class AnswerOption(models.Model):
         indexes = [
             models.Index(fields=['question'], name='answeroption_question_idx'),
         ]
+
 
 class SurveyResponse(models.Model):
     """Survey response submission - Respuesta a Encuesta"""

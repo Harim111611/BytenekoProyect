@@ -419,6 +419,65 @@
         </div>
     </div>
 
+    <!-- INTEGRACIÓN SEGMENTACIÓN Y TABLAS CRUZADAS -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-funnel me-2 text-primary"></i>Segmentación de Clientes
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="get" action="">
+                        <label for="segment-select" class="form-label">Selecciona un segmento guardado</label>
+                        <select id="segment-select" name="segment_id" class="form-select mb-2">
+                            <option value="">-- Todos --</option>
+                            {% for segment in analysis_segments %}
+                                <option value="{{ segment.id }}">{{ segment.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-outline-primary">Aplicar Segmento</button>
+                    </form>
+                    <small class="text-muted">Filtra los resultados usando criterios guardados.</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="h6 fw-bold m-0 text-body-emphasis">
+                        <i class="bi bi-table me-2 text-primary"></i>Tablas Cruzadas
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="get" action="">
+                        <div class="row g-2">
+                            <div class="col">
+                                <label for="row-question" class="form-label">Pregunta Fila</label>
+                                <select id="row-question" name="row_question_id" class="form-select">
+                                    {% for q in survey_questions %}
+                                        <option value="{{ q.id }}">{{ q.text|truncatechars:50 }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col">
+                                <label for="col-question" class="form-label">Pregunta Columna</label>
+                                <select id="col-question" name="col_question_id" class="form-select">
+                                    {% for q in survey_questions %}
+                                        <option value="{{ q.id }}">{{ q.text|truncatechars:50 }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-outline-success mt-2">Generar Tabla Cruzada</button>
+                    </form>
+                    <small class="text-muted">Analiza la relación entre dos variables.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 

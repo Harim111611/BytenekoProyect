@@ -76,13 +76,12 @@
                         <label class="form-label fw-bold small text-uppercase text-muted tracking-wide">
                             Nombre del Proyecto (Opcional)
                         </label>
-                        <input type="text" class="form-control form-control-lg bg-body-tertiary"
-                                <button type="submit" class="btn btn-outline-primary border-0 px-3" title="Buscar">
-                                    <i class="bi bi-search"></i>
-                                </button>
-                               id="surveyTitleInput"
-                               placeholder="Ej. Análisis de Mercado 2025"
-                               maxlength="255">
+                        <div class="input-group input-group-lg mb-2">
+                            <input type="text" class="form-control bg-body-tertiary" id="surveyTitleInput" placeholder="Ej. Análisis de Mercado 2025" maxlength="255">
+                            <button type="button" class="btn btn-outline-primary border-0 px-3" title="Buscar" tabindex="-1" disabled>
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -605,18 +604,32 @@ window.pollDeleteTask = async function(taskId) {
     return false;
 };
 
-window.pollImportJob = async function(jobId) {
-    const statusUrl = "{% url 'surveys:import_job_status' 0 %}".replace('/0/', `/${jobId}/`);
+window.pollImportJob = async function(taskId) {
+    // Usamos la nueva URL de estado de tarea
+    // Nota: task_status espera un string, nos aseguramos que la URL se genere bien
+    const statusUrl = "{% url 'surveys:task_status' 'TASK_ID_PLACEHOLDER' %}".replace('TASK_ID_PLACEHOLDER', taskId);
+    
     const start = Date.now();
-    while (Date.now() - start < 300000) {
+    while (Date.now() - start < 300000) { // 5 minutos timeout
         try {
             const res = await fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!res.ok) break;
+            
             const info = await res.json();
-            if (info.status === 'completed') return true;
-            if (info.status === 'failed' || info.error_message) return false;
+            
+            // Adaptador para la respuesta del backend
+            if (info.status === 'completed' || info.status === 'success') {
+                return true;
+            }
+            if (info.status === 'failed' || info.status === 'failure') {
+                // Si hay error, lo mostramos (opcional, aquí solo retornamos false)
+                console.error("Error en importación:", info.error_message);
+                return false;
+            }
+            
         } catch (e) { console.warn('Polling error', e); }
-        await new Promise(r => setTimeout(r, 1500));
+        
+        await new Promise(r => setTimeout(r, 2000)); // Esperar 2 segundos
     }
     return false;
 };
@@ -1056,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', function() {
     btnConfirm.addEventListener('click', async () => {
         showStep('step-loading');
         document.getElementById('loading-title').textContent = "Importando...";
-        
+
         const formData = new FormData();
         formData.append('csv_file', fileInput.files[0]);
         if (titleInput.value) formData.append('survey_title', titleInput.value);
@@ -1071,9 +1084,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 const jobId = data.job_id || data.import_job_id;
                 if (jobId) {
                     const success = await pollImportJob(jobId);
-                    if (success) window.location.reload();
-                    else showError("La importación falló.");
-                } else window.location.reload();
+                    if (success) {
+                        // Mostrar mensaje de éxito durante 2 segundos antes de recargar
+                                                document.getElementById('loading-title').textContent = "¡Importación completada!";
+                                                document.getElementById('loading-text').innerHTML = `
+                                                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;">
+                                                        <div class="animate__animated animate__fadeInDown">
+                                                            <span style="font-size:3rem;color:#28a745;">
+                                                                <i class="bi bi-patch-check-fill"></i>
+                                                            </span>
+                                                        </div>
+                                                        <div class="fw-bold mt-3 mb-1" style="font-size:1.3rem;color:#28a745;letter-spacing:0.5px;">¡Importación exitosa!</div>
+                                                        <div class="text-secondary small">Tus datos están listos para usarse.</div>
+                                                    </div>
+                                                `;
+                                                setTimeout(() => window.location.reload(), 2000);
+                    } else showError("La importación falló.");
+                } else {
+                    // fallback: mostrar mensaje igual
+                                        document.getElementById('loading-title').textContent = "¡Importación completada!";
+                                        document.getElementById('loading-text').innerHTML = `
+                                            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;">
+                                                <div class="animate__animated animate__fadeInDown">
+                                                    <span style="font-size:3rem;color:#28a745;">
+                                                        <i class="bi bi-patch-check-fill"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="fw-bold mt-3 mb-1" style="font-size:1.3rem;color:#28a745;letter-spacing:0.5px;">¡Importación exitosa!</div>
+                                                <div class="text-secondary small">Tus datos están listos para usarse.</div>
+                                            </div>
+                                        `;
+                                        setTimeout(() => window.location.reload(), 2000);
+                }
             } else showError(data.error);
         } catch (e) { showError(e.message); }
     });

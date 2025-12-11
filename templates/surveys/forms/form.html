@@ -150,6 +150,27 @@
                             {% endif %}
                         </div>
 
+                        <!-- LÓGICA CONDICIONAL EN PREGUNTAS -->
+                        <div class="mb-4">
+                            <label for="id_depends_on" class="form-label fw-semibold">Depende de la pregunta</label>
+                            <select id="id_depends_on" name="depends_on" class="form-select">
+                                <option value="">-- Ninguna --</option>
+                                {% for q in survey_questions %}
+                                    <option value="{{ q.id }}">{{ q.text|truncatechars:50 }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Esta pregunta solo será visible si se responde la pregunta seleccionada.</small>
+                        </div>
+                        <div class="mb-4">
+                            <label for="id_visible_if_option" class="form-label fw-semibold">Visible si selecciona opción</label>
+                            <select id="id_visible_if_option" name="visible_if_option" class="form-select">
+                                <option value="">-- Ninguna --</option>
+                                {% for opt in answer_options %}
+                                    <option value="{{ opt.id }}">{{ opt.text|truncatechars:50 }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">La pregunta será visible solo si se selecciona esta opción en la pregunta dependiente.</small>
+                        </div>
                         {% else %}
                         <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
                             <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
@@ -229,7 +250,7 @@
                         <a href="{% url 'surveys:respond' object.public_id %}" class="btn btn-outline-secondary btn-sm" target="_blank">
                             <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
                         </a>
-                        <a href="{% url 'surveys:export' object.public_id %}" class="btn btn-outline-success btn-sm">
+                            <a href="{% url 'surveys:export_csv' object.public_id %}" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-download me-2"></i>Exportar CSV
                         </a>
                     </div>

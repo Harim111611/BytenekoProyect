@@ -312,91 +312,185 @@ class SurveyAnalysisService:
     Servicio principal de orquestación para el análisis de encuestas.
     Integra todos los analizadores y constructores.
     """
+
     @staticmethod
-    def get_analysis_data(survey, responses_queryset, include_charts=True, cache_key=None, use_base_filter=True):
+    def generate_crosstab(survey, row_question_id, col_question_id, queryset=None):
+        """
+        Algoritmos para tablas cruzadas (Crosstabs).
+        Cruza dos variables para ver la relación entre ellas.
+        """
+        from surveys.models import Question, SurveyResponse
+
+        qs = queryset or SurveyResponse.objects.filter(survey=survey)
+        # Obtener datos usando DataFrameBuilder existente
+        df = DataFrameBuilder.build_responses_dataframe(survey, qs)
+        if df.empty:
+            return None
+
+        # Obtener etiquetas de las preguntas
+        try:
+            row_label = survey.questions.get(id=row_question_id).text
+            col_label = survey.questions.get(id=col_question_id).text
+        except Question.DoesNotExist:
+            return {"error": "Pregunta no encontrada"}
+
+        if row_label not in df.columns or col_label not in df.columns:
+            return {"error": "Sin datos para estas preguntas"}
+
+        # Generar crosstab con Pandas
+        crosstab = pd.crosstab(
+            df[row_label],
+            df[col_label],
+            margins=True,
+            margins_name="Total",
+        )
+
+        return {
+            "row_label": row_label,
+            "col_label": col_label,
+            "data": crosstab.to_dict(orient="split"),  # Formato fácil para JS
+            "html_table": crosstab.to_html(classes="table table-striped"),
+        }
+
+    @staticmethod
+    def get_analysis_data(
+        survey,
+        responses_queryset,
+        include_charts: bool = True,
+        cache_key: str | None = None,
+        use_base_filter: bool = True,
+    ):
         """
         Método principal llamado por las vistas.
         Retorna un diccionario completo con datos analizados, KPIs y gráficos.
         """
+            import time
+            start_time = time.time()
+            logger.info(f"[ANALYSIS] Inicio análisis de encuesta {getattr(survey, 'id', None)} con {responses_queryset.count()} respuestas.")
         # 1. KPIs Globales (NPS)
         nps_data = NPSCalculator.calculate_nps(survey, responses_queryset)
-        
+
         # 2. Análisis por Pregunta
-        # Filtramos preguntas analizables (ignoramos descriptivas o saltos de sección si existen)
-        questions = survey.questions.all().order_by('order') 
-        if hasattr(questions.first(), 'is_analyzable'):
+        questions = survey.questions.all().order_by("order")
+        first_q = questions.first()
+        if first_q is not None and hasattr(first_q, "is_analyzable"):
             questions = questions.filter(is_analyzable=True)
 
-        analysis_data = []
-        satisfaction_values = []
-        
+        analysis_data: list[dict] = []
+        satisfaction_values: list[float] = []
+
         for question in questions:
             item = None
-            
             try:
-                if question.type in ['scale', 'number']:
-                    item = QuestionAnalyzer.analyze_numeric_question(question, responses_queryset, include_charts)
-                    if item.get('avg') is not None:
-                        satisfaction_values.append(item['avg'])
-                        
-                elif question.type in ['single', 'multi']:
-                    item = QuestionAnalyzer.analyze_choice_question(question, responses_queryset, include_charts)
-                    
-                elif question.type == 'text':
+                if question.type in ["scale", "number"]:
+                    item = QuestionAnalyzer.analyze_numeric_question(
+                        question,
+                        responses_queryset,
+                        include_charts=include_charts,
+                    )
+                    if item.get("avg") is not None:
+                        satisfaction_values.append(item["avg"])
+
+                elif question.type in ["single", "multi"]:
+                    item = QuestionAnalyzer.analyze_choice_question(
+                        question,
+                        responses_queryset,
+                        include_charts=include_charts,
+                    )
+
+                elif question.type == "text":
                     # Análisis de texto
-                    q_res = QuestionResponse.objects.filter(question=question, survey_response__in=responses_queryset)
+                    q_res = QuestionResponse.objects.filter(
+                        question=question,
+                        survey_response__in=responses_queryset,
+                    )
                     top_words, _, sentiment = TextAnalyzer.analyze_text_responses(q_res)
-                    
+
                     insight = ""
                     if sentiment:
-                        insight = f"Sentimiento: {sentiment['label']}. {sentiment['description']}"
-                        
+                        insight = (
+                            f"Sentimiento: {sentiment['label']}. "
+                            f"{sentiment['description']}"
+                        )
+
                     item = {
-                        'id': question.id, 'text': question.text, 'type': question.type, 'order': question.order,
-                        'total_respuestas': q_res.count(),
-                        'insight': insight,
-                        'top_words': top_words,
-                        'sentiment': sentiment,
-                        'opciones': []
+                        "id": question.id,
+                        "text": question.text,
+                        "type": question.type,
+                        "order": question.order,
+                        "total_respuestas": q_res.count(),
+                        "insight": insight,
+                        "top_words": top_words,
+                        "sentiment": sentiment,
+                        "opciones": [],
                     }
                 else:
                     # Fallback para tipos desconocidos
                     item = {
-                        'id': question.id, 'text': question.text, 'type': question.type, 'order': question.order,
-                        'total_respuestas': 0, 'insight': ""
+                        "id": question.id,
+                        "text": question.text,
+                        "type": question.type,
+                        "order": question.order,
+                        "total_respuestas": 0,
+                        "insight": "",
                     }
             except Exception as e:
                 logger.error(f"Error analizando pregunta {question.id}: {e}")
-                item = {'id': question.id, 'text': question.text, 'error': str(e)}
+                item = {
+                    "id": question.id,
+                    "text": question.text,
+                    "error": str(e),
+                }
 
             if item:
                 analysis_data.append(item)
 
-        # 3. KPI Promedio Satisfacción General
-        kpi_satisfaction = 0
+        # 3. KPI de satisfacción promedio (si hay escala/numéricas)
+        kpi_satisfaction = None
         if satisfaction_values:
-            kpi_satisfaction = sum(satisfaction_values) / len(satisfaction_values)
+            try:
+                kpi_satisfaction = round(
+                    sum(satisfaction_values) / len(satisfaction_values),
+                    1,
+                )
+            except Exception as e:
+                logger.warning(f"No se pudo calcular KPI de satisfacción: {e}")
 
-        # 4. Heatmap de Correlaciones (Solo si ChartGenerator está disponible)
+        # 4. Heatmap de correlación (opcional)
         heatmap_image = None
         heatmap_image_dark = None
-        if include_charts and ChartGenerator and len(satisfaction_values) > 1:
+
+        if include_charts and ChartGenerator:
             try:
-                df = DataFrameBuilder.build_responses_dataframe(survey, responses_queryset)
+                df = DataFrameBuilder.build_responses_dataframe(
+                    survey,
+                    responses_queryset,
+                )
                 # Filtrar solo columnas numéricas para correlación
-                numeric_df = df.select_dtypes(include=['number'])
+                numeric_df = df.select_dtypes(include=["number"])
                 if not numeric_df.empty and numeric_df.shape[1] > 1:
+                    # Versión normal
                     heatmap_image = ChartGenerator.generate_heatmap(numeric_df)
-                    # Opcional: generar versión dark si el generador lo soporta
+                    # Intentar versión dark si existe firma compatible
+                    try:
+                        heatmap_image_dark = ChartGenerator.generate_heatmap(
+                            numeric_df,
+                            dark=True,
+                        )
+                    except TypeError:
+                        # Compatibilidad con implementaciones antiguas
+                        heatmap_image_dark = None
             except Exception as e:
                 logger.warning(f"No se pudo generar heatmap: {e}")
 
+            elapsed = time.time() - start_time
+            logger.info(f"[ANALYSIS] Fin análisis encuesta {getattr(survey, 'id', None)}. Duración: {elapsed:.2f} segundos.")
         return {
-            'survey': survey,
-            'analysis_data': analysis_data,
-            'nps_data': nps_data,
-            'kpi_prom_satisfaccion': kpi_satisfaction,
-            'heatmap_image': heatmap_image,
-            'heatmap_image_dark': heatmap_image_dark,
-            'total_responses': responses_queryset.count()
+            "survey": survey,
+            "analysis_data": analysis_data,
+            "nps_data": nps_data,
+            "kpi_prom_satisfaccion": kpi_satisfaction,
+            "heatmap_image": heatmap_image,
+            "heatmap_image_dark": heatmap_image_dark,
+            "total_responses": responses_queryset.count(),
         }

@@ -38,7 +38,7 @@
 
     <div class="mb-4">
         <h1 class="h2 fw-semibold text-body-emphasis">Crear Encuesta</h1>
-        <p class="text-muted">Sigue los pasos para crear tu survey profesional</p>
+        <p class="text-muted">Puedes crear una encuesta desde cero o agregar preguntas sugeridas y guardar tu propia plantilla personalizada.</p>
     </div>
 
     <div class="mb-4">
@@ -59,6 +59,7 @@
                     <div>
                         <h3 class="h6 mb-1 fw-semibold text-body-emphasis">Información básica</h3>
                         <p class="text-muted small mb-0">Nombre y categoría</p>
+                        {# El modal de eliminación estaba aquí. Se movió al final de la plantilla para evitar problemas de DOM/z-index. #}
                     </div>
                 </div>
             </div>
@@ -100,21 +101,13 @@
                 </div>
 
                 <div class="mt-3">
-                    <label for="surveyTitle" class="form-label fw-medium text-body">Nombre de la survey <span class="text-danger">*</span>
-                        <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo nombrar la survey?" data-bs-content="Usa un nombre claro que incluya objetivo y periodo, por ejemplo: 'Satisfacción Clientes Q1 2025'. Esto facilita búsquedas y exportaciones.">
-                            <i class="bi bi-question-circle"></i>
-                        </a>
-                    </label>
+                    <label for="surveyTitle" class="form-label fw-medium text-body">Nombre de la survey <span class="text-danger">*</span></label>
                     <input type="text" class="form-control bg-body-tertiary" id="surveyTitle" placeholder="ej. Satisfacción de clientes Q1 2025">
                     <div class="form-text small text-muted">Un título claro y descriptivo ayudará a organizar tus estudios.</div>
                 </div>
 
                 <div class="mt-4">
-                    <label for="surveyDescription" class="form-label fw-medium text-body">Descripción (opcional)
-                        <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Qué incluir en la descripción?" data-bs-content="Explica brevemente el objetivo y audiencia. Esto ayuda a recordar el propósito y a que otros colaboradores entiendan el estudio.">
-                            <i class="bi bi-question-circle"></i>
-                        </a>
-                    </label>
+                    <label for="surveyDescription" class="form-label fw-medium text-body">Descripción (opcional)</label>
                     <textarea class="form-control bg-body-tertiary" id="surveyDescription" rows="4" placeholder="Describe brevemente el objetivo..."></textarea>
                 </div>
 
@@ -140,6 +133,9 @@
                     </button>
                     <button class="btn btn-outline-secondary btn-lg border-dashed text-body" id="btn-add-custom-question">
                         <i class="bi bi-plus-lg me-2"></i> Crear pregunta personalizada
+                    </button>
+                    <button class="btn btn-success btn-lg ms-2" id="btn-save-template" style="display:none;">
+                        <i class="bi bi-save me-2"></i> Guardar como plantilla
                     </button>
                 </div>
 
@@ -169,7 +165,6 @@
                         <div class="card bg-body-tertiary border-0 h-100">
                             <div class="card-body">
                                 <h6 class="text-uppercase text-muted small fw-bold mb-3">Resumen del Proyecto</h6>
-
                                 <div class="mb-3">
                                     <label class="small text-muted d-block">Título</label>
                                     <span class="fw-bold text-body-emphasis" id="review-title">...</span>
@@ -182,9 +177,7 @@
                                     <label class="small text-muted d-block">Preguntas</label>
                                     <span class="h4 fw-bold text-body-emphasis" id="review-count">0</span>
                                 </div>
-
                                 <hr class="border-secondary-subtle">
-
                                 <div class="small text-muted">
                                     <i class="bi bi-info-circle me-1"></i> Al publicar, la survey quedará activa inmediatamente.
                                 </div>
@@ -202,10 +195,7 @@
                                     <h4 class="fw-bold text-body-emphasis mb-1" id="preview-header-title">Título</h4>
                                     <p class="text-muted small" id="preview-header-desc">Descripción...</p>
                                 </div>
-
-                                <div id="preview-container" class="vstack gap-3">
-                                    </div>
-
+                                <div id="preview-container" class="vstack gap-3"></div>
                                 <div class="mt-4 text-center">
                                     <button class="btn btn-primary w-100" disabled>Enviar Respuestas (Demo)</button>
                                 </div>
@@ -228,19 +218,74 @@
     </div>
 </div>
 
-<!-- Modal para seleccionar tipo de questions sugeridas -->
-<div class="modal fade" id="suggestQuestionsModal" tabindex="-1" aria-labelledby="suggestQuestionsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade" id="saveTemplateModal" tabindex="-1" aria-labelledby="saveTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="suggestQuestionsModalLabel">
-                    <i class="bi bi-magic me-2"></i>Selecciona el tipo de questions
+                <h5 class="modal-title" id="saveTemplateModalLabel">
+                    <i class="bi bi-save me-2"></i>Guardar Plantilla
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted mb-4">Elige qué tipo de preguntas deseas agregar a tu encuesta:</p>
+                <form id="saveTemplateForm">
+                    <div class="mb-3">
+                        <label for="templateName" class="form-label">Nombre de la plantilla</label>
+                        <input type="text" class="form-control" id="templateName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="templateDesc" class="form-label">Descripción</label>
+                        <input type="text" class="form-control" id="templateDesc">
+                    </div>
+                    <div class="mb-3">
+                        <label for="templateCat" class="form-label">Categoría</label>
+                        <input type="text" class="form-control" id="templateCat" value="General">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-save-template">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="crudTemplateModal" tabindex="-1" aria-labelledby="crudTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="crudTemplateModalLabel">
+                    <i class="bi bi-collection me-2"></i>Gestionar Plantillas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="template-list-container"></div>
+                </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="suggestQuestionsModal" tabindex="-1" aria-labelledby="suggestQuestionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="suggestQuestionsModalLabel">
+                    <i class="bi bi-magic me-2"></i>Selecciona el tipo de preguntas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
                 
+                <div id="my-custom-templates-section" class="d-none mb-4">
+                    <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person-workspace me-2"></i>Mis Plantillas Guardadas</h6>
+                    <div id="my-templates-container" class="row g-3">
+                        </div>
+                    <hr class="text-secondary opacity-25 my-4">
+                </div>
+
+                <h6 class="fw-bold text-muted mb-3 small text-uppercase">Plantillas del Sistema</h6>
                 <div class="row g-3">
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="satisfaccion">
@@ -253,7 +298,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="mercado">
                             <div class="d-flex align-items-start gap-3">
@@ -265,7 +309,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="rrhh">
                             <div class="d-flex align-items-start gap-3">
@@ -277,7 +320,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="educacion">
                             <div class="d-flex align-items-start gap-3">
@@ -289,7 +331,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="producto">
                             <div class="d-flex align-items-start gap-3">
@@ -301,7 +342,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="tecnologia">
                             <div class="d-flex align-items-start gap-3">
@@ -313,7 +353,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="evento">
                             <div class="d-flex align-items-start gap-3">
@@ -325,7 +364,6 @@
                             </div>
                         </button>
                     </div>
-                    
                     <div class="col-md-6">
                         <button type="button" class="btn btn-outline-primary w-100 text-start p-3 template-option" data-template="general">
                             <div class="d-flex align-items-start gap-3">
@@ -338,6 +376,25 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# MODAL DE ELIMINACIÓN (MOVIDO AL FINAL DEL CONTENIDO PRINCIPAL) #}
+<div class="modal fade" id="deleteTemplateModal" tabindex="-1" aria-labelledby="deleteTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteTemplateModalLabel">Eliminar plantilla personalizada</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de eliminar esta plantilla permanentemente?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirm-delete-template">Eliminar</button>
             </div>
         </div>
     </div>
@@ -376,6 +433,7 @@
         </div>
     </div>
 </template>
+
 {% endblock %}
 
 {% block scripts %}
