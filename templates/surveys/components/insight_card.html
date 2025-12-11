@@ -1,0 +1,92 @@
+{% load humanize %}
+
+<div class="analysis-card h-100 position-relative">
+    <div class="card-body d-flex flex-column p-4">
+        
+        {# HEADER #}
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <h5 class="fw-bold mb-0 text-dark" style="font-size: 1rem; line-height: 1.4;">
+                <span class="text-muted fw-normal me-1">#{{ data.order }}</span> 
+                {{ data.text }}
+            </h5>
+            {% if data.type == 'numeric' or data.type == 'scale' %}
+                <span class="badge badge-soft-primary rounded-pill">Métrica</span>
+            {% elif data.type == 'single' or data.type == 'multi' %}
+                <span class="badge badge-soft-success rounded-pill">Opción</span>
+            {% elif data.type == 'text' %}
+                <span class="badge badge-soft-secondary rounded-pill">Texto</span>
+            {% endif %}
+        </div>
+
+        {# BODY #}
+        <div class="flex-grow-1">
+            {% if data.type == 'numeric' or data.type == 'scale' %}
+                <div class="row align-items-center">
+                    <div class="col-5">
+                        <div class="text-center">
+                            <h2 class="display-4 fw-bold text-dark mb-0">{{ data.insight_data.avg|floatformat:1 }}</h2>
+                            <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Promedio</small>
+                        </div>
+                    </div>
+                    <div class="col-7">
+                        <div style="height: 80px; width: 100%;">
+                            <canvas id="chart-{{ data.id }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+            {% elif data.type == 'single' or data.type == 'multi' %}
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <div style="height: 140px; width: 100%;">
+                            <canvas id="chart-{{ data.id }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+                {% if data.insight_data.top_option %}
+                    <div class="d-flex align-items-center p-2 bg-light rounded border border-light-subtle">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        <div class="small text-truncate">
+                            <span class="text-muted">Top:</span> 
+                            <strong>{{ data.insight_data.top_option.option }}</strong>
+                        </div>
+                    </div>
+                {% endif %}
+            {% elif data.type == 'text' %}
+                <div class="mt-2">
+                    <p class="small text-uppercase fw-bold text-muted mb-2">Palabras Frecuentes</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for topic in data.insight_data.topics %}
+                            <span class="badge bg-white text-dark border shadow-sm fw-normal px-2 py-1">{{ topic }}</span>
+                        {% empty %}
+                            <span class="text-muted small fst-italic">Sin patrones claros.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        {# FOOTER: NARRATIVA EXTENDIDA #}
+        {% if data.insight_data.narrative %}
+            <div class="mt-3 p-3 bg-body-tertiary rounded-3 border border-light-subtle position-relative overflow-hidden">
+                <div class="position-absolute top-0 start-0 w-1 h-100 bg-info"></div>
+                <p class="mb-0 small text-secondary" style="font-size: 0.9rem; line-height: 1.5; text-align: justify;">
+                    <i class="bi bi-stars text-info me-1"></i> {{ data.insight_data.narrative }}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    {# DATA SCRIPT #}
+    {% if data.chart %}
+        {{ data.chart|json_script:data.id }}
+        <script>
+            if (!window.chartRegistry) window.chartRegistry = [];
+            window.chartRegistry.push({
+                id: 'chart-{{ data.id }}',
+                type: '{{ data.type }}',
+                isDemographic: {{ data.is_demographic|yesno:"true,false" }},
+                dataId: '{{ data.id }}'
+            });
+        </script>
+    {% endif %}
+</div>

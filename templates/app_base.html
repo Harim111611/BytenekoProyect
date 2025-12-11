@@ -8,49 +8,47 @@
 
 {% block content %}
 
-    {# --- OVERLAY PARA MÓVILES (Cierra el menú al hacer click fuera) --- #}
+    {# --- BOTÓN HAMBURGUESA PARA MÓVIL --- #}
+    {# Se aumentó z-index a 1035 para estar por encima de overlays estándar pero debajo del sidebar #}
+    <button class="btn btn-sm btn-icon d-lg-none position-fixed top-0 start-0 m-3" 
+            id="sidebarToggleBtn" 
+            style="background: var(--sidebar-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 1035;">
+        <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+    </button>
+
+    {# --- OVERLAY PARA MÓVILES --- #}
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <aside class="app-sidebar">
-
         <div class="app-sidebar-logo">
             <div class="d-flex align-items-center gap-2">
                 <img src="{% static 'img/favicon.ico' %}" alt="Logo" style="width: 32px; height: 32px;" class="rounded-2 shadow-sm">
                 <span class="fs-5 fw-bold text-body">Byteneko</span>
             </div>
-            {# Botón cerrar en móvil (opcional, por usabilidad) #}
+            {# Botón cerrar en móvil #}
             <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn">
                 <i class="bi bi-x-lg"></i>
             </button>
         </div>
 
         <nav class="app-sidebar-nav">
-            <a href="{% url 'dashboard' %}"
-               class="nav-item-button {% if page_name == 'dashboard' %}active{% endif %}">
+            <a href="{% url 'dashboard' %}" class="nav-item-button {% if page_name == 'dashboard' %}active{% endif %}">
                 <i class="bi bi-grid-fill"></i>
                 <span>Dashboard</span>
             </a>
-
-            <a href="{% url 'surveys:list' %}"
-               class="nav-item-button {% if page_name == 'surveys' %}active{% endif %}">
+            <a href="{% url 'surveys:list' %}" class="nav-item-button {% if page_name == 'surveys' %}active{% endif %}">
                 <i class="bi bi-clipboard-data-fill"></i>
                 <span>Encuestas</span>
             </a>
-
-            <a href="{% url 'dashboard_results' %}"
-               class="nav-item-button {% if page_name == 'results' %}active{% endif %}">
+            <a href="{% url 'dashboard_results' %}" class="nav-item-button {% if page_name == 'results' %}active{% endif %}">
                 <i class="bi bi-bar-chart-line-fill"></i>
                 <span>Resultados</span>
             </a>
-
-            <a href="{% url 'reports' %}"
-               class="nav-item-button {% if page_name == 'reports' %}active{% endif %}">
+            <a href="{% url 'reports' %}" class="nav-item-button {% if page_name == 'reports' %}active{% endif %}">
                 <i class="bi bi-file-earmark-text-fill"></i>
                 <span>Reportes</span>
             </a>
-
-            <a href="{% url 'settings' %}"
-               class="nav-item-button {% if page_name == 'settings' %}active{% endif %}">
+            <a href="{% url 'settings' %}" class="nav-item-button {% if page_name == 'settings' %}active{% endif %}">
                 <i class="bi bi-gear-fill"></i>
                 <span>Configuración</span>
             </a>
@@ -76,84 +74,31 @@
                 </button>
             </form>
         </div>
-
     </aside>
-
 
     <main class="app-content">
         {% block app_content %}
         {% endblock %}
     </main>
 
-    {# --- SCRIPT PARA EL MENÚ MÓVIL --- #}
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggleBtn = document.getElementById('sidebarToggleBtn');
-            const closeBtn = document.getElementById('sidebarCloseBtn');
-            const overlay = document.getElementById('sidebarOverlay');
-            const body = document.body;
-
-            function toggleSidebar() {
-                body.classList.toggle('sidebar-open');
-            }
-
-            function closeSidebar() {
-                body.classList.remove('sidebar-open');
-            }
-
-            if(toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
-            if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
-            if(overlay) overlay.addEventListener('click', closeSidebar);
-        });
-    </script>
-
-
-        <!-- Loader sencillo para navegación a Resultados (disfraz de carga) -->
-        <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 bg-transparent shadow-none">
-                    <div class="modal-body text-center">
-                        <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
-                        <div class="mt-3"><strong>Cargando resultados...</strong></div>
-                    </div>
+    <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 bg-transparent shadow-none">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
+                    <div class="mt-3"><strong>Cargando resultados...</strong></div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Fix: Ocultar modal loader si queda visible tras volver con el botón atrás -->
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var modalEl = document.getElementById('globalResultsLoaderModal');
-            if (modalEl && modalEl.classList.contains('show')) {
-                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                modal.hide();
-            }
-        });
-        </script>
+{% endblock %}
 
-        <script>
-        document.addEventListener('click', function(e) {
-                var el = e.target.closest && e.target.closest('a.show-results-loader');
-                if (!el) return;
-                // Interceptar navegación para mostrar loader
-                try {
-                        e.preventDefault();
-                        var href = el.href;
-                        var modalEl = document.getElementById('globalResultsLoaderModal');
-                        var modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-                        if (modal) modal.show();
-                        // Navegar ligeramente después de mostrar el modal para dar tiempo a pintar
-                        setTimeout(function() { window.location.href = href; }, 80);
-                } catch (err) {
-                        // En caso de fallo, seguir navegación normal
-                        window.location.href = el.href;
-                }
-        }, { capture: true });
-        </script>
-        {# --- SCRIPT GESTIÓN TEMA Y SIDEBAR --- #}
+{% block scripts %}
+    {# --- LÓGICA UNIFICADA DE LA UI DE LA APP --- #}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Lógica del Sidebar Móvil
+            // 1. Lógica del Sidebar Móvil (Corregida: Solo se declara una vez)
             const toggleBtn = document.getElementById('sidebarToggleBtn');
             const closeBtn = document.getElementById('sidebarCloseBtn');
             const overlay = document.getElementById('sidebarOverlay');
@@ -166,36 +111,52 @@
             if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
             if(overlay) overlay.addEventListener('click', closeSidebar);
 
-            // 2. Lógica de Persistencia del Tema (Dark Mode Fix)
-            // Esto asegura que el servidor sepa qué tema usar para los gráficos estáticos
+            // 2. Gestión del Modal Loader (Si quedó abierto por cache de navegación)
+            var modalEl = document.getElementById('globalResultsLoaderModal');
+            if (modalEl && modalEl.classList.contains('show')) {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.hide();
+            }
+
+            // 3. Persistencia del Tema (Dark Mode)
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
                         const newTheme = document.documentElement.getAttribute('data-bs-theme');
-                        
-                        // Guardar cookie por 1 año
                         document.cookie = `theme=${newTheme}; path=/; max-age=31536000; SameSite=Lax`;
                         
-                        // Si estamos en una página de reportes/resultados, necesitamos recargar
-                        // para que Django regenere los gráficos de Matplotlib con el nuevo color de texto.
-                        // Los gráficos interactivos (Chart.js) se actualizan solos, pero los estáticos no.
+                        // Recarga forzada solo en vistas críticas de gráficos
                         if (window.location.pathname.includes('/results/') || window.location.pathname.includes('/dashboard/')) {
-                            // Pequeño delay para permitir que la UI termine de transicionar
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 300);
+                            setTimeout(() => window.location.reload(), 300);
                         }
                     }
                 });
             });
-            
             observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
             
-            // Asegurar que la cookie exista al cargar (por si es la primera visita)
-            const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+            // Inicialización de cookie si no existe
             if (!document.cookie.includes('theme=')) {
+                const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
                 document.cookie = `theme=${currentTheme}; path=/; max-age=31536000; SameSite=Lax`;
             }
         });
+
+        // 4. Interceptor de navegación para mostrar Loader
+        document.addEventListener('click', function(e) {
+            var el = e.target.closest && e.target.closest('a.show-results-loader');
+            if (!el) return;
+            
+            try {
+                // Solo prevenimos default si vamos a mostrar el loader
+                e.preventDefault();
+                var href = el.href;
+                var modalEl = document.getElementById('globalResultsLoaderModal');
+                var modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
+                if (modal) modal.show();
+                setTimeout(function() { window.location.href = href; }, 80);
+            } catch (err) {
+                window.location.href = el.href;
+            }
+        }, { capture: true });
     </script>
 {% endblock %}

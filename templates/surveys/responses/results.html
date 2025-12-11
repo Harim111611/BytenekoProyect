@@ -1,423 +1,137 @@
 {% extends 'app_base.html' %}
-{% load static %}
+{% load static humanize %}
 
 {% block app_content %}
-<div class="container-xl p-4 p-md-5">
+<div class="container-fluid bg-light min-vh-100 p-4 p-md-5">
+    
+    {# HEADER #}
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-5">
+        <div>
+            <h1 class="display-6 fw-bold text-dark mb-1">{{ survey.title }}</h1>
+            <p class="text-muted mb-0">
+                <i class="bi bi-bar-chart-line-fill me-1"></i> Dashboard Inteligente &bull; 
+                <span class="fw-medium text-dark">{{ total_respuestas|intcomma }}</span> respuestas
+            </p>
+        </div>
+        <div class="d-flex gap-2 mt-3 mt-md-0">
+            <button class="btn btn-white border shadow-sm text-dark fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse">
+                <i class="bi bi-filter"></i> Filtros
+            </button>
+            <a href="{% url 'reports' %}?public_id={{ survey.public_id }}" class="btn btn-dark fw-medium shadow-sm">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i> Exportar
+            </a>
+        </div>
+    </div>
 
-    <div class="mb-4">
-        <nav aria-label="breadcrumb" class="mb-2">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}" class="text-decoration-none">Mis Encuestas</a></li>
-                <li class="breadcrumb-item active">{{ survey.title }}</li>
-            </ol>
-        </nav>
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h1 class="h2 mb-1">Resultados Analíticos</h1>
-                <p class="text-muted mb-0">Explora los datos y segmenta tu audiencia.</p>
+    {# FILTROS #}
+    <div class="collapse mb-5" id="filtersCollapse">
+        <div class="card card-body border-0 shadow-sm rounded-4 p-4">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-uppercase text-muted">Desde</label>
+                    <input type="date" name="start" class="form-control bg-light border-0" value="{{ filter_start }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-uppercase text-muted">Hasta</label>
+                    <input type="date" name="end" class="form-control bg-light border-0" value="{{ filter_end }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-uppercase text-muted">Segmentar</label>
+                    <select name="segment_col" class="form-select bg-light border-0">
+                        <option value="">Todo el público</option>
+                        {% for p in preguntas_filtro %}
+                            <option value="{{ p.id }}" {% if filter_col == p.id|stringformat:"s" %}selected{% endif %}>
+                                {{ p.text|truncatechars:30 }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Actualizar Datos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# KPI GLOBAL #}
+    <div class="row g-4 mb-5">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm h-100 bg-dark text-white overflow-hidden position-relative rounded-4">
+                <div class="position-absolute top-0 end-0 opacity-10 p-3">
+                    <i class="bi bi-trophy-fill" style="font-size: 8rem;"></i>
+                </div>
+                <div class="card-body p-4 d-flex flex-column justify-content-center">
+                    <h6 class="text-uppercase opacity-75 fw-bold mb-3">Satisfacción General</h6>
+                    <div class="d-flex align-items-baseline">
+                        <span class="display-3 fw-bold">{{ kpi_score }}</span>
+                        <span class="fs-4 ms-2 opacity-50">/ 10</span>
+                    </div>
+                    <div class="mt-3">
+                        <div class="progress" style="height: 6px; background: rgba(255,255,255,0.2);">
+                            <div class="progress-bar bg-white" role="progressbar" 
+                                 style="width: {% widthratio kpi_score 10 100 %}%"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="d-flex gap-2">
-                <a href="{% url 'surveys:export_csv' public_id=survey.public_id %}"class="btn btn-outline-primary">
-                    <i class="bi bi-download me-1"></i> Exportar
-                </a>
+        </div>
+        <div class="col-12 col-xl-8">
+            <div class="card border-0 shadow-sm h-100 rounded-4">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold text-muted text-uppercase mb-4">Evolución de Respuestas</h6>
+                    <div style="height: 200px; width: 100%;">
+                        <canvas id="evolutionChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="filter-bar mb-4">
-        <form method="GET" class="row g-3 align-items-end" id="filterForm">
-            <input type="hidden" name="theme" id="themeInput">
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted text-uppercase">Desde</label>
-                <input type="date" name="start" class="form-control bg-body-tertiary border-0" value="{{ filter_start|default:'' }}">
+    {# GRID DE INSIGHTS #}
+    <h5 class="fw-bold text-dark mb-4 ps-1">Análisis Detallado</h5>
+    <div class="row g-4">
+        {% for item in analysis_data %}
+            <div class="col-md-6 col-xl-4">
+                {% include "surveys/components/insight_card.html" with data=item scale_max=item.insight_data.max %}
             </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted text-uppercase">Hasta</label>
-                <input type="date" name="end" class="form-control bg-body-tertiary border-0" value="{{ filter_end|default:'' }}">
+        {% empty %}
+            <div class="col-12 py-5 text-center">
+                <div class="text-muted mb-3"><i class="bi bi-inbox fs-1"></i></div>
+                <h5 class="fw-normal text-muted">No hay datos que coincidan con los filtros.</h5>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted text-uppercase">Filtrar por</label>
-                <select name="segment_col" class="form-select bg-body-tertiary border-0">
-                    <option value="">-- Sin segmentar --</option>
-                    {% for p in preguntas_filtro %}
-                        <option value="{{ p.id }}" {% if filter_col|default:'' == p.id|stringformat:"s" %}selected{% endif %}>
-                            {{ p.text|truncatechars:40 }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted text-uppercase">Valor</label>
-                <input type="text" name="segment_val" class="form-control bg-body-tertiary border-0" value="{{ filter_val|default:'' }}">
-            </div>
-            <div class="col-md-1">
-                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel-fill"></i></button>
-            </div>
-        </form>
+        {% endfor %}
     </div>
 
-    {% if total_respuestas == 0 %}
-        <div class="card py-5">
-            <div class="card-body text-center">
-                <h3 class="fw-bold">No hay resultados para los filtros seleccionados</h3>
-                <p class="text-muted">Ajusta el rango de fechas o la segmentación para ver datos.</p>
-            </div>
-        </div>
-    {% else %}
-        {# Bloque Resumen Ejecutivo y métricas principales #}
-        {% if meta %}
-        <div class="card shadow-lg rounded-4 mb-4 border-0" style="background:rgba(30,32,40,0.98);">
-            <div class="card-body p-4">
-                <h2 class="fw-bold mb-2" style="font-size:2.2rem;letter-spacing:-1px;">{{ meta.headline }}</h2>
-                {% if meta.subheadline %}
-                <span class="badge bg-primary mb-2" style="font-size:1rem;padding:.5em 1em;border-radius:1em;">{{ meta.subheadline }}</span>
-                {% endif %}
-                <div class="mb-3 text-muted" style="font-size:1.1rem;">
-                    {{ meta.sample.total_responses }} respuestas · {{ meta.sample.period_label }}
-                </div>
-                <div class="row g-4 align-items-stretch mb-3">
-                    <div class="col-md-6">
-                        <div class="bg-body-tertiary rounded-3 p-4 h-100" style="min-height:180px;">
-                            <h6 class="fw-bold mb-3" style="font-size:1.1rem;">Estructura de la encuesta</h6>
-                            <ul class="list-unstyled mb-0" style="font-size:1.05rem;">
-                                <li><span class="fw-bold">Total preguntas:</span> {{ meta.structure.total_questions }}</li>
-                                <li><span class="fw-bold">Analizables:</span> {{ meta.structure.analyzable_questions }}</li>
-                                <li><span class="fw-bold">Numéricas:</span> {{ meta.structure.numeric_questions }}</li>
-                                <li><span class="fw-bold">Categóricas:</span> {{ meta.structure.categorical_questions }}</li>
-                                <li><span class="fw-bold">Texto:</span> {{ meta.structure.text_questions }}</li>
-                                <li><span class="fw-bold">Demográficas:</span> {{ meta.structure.demographic_questions }}</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="bg-body-tertiary rounded-3 p-4 h-100" style="min-height:180px;">
-                            <h6 class="fw-bold mb-3" style="font-size:1.1rem;">Fortalezas / Áreas críticas</h6>
-                            <ul class="list-unstyled mb-0" style="font-size:1.05rem;">
-                                {% for h in meta.highlights %}
-                                    <li class="text-success mb-2 d-flex align-items-center gap-2">
-                                        <i class="bi bi-check-circle" style="font-size:1.2rem;"></i>
-                                        <span class="fw-semibold">{{ h.text }}</span>
-                                        {% if h.state %}<span class="badge bg-success ms-2" style="font-size:.95rem;padding:.4em .9em;border-radius:1em;">{{ h.state }}</span>{% endif %}
-                                    </li>
-                                {% endfor %}
-                                {% for a in meta.alerts %}
-                                    <li class="text-danger mb-2 d-flex align-items-center gap-2">
-                                        <i class="bi bi-exclamation-triangle" style="font-size:1.2rem;"></i>
-                                        <span class="fw-semibold">{{ a.text }}</span>
-                                        {% if a.state %}<span class="badge bg-danger ms-2" style="font-size:.95rem;padding:.4em .9em;border-radius:1em;">{{ a.state }}</span>{% endif %}
-                                    </li>
-                                {% endfor %}
-                                {% if not meta.highlights and not meta.alerts %}
-                                    <li class="text-muted">Sin fortalezas ni alertas destacadas.</li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-3 mt-2">
-                    <div class="col-md-3 col-6">
-                        <div class="metric-card bg-body-tertiary rounded-3 p-4 text-center h-100 border border-0 shadow-sm transition-fast" style="min-height:110px;transition:box-shadow .2s;">
-                            <div class="text-muted small fw-bold mb-1" style="font-size:1.05rem;"><i class="bi bi-people-fill me-1"></i>Respuestas</div>
-                            <div class="display-6 fw-bold mb-0" style="font-size:2.1rem;">{{ total_respuestas }}</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="metric-card bg-body-tertiary rounded-3 p-4 text-center h-100 border border-0 shadow-sm transition-fast" style="min-height:110px;transition:box-shadow .2s;">
-                            <div class="text-muted small fw-bold mb-1" style="font-size:1.05rem;"><i class="bi bi-bar-chart-line-fill me-1"></i>NPS</div>
-                            <div class="display-6 fw-bold mb-0" style="font-size:2.1rem;">{{ nps_score|default:"--" }}</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="metric-card bg-body-tertiary rounded-3 p-4 text-center h-100 border border-0 shadow-sm transition-fast" style="min-height:110px;transition:box-shadow .2s;">
-                            <div class="text-muted small fw-bold mb-1" style="font-size:1.05rem;"><i class="bi bi-emoji-smile-fill me-1"></i>Satisfacción</div>
-                            <div class="display-6 fw-bold mb-0" style="font-size:2.1rem;">{{ metrics.promedio_satisfaccion|default:"--" }}</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="metric-card bg-body-tertiary rounded-3 p-4 text-center h-100 border border-0 shadow-sm transition-fast" style="min-height:110px;transition:box-shadow .2s;">
-                            <div class="text-muted small fw-bold mb-1" style="font-size:1.05rem;"><i class="bi bi-clipboard-data me-1"></i>Calidad Dato</div>
-                            <div class="display-6 fw-bold mb-0" style="font-size:2.1rem;">{{ data_quality.avg_completeness_pct|default:"--"|floatformat:0 }}%</div>
-                        </div>
-                    </div>
-                </div>
-                <style>
-                    .metric-card:hover { box-shadow: 0 0 0 2px #6366f1, 0 2px 16px rgba(0,0,0,.12); }
-                    @media (max-width: 900px) {
-                        .card-body .row.g-4 > div, .card-body .row.g-3 > div { min-width: 100%; margin-bottom: 1rem; }
-                    }
-                </style>
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="row g-4 mb-5">
-            <div class="col-lg-8">
-                <div class="card h-100 shadow-sm border-0">
-                    <div class="card-header bg-transparent border-0 py-3"><h6 class="m-0 fw-bold">Evolución Temporal</h6></div>
-                    <div class="card-body p-4">
-                        <div style="height: 300px; width: 100%; position: relative;">
-                            <canvas id="trendLineChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4">
-                <div class="card h-100 shadow-sm border-0">
-                    <div class="card-header bg-transparent border-0 py-3"><h6 class="m-0 fw-bold">Correlaciones</h6></div>
-                    <div class="card-body p-4 text-center d-flex align-items-center justify-content-center">
-                        {% if heatmap_image %}
-                            <img src="data:image/png;base64,{{ heatmap_image }}" class="img-fluid rounded shadow-sm" style="max-height: 220px; width: auto;">
-                        {% else %}
-                            <p class="text-muted small">Se requieren más datos numéricos.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {# NUEVA SECCIÓN: Tablas Cruzadas (Crosstabs) #}
-        <div class="card shadow-sm rounded-4 mb-5 border-0">
-            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex align-items-center">
-                <i class="bi bi-grid-3x3-gap-fill fs-4 text-primary me-2"></i>
-                <div>
-                    <h5 class="fw-bold mb-0">Análisis Cruzado (Cross-tabs)</h5>
-                    <p class="text-muted small mb-0">Cruza dos variables para identificar patrones y relaciones ocultas.</p>
-                </div>
-            </div>
-            <div class="card-body p-4">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold small text-muted">Fila (Variable 1)</label>
-                        <select id="crosstabRow" class="form-select bg-body-tertiary border-0 py-2">
-                            <option value="">Selecciona una pregunta...</option>
-                            {% for p in preguntas_filtro %}
-                                <option value="{{ p.id }}">{{ p.text|truncatechars:60 }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold small text-muted">Columna (Variable 2)</label>
-                        <select id="crosstabCol" class="form-select bg-body-tertiary border-0 py-2">
-                            <option value="">Selecciona una pregunta...</option>
-                            {% for p in preguntas_filtro %}
-                                <option value="{{ p.id }}">{{ p.text|truncatechars:60 }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button onclick="loadCrosstab()" class="btn btn-primary w-100 fw-bold py-2 shadow-sm">
-                            <i class="bi bi-lightning-fill me-1"></i> Analizar
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="crosstabContainer" class="mt-4 table-responsive rounded-3 border border-dashed p-4 d-none text-center bg-body-tertiary">
-                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
-                </div>
-                <div id="crosstabError" class="mt-3 alert alert-warning d-none small"></div>
-            </div>
-        </div>
-
-        <h4 class="fw-bold mb-4 mt-5 border-bottom pb-2">Análisis Detallado por Pregunta</h4>
-        <div class="accordion" id="questionsAccordion">
-            {% for item in analysis_data %}
-                {% if item.is_active|default:True %}
-                <div class="accordion-item mb-4 shadow-sm rounded overflow-hidden border-0">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ item.id }}">
-                            <span class="fw-bold me-2 text-primary opacity-75">{{ item.order }}.</span> {{ item.text }}
-                        </button>
-                    </h2>
-                    <div id="collapse{{ item.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#questionsAccordion">
-                        <div class="accordion-body p-4">
-                            <div class="row g-4">
-                                <div class="col-md-8 border-end border-secondary-subtle">
-                                    {% if item.type == 'text' %}
-                                        <div class="p-3 bg-body-tertiary rounded-3" style="max-height: 300px; overflow-y: auto;">
-                                            <ul class="list-group list-group-flush">
-                                                {% for texto in item.samples_texto %}
-                                                    <li class="list-group-item bg-transparent border-bottom-0 py-2"><i class="bi bi-chat-left-dots me-2 text-muted"></i>{{ texto }}</li>
-                                                {% empty %}<li class="list-group-item bg-transparent text-muted">Sin respuestas textuales.</li>{% endfor %}
-                                            </ul>
-                                        </div>
-                                    {% elif item.chart_image %}
-                                        {# Gráfico Estático Matplotlib #}
-                                        <div class="text-center">
-                                            <img src="data:image/png;base64,{{ item.chart_image }}" class="img-fluid rounded" style="max-height: 300px;">
-                                        </div>
-                                    {% else %}
-                                        {# Gráfico Interactivo Chart.js #}
-                                        <div class="chart-scroll-wrapper" id="chart-wrapper-{{ item.id }}" style="height: 300px;">
-                                            <canvas id="chart_q_{{ item.id }}"></canvas>
-                                        </div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-4">
-                                    <h6 class="fw-bold text-uppercase small text-muted mb-3">Insights Detectados</h6>
-                                    {% if item.insight %}
-                                        <div class="p-3 rounded-3 bg-info-subtle border border-info-subtle text-info-emphasis">
-                                            {% autoescape off %}{{ item.insight }}{% endautoescape %}
-                                        </div>
-                                    {% else %}
-                                        <p class="text-muted small">Sin insights suficientes.</p>
-                                    {% endif %}
-                                    
-                                    {% if item.top_options %}
-                                        <div class="mt-4">
-                                            <h6 class="fw-bold text-uppercase small text-muted mb-2">Top Opciones</h6>
-                                            <ul class="list-group list-group-flush small">
-                                                {% for opt in item.top_options %}
-                                                    <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
-                                                        <span>{{ opt.label|truncatechars:30 }}</span>
-                                                        <span class="badge bg-secondary-subtle text-body-emphasis rounded-pill">{{ opt.percent|floatformat:0 }}%</span>
-                                                    </li>
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // --- LÓGICA CROSSTABS (Tablas Cruzadas) ---
-    async function loadCrosstab() {
-        const rowId = document.getElementById('crosstabRow').value;
-        const colId = document.getElementById('crosstabCol').value;
-        const container = document.getElementById('crosstabContainer');
-        const errorBox = document.getElementById('crosstabError');
-
-        // Reset
-        container.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>';
-        container.classList.remove('d-none');
-        errorBox.classList.add('d-none');
-
-        if (!rowId || !colId) {
-            container.classList.add('d-none');
-            errorBox.innerText = "Por favor selecciona ambas preguntas para generar el cruce.";
-            errorBox.classList.remove('d-none');
-            return;
-        }
-
-        try {
-            // URL dinámica usando el public_id de la encuesta actual
-            const url = `{% url 'surveys:api_crosstab' survey.public_id %}?row=${rowId}&col=${colId}`;
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            // Inyectar HTML generado por Pandas
-            container.innerHTML = `
-                <h6 class="fw-bold mb-3">${data.row_label} <span class="text-muted fw-normal">vs</span> ${data.col_label}</h6>
-                <div class="table-responsive bg-body">
-                    ${data.html_table}
-                </div>
-            `;
-            
-            // Estilizar tabla inyectada
-            const table = container.querySelector('table');
-            if(table) {
-                table.classList.add('table', 'table-bordered', 'table-hover', 'mb-0');
-                table.style.width = '100%';
-            }
-
-        } catch (err) {
-            container.classList.add('d-none');
-            errorBox.innerText = "Error generando análisis: " + err.message;
-            errorBox.classList.remove('d-none');
-        }
-    }
-
-    // --- CONFIGURACIÓN GRÁFICOS CHART.JS ---
-    const chartConfig = {
-        trendData: {{ trend_data|default:"null"|safe }},
-        analysisData: {{ analysis_data_json|default:"[]"|safe }},
-        colors: [
-            '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', 
-            '#f43f5e', '#84cc16', '#3b82f6', '#f97316', '#14b8a6', '#d946ef', 
-            '#64748b', '#ef4444', '#22c55e', '#eab308', '#a855f7', '#0ea5e9', 
-            '#f472b6', '#a3e635'
-        ]
-    };
-    let activeCharts = [];
-
-    function getThemeStyles() {
-        const style = getComputedStyle(document.body);
-        return {
-            text: style.getPropertyValue('--chart-text-color').trim() || '#333',
-            grid: style.getPropertyValue('--chart-grid-color').trim() || '#eee'
-        };
-    }
-
     document.addEventListener('DOMContentLoaded', function() {
-        const currentTheme = document.documentElement.getAttribute('data-bs-theme');
-        if(currentTheme) document.getElementById('themeInput').value = currentTheme;
-
-        setTimeout(initCharts, 100);
         
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((m) => {
-                if (m.type === 'attributes' && m.attributeName === 'data-bs-theme') {
-                    setTimeout(updateChartsColors, 200);
-                }
-            });
-        });
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
-    });
-
-    function updateChartsColors() {
-        const theme = getThemeStyles();
-        activeCharts.forEach(chart => {
-            if (chart.options.scales.x) {
-                chart.options.scales.x.ticks.color = theme.text;
-                chart.options.scales.x.grid.color = 'transparent';
-            }
-            if (chart.options.scales.y) {
-                chart.options.scales.y.ticks.color = theme.text;
-                chart.options.scales.y.grid.color = theme.grid;
-            }
-            if (chart.options.plugins.legend) {
-                chart.options.plugins.legend.labels.color = theme.text;
-            }
-            chart.update();
-        });
-    }
-
-    function initCharts() {
-        const theme = getThemeStyles();
-
-        // 1. Gráfico de Tendencia
-        const trendCtx = document.getElementById('trendLineChart');
-        if (trendCtx && chartConfig.trendData && chartConfig.trendData.labels) {
-            let gradient = trendCtx.getContext('2d').createLinearGradient(0, 0, 0, 300);
-            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
-            activeCharts.push(new Chart(trendCtx, {
+        // 1. GLOBAL EVOLUTION
+        const evolCtx = document.getElementById('evolutionChart');
+        if (evolCtx) {
+            const evolData = JSON.parse('{{ evolution_chart|escapejs }}');
+            new Chart(evolCtx, {
                 type: 'line',
                 data: {
-                    labels: chartConfig.trendData.labels,
+                    labels: evolData.labels || [],
                     datasets: [{
                         label: 'Respuestas',
-                        data: chartConfig.trendData.data,
-                        borderColor: chartConfig.colors[0],
-                        backgroundColor: gradient,
+                        data: evolData.data || [],
+                        borderColor: '#0d6efd',
+                        backgroundColor: (context) => {
+                            const ctx = context.chart.ctx;
+                            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+                            gradient.addColorStop(0, 'rgba(13, 110, 253, 0.2)');
+                            gradient.addColorStop(1, 'rgba(13, 110, 253, 0)');
+                            return gradient;
+                        },
                         fill: true,
                         tension: 0.4,
-                        pointBackgroundColor: theme.text,
                         pointRadius: 4,
                         pointHoverRadius: 6
                     }]
@@ -425,76 +139,115 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    scales: {
-                        y: { grid: { color: theme.grid, drawBorder: false }, ticks: { color: theme.text, font: {family: 'Inter'} }, beginAtZero: true },
-                        x: { display: false }
-                    },
-                    plugins: { legend: { display: false } }
-                }
-            }));
-        }
-
-        // 2. Gráficos Interactivos
-        chartConfig.analysisData.forEach(item => {
-            const ctx = document.getElementById('chart_q_' + item.id);
-            if (!ctx || !item.chart_data || item.chart_data.length === 0) return;
-
-            const dataLength = item.chart_labels.length;
-            const isDonut = item.type === 'multi' || item.type === 'single';
-            let chartType = isDonut ? 'doughnut' : 'bar';
-            let indexAxis = 'x';
-
-            if (!isDonut && dataLength > 15) {
-                indexAxis = 'y';
-                const newHeight = Math.max(300, dataLength * 40);
-                const wrapper = document.getElementById('chart-wrapper-' + item.id);
-                if (wrapper) {
-                    wrapper.style.height = '400px';
-                    ctx.parentNode.style.height = newHeight + 'px';
-                }
-            }
-
-            const bgColors = item.chart_labels.map((_, i) => chartConfig.colors[i % chartConfig.colors.length]);
-
-            activeCharts.push(new Chart(ctx, {
-                type: chartType,
-                data: {
-                    labels: item.chart_labels,
-                    datasets: [{
-                        label: 'Votos',
-                        data: item.chart_data,
-                        backgroundColor: bgColors,
-                        borderWidth: 2,
-                        borderColor: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#161b22' : '#ffffff',
-                        borderRadius: chartType === 'bar' ? 6 : 0,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    indexAxis: indexAxis,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { 
-                            display: isDonut, 
-                            position: 'right',
-                            labels: { color: theme.text, font: {family: 'Inter'}, boxWidth: 12, padding: 15 }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.8)',
-                            titleFont: { size: 13 },
-                            padding: 10,
-                            cornerRadius: 8
-                        }
-                    },
-                    scales: isDonut ? { x:{display:false}, y:{display:false} } : {
-                        [indexAxis]: { grid: { display: false }, ticks: { color: theme.text, autoSkip: false } },
-                        [indexAxis === 'x' ? 'y' : 'x']: { grid: { color: theme.grid }, ticks: { color: theme.text } }
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, border: { display: false } }
                     }
                 }
-            }));
-        });
-    }
+            });
+        }
+
+        // 2. MINI CHARTS REGISTRY
+        if (window.chartRegistry) {
+            window.chartRegistry.forEach(chartItem => {
+                const ctx = document.getElementById(chartItem.id);
+                if (!ctx) return;
+
+                const rawData = JSON.parse(document.getElementById(chartItem.dataId).textContent);
+                let chartConfig = {};
+
+                // --- CONFIGURACIÓN DINÁMICA ---
+                
+                if (chartItem.isDemographic) {
+                    // DEMOGRÁFICOS = DONUT
+                    chartConfig = {
+                        type: 'doughnut',
+                        data: {
+                            labels: rawData.labels,
+                            datasets: [{
+                                data: rawData.data,
+                                backgroundColor: [
+                                    '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
+                                    '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
+                                ],
+                                borderWidth: 0,
+                                hoverOffset: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '75%',
+                            plugins: { 
+                                legend: { 
+                                    display: true, 
+                                    position: 'right',
+                                    labels: { boxWidth: 10, font: { size: 10 }, usePointStyle: true }
+                                } 
+                            }
+                        }
+                    };
+
+                } else if (chartItem.type === 'numeric' || chartItem.type === 'scale') {
+                    // NUMÉRICOS = BARRAS VERTICALES
+                    chartConfig = {
+                        type: 'bar',
+                        data: {
+                            labels: rawData.labels,
+                            datasets: [{
+                                data: rawData.data,
+                                backgroundColor: '#0d6efd',
+                                borderRadius: 4,
+                                barThickness: 'flex',
+                                maxBarThickness: 15
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false, beginAtZero: true }
+                            }
+                        }
+                    };
+
+                } else if (chartItem.type === 'single' || chartItem.type === 'multi') {
+                    // CATEGÓRICAS NO DEMOGRÁFICAS = BARRAS HORIZONTALES
+                    chartConfig = {
+                        type: 'bar',
+                        data: {
+                            labels: rawData.labels,
+                            datasets: [{
+                                data: rawData.data,
+                                backgroundColor: '#198754', // Verde para opciones
+                                borderRadius: 4,
+                                barThickness: 12
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { display: false, beginAtZero: true },
+                                y: { 
+                                    grid: { display: false, drawBorder: false },
+                                    ticks: { font: { size: 11 }, autoSkip: false }
+                                }
+                            }
+                        }
+                    };
+                }
+
+                if (chartConfig.type) {
+                    new Chart(ctx, chartConfig);
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

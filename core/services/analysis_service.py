@@ -364,9 +364,9 @@ class SurveyAnalysisService:
         Método principal llamado por las vistas.
         Retorna un diccionario completo con datos analizados, KPIs y gráficos.
         """
-            import time
-            start_time = time.time()
-            logger.info(f"[ANALYSIS] Inicio análisis de encuesta {getattr(survey, 'id', None)} con {responses_queryset.count()} respuestas.")
+        import time
+        start_time = time.time()
+        logger.info(f"[ANALYSIS] Inicio análisis de encuesta {getattr(survey, 'id', None)} con {responses_queryset.count()} respuestas.")
         # 1. KPIs Globales (NPS)
         nps_data = NPSCalculator.calculate_nps(survey, responses_queryset)
 

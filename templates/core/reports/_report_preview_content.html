@@ -1,419 +1,58 @@
-{% comment %}
-    COMPONENTE DE CONTENIDO DE REPORTE (COMPARTIDO WEB/PDF)
-    Diseñado para garantizar paridad visual 1:1 entre la vista previa y el PDF final,
-    con soporte completo para modo oscuro en la vista web.
-{% endcomment %}
+{% load humanize %}
 
-<style>
-    /* === VARIABLES BASE (Adaptables) === */
-    :root {
-        --rp-bg-card: #ffffff;
-        --rp-text-main: #1f2937;
-        --rp-text-muted: #6b7280;
-        --rp-border: #e5e7eb;
-        --rp-bg-subtle: #f8f9fa;
-        --rp-primary: var(--bs-primary, #0d6efd);
-    }
-
-    /* MODO OSCURO (Solo afecta vista web, no PDF) */
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --rp-bg-card: #212529; /* Bootstrap Dark BG */
-            --rp-text-main: #e9ecef;
-            --rp-text-muted: #adb5bd;
-            --rp-border: #373b3e;
-            --rp-bg-subtle: #2c3034;
-        }
-    }
-
-    /* === ESTILOS ESTRUCTURALES === */
-
-    /* Tipografía y Encabezados */
-    .rp-title { 
-        font-size: 24pt; 
-        font-weight: 800; 
-        color: var(--rp-primary);
-        margin-bottom: 0.2cm; 
-        line-height: 1.2; 
-        text-align: left; 
-    }
+<div class="text-center mb-5">
+    <h2 class="fw-bold">{{ survey.title }}</h2>
+    <p class="text-muted">Reporte Ejecutivo Generado el {{ generated_at|date:"d M Y" }}</p>
     
-    .rp-subtitle {
-        font-size: 14pt;
-        color: var(--rp-text-muted);
-        font-weight: 300;
-        margin-bottom: 1cm;
-    }
+    <div class="d-flex justify-content-center gap-3">
+        <div class="d-inline-flex align-items-center bg-white px-3 py-2 rounded-pill shadow-sm border">
+            <span class="fs-4 fw-bold text-primary me-2">{{ kpi_score|floatformat:1 }}</span>
+            <span class="small text-muted text-uppercase">Score Global</span>
+        </div>
+        <div class="d-inline-flex align-items-center bg-white px-3 py-2 rounded-pill shadow-sm border">
+            <span class="fs-4 fw-bold text-dark me-2">{{ analysis.analysis_data|length }}</span>
+            <span class="small text-muted text-uppercase">Preguntas</span>
+        </div>
+    </div>
+</div>
 
-    .rp-h2 { 
-        font-size: 16pt; 
-        border-bottom: 2px solid var(--rp-primary); 
-        padding-bottom: 5px; 
-        margin: 1cm 0 0.5cm 0; 
-        color: var(--rp-text-main); 
-        text-transform: uppercase; 
-        page-break-after: avoid; 
-    }
-
-    /* Ficha Técnica */
-    .rp-meta-box { 
-        background: var(--rp-bg-subtle); 
-        border-left: 5px solid var(--rp-primary); 
-        padding: 15px; 
-        margin-bottom: 1cm; 
-        border-radius: 4px; 
-        color: var(--rp-text-main);
-    }
-    .rp-meta-row { 
-        display: flex; 
-        justify-content: space-between; 
-        margin-bottom: 5px; 
-        font-size: 10pt; 
-    }
-    .rp-meta-label { font-weight: 700; color: var(--rp-text-main); }
-
-    /* KPIs */
-    .rp-kpi-container { 
-        display: flex; 
-        flex-wrap: wrap; 
-        gap: 15px; 
-        margin-bottom: 1cm; 
-        page-break-inside: avoid; 
-    }
-    .rp-kpi-card { 
-        flex: 1; 
-        min-width: 120px; 
-        background: var(--rp-bg-card); 
-        border: 1px solid var(--rp-border); 
-        padding: 15px; 
-        border-radius: 8px; 
-        text-align: center;
-    }
-    .rp-val { display: block; font-size: 24pt; font-weight: 800; color: var(--rp-text-main); line-height: 1; margin-bottom: 5px; }
-    .rp-lbl { font-size: 9pt; text-transform: uppercase; color: var(--rp-text-muted); font-weight: 700; letter-spacing: 1px; }
-
-    /* Tarjetas de Preguntas */
-    .rp-q-card { 
-        border: 1px solid var(--rp-border); 
-        border-radius: 8px; 
-        padding: 15px; 
-        margin-bottom: 15px; 
-        background: var(--rp-bg-card);
-        page-break-inside: auto; 
-    }
-    
-    .rp-q-header { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: flex-start; 
-        margin-bottom: 10px; 
-        gap: 10px;
-        page-break-inside: avoid;
-        page-break-after: avoid; 
-    }
-    
-    .rp-q-title { margin: 0; font-size: 12pt; color: var(--rp-text-main); line-height: 1.4; flex: 1; font-weight: 600; }
-    .rp-q-title-num { color: var(--rp-primary); font-weight: 700; }
-    
-    .rp-badges { display: flex; gap: 5px; flex-shrink: 0; }
-    .rp-badge { background: rgba(13, 110, 253, 0.1); color: var(--rp-primary); padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700; text-transform: uppercase; }
-
-    /* Insights y Recomendaciones (Colores fijos suaves para legibilidad) */
-    .rp-insight { 
-        background: #eff6ff; color: #1e3a8a; /* Blue-50 / Blue-900 */
-        padding: 8px 12px; border-radius: 6px; 
-        margin: 10px 0; font-size: 9.5pt; 
-        border-left: 3px solid #3b82f6; 
-        text-align: justify;
-        page-break-inside: avoid;
-    }
-    /* En modo oscuro, oscurecemos un poco el fondo del insight para que no brille tanto */
-    @media (prefers-color-scheme: dark) {
-        .rp-insight { background: #1e293b; color: #dbeafe; border-left-color: #60a5fa; }
-    }
-
-    .rp-recommendations { 
-        margin: 10px 0; padding: 8px 12px; 
-        background-color: #f0fdf4; /* Green-50 */
-        border-left: 3px solid #22c55e; 
-        border-radius: 4px; 
-        page-break-inside: avoid;
-        color: #14532d;
-    }
-    @media (prefers-color-scheme: dark) {
-        .rp-recommendations { background-color: #14532d; color: #dcfce7; border-left-color: #4ade80; }
-    }
-    
-    .rp-rec-list { margin: 0; padding-left: 18px; font-size: 9.5pt; }
-
-    /* Gráficos e Imágenes */
-    .rp-chart-container {
-        text-align: center;
-        page-break-inside: avoid;
-        margin: 10px 0;
-        /* Fondo blanco para gráficos PNG transparentes en modo oscuro */
-        background: white; 
-        padding: 10px;
-        border-radius: 8px;
-    }
-    .rp-chart { 
-        max-width: 100%; 
-        height: auto; 
-        max-height: 350px; 
-    }
-    .rp-chart-donut { 
-        max-width: 250px; 
-        max-height: 250px;
-    }
-
-    /* === ESTILOS DE TABLA (Unificados) === */
-    .rp-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 9pt;
-        margin-bottom: 10px;
-        page-break-inside: auto;
-        color: var(--rp-text-main);
-    }
-    .rp-table th {
-        background-color: var(--rp-bg-subtle);
-        text-align: left;
-        padding: 8px;
-        font-weight: 700;
-        color: var(--rp-text-main);
-        border-bottom: 2px solid var(--rp-border);
-    }
-    .rp-table td {
-        padding: 8px;
-        border-bottom: 1px solid var(--rp-border);
-        vertical-align: middle;
-    }
-    .rp-table tr { page-break-inside: avoid; }
-    
-    .text-center { text-align: center; }
-    .text-end { text-align: right; }
-    .fw-bold { font-weight: 700; }
-
-    /* === MODO WEB (Responsive y Corrección de Fondo) === */
-    {% if not is_pdf %}
-        .report-preview-wrapper {
-            width: 100%;
-            max-width: 210mm; /* Ancho A4 */
-            min-height: 297mm; /* Mínimo alto A4 */
-            
-            /* SOLUCIÓN AL FONDO CORTADO */
-            display: flow-root; 
-            
-            padding: 15mm;
-            margin: 20px auto; 
-            background: var(--rp-bg-card); /* Adaptable */
-            box-shadow: 0 0 15px rgba(0,0,0,0.15);
-            box-sizing: border-box;
-            
-            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-            font-size: 11pt;
-            color: var(--rp-text-main);
-            line-height: 1.5;
-            text-align: left;
-        }
-
-        .report-web-container {
-            height: 600px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            /* Fondo gris oscuro para contraste con la "hoja" */
-            background: #525659; 
-            padding: 20px;
-            border-radius: 8px;
-            display: block; 
-            text-align: center;
-        }
-        
-        /* Ajuste móvil */
-        @media (max-width: 480px) {
-            .report-web-container { padding: 10px; }
-            .report-preview-wrapper { padding: 10mm; }
-            .rp-title { font-size: 18pt; }
-        }
-
-        /* Animaciones */
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-enter { animation: fadeInUp 0.5s ease-out forwards; opacity: 0; }
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-    {% else %}
-        /* MODO PDF: Forzamos colores de impresión (Fondo blanco, texto negro) */
-        :root {
-            --rp-bg-card: #ffffff;
-            --rp-text-main: #1f2937;
-            --rp-text-muted: #6b7280;
-            --rp-border: #e5e7eb;
-            --rp-bg-subtle: #f8f9fa;
-        }
-        .report-preview-wrapper { width: 100%; background-color: #ffffff; }
-        .pdf-table-section { page-break-before: always; }
-        .rp-insight, .rp-recommendations { color: #000; border: 1px solid #ccc; background: #fff; }
-    {% endif %}
-</style>
-
-{% if not is_pdf %}<div class="report-web-container">{% endif %}
-
-    <div class="report-preview-wrapper">
-        
-        <div class="{% if not is_pdf %}animate-enter delay-1{% endif %}">
-            <div style="font-size: 9pt; font-weight: 700; color: var(--rp-text-muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 5px;">
-                Byteneko Analytics
-            </div>
-            <h1 class="rp-title">{{ survey.title }}</h1>
-            <p class="rp-subtitle">Reporte Ejecutivo de Resultados</p>
-
-            <div class="rp-meta-box">
-                <div class="rp-meta-row">
-                    <span class="rp-meta-label">Fecha de corte:</span>
-                    <span>{% now "d \d\e F, Y" %}</span>
+<div class="row g-4">
+    {% for item in analysis.analysis_data %}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm page-break-inside-avoid">
+            <div class="card-body">
+                <h5 class="card-title fw-bold mb-3 text-secondary">
+                    <span class="badge bg-light text-dark border me-2">{{ item.order }}</span>
+                    {{ item.text }}
+                </h5>
+                
+                <div class="row align-items-start">
+                    <div class="col-md-7">
+                        {# Reutilizamos el componente visual #}
+                        {% include "surveys/components/insight_card.html" with data=item %}
+                    </div>
+                    
+                    <div class="col-md-5">
+                        <div class="bg-light rounded p-3 h-100 d-flex align-items-center">
+                            {% if item.insight_data.narrative %}
+                                <div>
+                                    <h6 class="fw-bold small text-uppercase text-muted mb-2">Análisis Automático</h6>
+                                    <p class="mb-0 small fst-italic text-body-secondary">
+                                        "{{ item.insight_data.narrative }}"
+                                    </p>
+                                </div>
+                            {% else %}
+                                <p class="text-muted small text-center w-100">Sin análisis disponible.</p>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-                <div class="rp-meta-row">
-                    <span class="rp-meta-label">Total Respuestas:</span>
-                    <span>{{ total_respuestas }}</span>
-                </div>
-                {% if survey.description %}
-                <div class="rp-meta-row" style="margin-top: 10px; border-top: 1px dashed var(--rp-border); padding-top: 10px;">
-                    <span class="rp-meta-label">Contexto:</span>
-                </div>
-                <div style="font-size: 10pt; font-style: italic;">{{ survey.description|linebreaksbr }}</div>
-                {% endif %}
             </div>
         </div>
-
-        {% if include_kpis %}
-            <div class="{% if not is_pdf %}animate-enter delay-2{% endif %}">
-                <h2 class="rp-h2">Panorama General</h2>
-                <div class="rp-kpi-container">
-                    <div class="rp-kpi-card">
-                        <span class="rp-val" style="color: var(--rp-primary);">{{ total_respuestas }}</span>
-                        <span class="rp-lbl">Respuestas</span>
-                    </div>
-                    <div class="rp-kpi-card">
-                        <span class="rp-val {% if kpi_prom_satisfaccion < 6 %}text-danger{% endif %}">
-                            {{ kpi_prom_satisfaccion|floatformat:1 }}
-                        </span>
-                        <span class="rp-lbl">Satisfacción</span>
-                    </div>
-                    <div class="rp-kpi-card">
-                        <span class="rp-val {% if nps_score >= 50 %}text-success{% endif %}">
-                            {{ nps_score|default:"--" }}
-                        </span>
-                        <span class="rp-lbl">NPS</span>
-                    </div>
-                </div>
-
-                {% if nps_chart_image %}
-                <div class="rp-q-card" style="page-break-inside: avoid;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 12pt; color: var(--rp-text-main);">Distribución NPS</h3>
-                    <div class="rp-chart-container">
-                        <img src="data:image/png;base64,{{ nps_chart_image }}" class="rp-chart rp-chart-donut" alt="Gráfico NPS">
-                    </div>
-                </div>
-                {% endif %}
-                
-                {% if heatmap_image %}
-                <div class="rp-q-card" style="page-break-inside: avoid;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 12pt; color: var(--rp-text-main);">Mapa de Correlaciones</h3>
-                    <div class="rp-chart-container">
-                        <img src="data:image/png;base64,{{ heatmap_image }}" class="rp-chart" alt="Heatmap de correlaciones">
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        {% endif %}
-
-        {% if include_charts %}
-            <div class="{% if not is_pdf %}animate-enter delay-3{% endif %}">
-                <h2 class="rp-h2">Desglose por Pregunta</h2>
-                
-                {% for item in analysis_data %}
-                    <div class="rp-q-card question-page {% if not is_pdf %}animate-enter{% endif %}" style="{% if not is_pdf %}animation-delay: 0.{{ forloop.counter }}s;{% endif %}">
-                        <div class="rp-q-header">
-                            <h3 class="rp-q-title">
-                                <span class="rp-q-title-num">{{ item.order }}.</span> {{ item.text }}
-                            </h3>
-                            <div class="rp-badges"><span class="rp-badge">{{ item.type }}</span></div>
-                        </div>
-
-                        {% if item.chart_image %}
-                            <div class="rp-chart-container">
-                                <img src="data:image/png;base64,{{ item.chart_image }}" class="rp-chart {% if item.chart_type == 'donut' %}rp-chart-donut{% endif %}" alt="Gráfico de resultados">
-                            </div>
-                        {% endif %}
-
-
-                        {% if item.insight %}
-                            <div class="rp-insight">{% autoescape off %}{{ item.insight }}{% endautoescape %}</div>
-                        {% endif %}
-
-                        {% if item.recommendations %}
-                            <div class="rp-recommendations">
-                                <span style="font-weight: 700; font-size: 9pt; display: block; margin-bottom: 4px;">💡 Recomendaciones:</span>
-                                <ul class="rp-rec-list">
-                                    {% for rec in item.recommendations %}<li>{{ rec }}</li>{% endfor %}
-                                </ul>
-                            </div>
-                        {% endif %}
-
-                        {% if item.type == 'text' and item.samples_texto %}
-                            <div style="background: var(--rp-bg-subtle); padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px dashed var(--rp-border); page-break-inside: avoid;">
-                                <small style="font-weight: 700; color: var(--rp-text-muted);">Muestra de comentarios:</small>
-                                <ul style="padding-left: 20px; margin-bottom: 0; font-style: italic; font-size: 9pt; color: var(--rp-text-main);">
-                                    {% for resp in item.samples_texto|slice:":3" %}<li>"{{ resp }}"</li>{% endfor %}
-                                </ul>
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-
-        {% if include_table %}
-            <div class="{% if is_pdf %}pdf-table-section{% else %}animate-enter delay-3{% endif %}" style="margin-top: 1cm;">
-                <h2 class="rp-h2">Tablas de Análisis Detallado</h2>
-                <div style="overflow-x: auto;">
-                    <table class="rp-table">
-                        <thead>
-                            <tr>
-                                <th style="width:40%">Pregunta</th>
-                                <th style="width:35%">Opción</th>
-                                <th class="text-center" style="width:12%">Frecuencia</th>
-                                <th class="text-end" style="width:13%">%</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in consolidated_table_rows_limited %}
-                            <tr>
-                                <td>{{ row.question|truncatechars:80 }}</td>
-                                <td>{{ row.option }}</td>
-                                <td class="text-center">{{ row.count }}</td>
-                                <td class="text-end fw-bold">{{ row.percent|floatformat:1 }}%</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center" style="padding: 20px; font-style: italic; color: var(--rp-text-muted);">
-                                    No hay datos tabulados disponibles para las preguntas de esta encuesta.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    
-                    {% if consolidated_table_rows|length > consolidated_table_rows_limited|length %}
-                        <div style="font-size: 8pt; color: var(--rp-text-muted); font-style: italic; margin-top: 10px;">
-                            * Mostrando las primeras {{ consolidated_table_rows_limited|length }} filas para optimizar el reporte.
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        {% endif %}
-
     </div>
-
-{% if not is_pdf %}</div>{% endif %}
+    {% empty %}
+    <div class="col-12 text-center text-muted py-5">
+        No hay datos suficientes para generar el reporte en este periodo.
+    </div>
+    {% endfor %}
+</div>

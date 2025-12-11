@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',  # <--- AGREGADO: Necesario para filtros como 'intcomma'
 
     # --- Mis Apps ---
     'core.apps.CoreConfig',
@@ -130,7 +131,6 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 # ============================================================
 # LOGGING CONFIGURATION
 # ============================================================
-# (Mantenemos tu configuración de logging intacta, es robusta)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
