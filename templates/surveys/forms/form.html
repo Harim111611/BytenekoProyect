@@ -3,17 +3,22 @@
 
 {% block page_styles %}
 <style>
+    /* Estilos específicos encapsulados */
     .info-card {
         background: linear-gradient(135deg, var(--bs-primary-bg-subtle) 0%, var(--bs-secondary-bg-subtle) 100%);
         border-left: 4px solid var(--bs-primary);
+    }
+    /* Clase utilitaria para inputs consistentes */
+    .form-input-custom {
+        background-color: var(--bs-body-tertiary);
+        border: 0;
     }
 </style>
 {% endblock %}
 
 {% block app_content %}
 <div class="container-xl p-4 p-md-5">
-
-    <!-- Breadcrumb y Header -->
+    
     <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
@@ -28,165 +33,129 @@
     </div>
 
     <div class="row g-4">
-        <!-- Columna Principal - Formulario -->
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4 p-lg-5">
                     <form method="post">
                         {% csrf_token %}
 
-                        <!-- Título -->
                         <div class="mb-4">
                             <label for="id_title" class="form-label fw-semibold text-body">
-                                Título de la survey
-                                <span class="text-danger">*</span>
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="¿Cómo nombrar la survey?" data-bs-content="Incluye objetivo y periodo (ej. 'Satisfacción Q1 2025') para identificar fácilmente el análisis.">
+                                Título de la survey <span class="text-danger">*</span>
+                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Ayuda" data-bs-content="Incluye objetivo y periodo (ej. 'Satisfacción Q1 2025').">
                                     <i class="bi bi-question-circle"></i>
                                 </a>
                             </label>
                             <input type="text" 
-                                   class="form-control form-control-lg bg-body-tertiary border-0" 
+                                   class="form-control form-control-lg form-input-custom" 
                                    id="id_title" 
                                    name="title" 
-                                   value="{{ form.title.value|default:object.title }}" 
-                                   placeholder="ej. Satisfacción del Cliente Q1 2025"
+                                   value="{{ form.title.value|default_if_none:object.title }}" 
+                                   placeholder="ej. Satisfacción del Cliente Q1 2025" 
                                    required>
                             {% if form.title.errors %}
                                 <div class="text-danger small mt-1">{{ form.title.errors.0 }}</div>
                             {% endif %}
                         </div>
 
-                        <!-- Descripción -->
                         <div class="mb-4">
-                            <label for="id_description" class="form-label fw-semibold text-body">
-                                Descripción
-                            </label>
-                            <textarea class="form-control bg-body-tertiary border-0" 
+                            <label for="id_description" class="form-label fw-semibold text-body">Descripción</label>
+                            <textarea class="form-control form-input-custom" 
                                       id="id_description" 
                                       name="description" 
                                       rows="4" 
-                                      placeholder="Describe brevemente el objetivo de esta survey...">{{ form.description.value|default:object.description|default:"" }}</textarea>
-                            <div class="form-text small text-muted">Ayuda a los participantes a entender el propósito de la survey</div>
+                                      placeholder="Describe el objetivo...">{{ form.description.value|default_if_none:object.description }}</textarea>
+                            <div class="form-text small text-muted">Ayuda a los participantes a entender el propósito.</div>
                             {% if form.description.errors %}
                                 <div class="text-danger small mt-1">{{ form.description.errors.0 }}</div>
                             {% endif %}
                         </div>
 
                         {% if not object.is_imported %}
-                        <!-- Estado -->
-                        <div class="mb-4">
-                            <label for="id_status" class="form-label fw-semibold text-body">
-                                Estado de la survey
-                                <span class="text-danger">*</span>
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Cambios de estado" data-bs-content="Activa = recolecta respuestas. En pausa = detiene las respuestas sin volver a borrador. Cerrada = histórico definitivo.">
-                                    <i class="bi bi-question-circle"></i>
-                                </a>
-                            </label>
-                            <select class="form-select form-select-lg bg-body-tertiary border-0"
-                                    id="id_status"
-                                    name="status"
-                                    required>
-                                <option value="draft"
-                                        {% if object.status == 'draft' %}selected{% endif %}
-                                        {% if object.status != 'draft' %}disabled{% endif %}>
-                                    📝 Borrador - editable
-                                </option>
-                                <option value="active"
-                                        {% if object.status == 'active' %}selected{% endif %}>
-                                    ✅ Activa - aceptando respuestas
-                                </option>
-                                <option value="paused"
-                                        {% if object.status == 'paused' %}selected{% endif %}
-                                        {% if object.status == 'draft' %}disabled{% endif %}>
-                                    ⏸️ En pausa - detiene respuestas
-                                </option>
-                                <option value="closed"
-                                        {% if object.status == 'closed' %}selected{% endif %}>
-                                    🔒 Cerrada - histórico final
-                                </option>
-                            </select>
-                            <div class="form-text small text-muted">
-                                Una vez activada, la encuesta no puede volver a borrador ni modificar preguntas. Usa <strong>En pausa</strong> para detener temporalmente las respuestas.
-                            </div>
-                            {% if form.status.errors %}
-                                <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-
-                        <!-- Meta de respuestas -->
-                        <div class="mb-4">
-                            <label for="id_sample_goal" class="form-label fw-semibold text-body">
-                                Meta de respuestas
-                                <a tabindex="0"
-                                   class="ms-2 text-muted small"
-                                   data-bs-toggle="tooltip"
-                                   data-bs-placement="right"
-                                   title="Número objetivo de respuestas antes de pausar automáticamente la encuesta. Usa 0 para no limitar.">
-                                    <i class="bi bi-question-circle"></i>
-                                </a>
-                            </label>
-
-                            <div class="input-group">
-                                <input type="number"
-                                       min="0"
-                                       class="form-control bg-body-tertiary border-0"
-                                       id="id_sample_goal"
-                                       name="sample_goal"
-                                       value="{{ form.sample_goal.value|default:object.sample_goal|default:'' }}"
-                                       placeholder="0 = Sin límite">
-                                <span class="input-group-text bg-body-tertiary border-0">
-                                    respuestas
-                                </span>
+                            <div class="mb-4">
+                                <label for="id_status" class="form-label fw-semibold text-body">
+                                    Estado <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select form-select-lg form-input-custom" id="id_status" name="status" required>
+                                    <option value="draft" {% if object.status == 'draft' %}selected{% endif %} {% if object.status != 'draft' %}disabled{% endif %}>
+                                        📝 Borrador - editable
+                                    </option>
+                                    <option value="active" {% if object.status == 'active' %}selected{% endif %}>
+                                        ✅ Activa - aceptando respuestas
+                                    </option>
+                                    <option value="paused" {% if object.status == 'paused' %}selected{% endif %} {% if object.status == 'draft' %}disabled{% endif %}>
+                                        ⏸️ En pausa - detiene respuestas
+                                    </option>
+                                    <option value="closed" {% if object.status == 'closed' %}selected{% endif %}>
+                                        🔒 Cerrada - histórico final
+                                    </option>
+                                </select>
+                                <div class="form-text small text-muted">Una vez activada, no puede volver a borrador.</div>
+                                {% if form.status.errors %}
+                                    <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+                                {% endif %}
                             </div>
 
-                            <div class="form-text small text-muted">
-                                Cuando se alcance esta cantidad, la encuesta se pausará automáticamente.
-                                Luego podrás decidir si seguir recibiendo respuestas o cerrar la encuesta
-                                desde el panel de control.
+                            <div class="mb-4">
+                                <label for="id_sample_goal" class="form-label fw-semibold text-body">
+                                    Meta de respuestas
+                                    <i class="bi bi-question-circle ms-2 text-muted small" data-bs-toggle="tooltip" title="0 para ilimitado"></i>
+                                </label>
+                                <div class="input-group">
+                                    <input type="number" 
+                                           min="0" 
+                                           class="form-control form-input-custom" 
+                                           id="id_sample_goal" 
+                                           name="sample_goal" 
+                                           value="{{ form.sample_goal.value|default_if_none:object.sample_goal|default:'' }}" 
+                                           placeholder="0 = Sin límite">
+                                    <span class="input-group-text form-input-custom">respuestas</span>
+                                </div>
+                                <div class="form-text small text-muted">Pausa automática al alcanzar la meta.</div>
+                                {% if form.sample_goal.errors %}
+                                    <div class="text-danger small mt-1">{{ form.sample_goal.errors.0 }}</div>
+                                {% endif %}
                             </div>
 
-                            {% if form.sample_goal.errors %}
-                                <div class="text-danger small mt-1">{{ form.sample_goal.errors.0 }}</div>
-                            {% endif %}
-                        </div>
+                            <div class="p-3 bg-body-tertiary rounded-3 mb-4">
+                                <h6 class="fw-bold mb-3"><i class="bi bi-diagram-3 me-2"></i>Lógica Condicional</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="id_depends_on" class="form-label small fw-bold text-muted text-uppercase">Depende de la pregunta</label>
+                                    <select id="id_depends_on" name="depends_on" class="form-select form-select-sm">
+                                        <option value="">-- Ninguna --</option>
+                                        {% for q in survey_questions %}
+                                            <option value="{{ q.id }}">{{ q.text|truncatechars:60 }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
 
-                        <!-- LÓGICA CONDICIONAL EN PREGUNTAS -->
-                        <div class="mb-4">
-                            <label for="id_depends_on" class="form-label fw-semibold">Depende de la pregunta</label>
-                            <select id="id_depends_on" name="depends_on" class="form-select">
-                                <option value="">-- Ninguna --</option>
-                                {% for q in survey_questions %}
-                                    <option value="{{ q.id }}">{{ q.text|truncatechars:50 }}</option>
-                                {% endfor %}
-                            </select>
-                            <small class="text-muted">Esta pregunta solo será visible si se responde la pregunta seleccionada.</small>
-                        </div>
-                        <div class="mb-4">
-                            <label for="id_visible_if_option" class="form-label fw-semibold">Visible si selecciona opción</label>
-                            <select id="id_visible_if_option" name="visible_if_option" class="form-select">
-                                <option value="">-- Ninguna --</option>
-                                {% for opt in answer_options %}
-                                    <option value="{{ opt.id }}">{{ opt.text|truncatechars:50 }}</option>
-                                {% endfor %}
-                            </select>
-                            <small class="text-muted">La pregunta será visible solo si se selecciona esta opción en la pregunta dependiente.</small>
-                        </div>
+                                <div class="mb-0">
+                                    <label for="id_visible_if_option" class="form-label small fw-bold text-muted text-uppercase">Visible si selecciona</label>
+                                    <select id="id_visible_if_option" name="visible_if_option" class="form-select form-select-sm">
+                                        <option value="">-- Ninguna --</option>
+                                        {% for opt in answer_options %}
+                                            <option value="{{ opt.id }}">{{ opt.text|truncatechars:60 }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
                         {% else %}
-                        <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
-                            <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
-                            <div>
-                                <p class="mb-1 fw-semibold text-body">Encuesta importada</p>
-                                <p class="mb-0 small text-muted">Este proyecto proviene de un CSV con respuestas registradas y permanece cerrado automáticamente.</p>
+                            <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
+                                <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
+                                <div>
+                                    <p class="mb-1 fw-semibold text-body">Encuesta importada</p>
+                                    <p class="mb-0 small text-muted">Este proyecto proviene de un CSV y permanece cerrado automáticamente.</p>
+                                </div>
                             </div>
-                        </div>
                         {% endif %}
 
-                        <!-- Botones de Acción -->
                         <div class="d-flex justify-content-between align-items-center pt-4 mt-4 border-top">
                             <a href="{% url 'surveys:detail' object.public_id %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-x-lg me-2"></i>Cancelar
                             </a>
-                            <button type="submit" class="btn btn-primary btn-lg px-4">
+                            <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm">
                                 <i class="bi bi-check-lg me-2"></i>Guardar Cambios
                             </button>
                         </div>
@@ -195,54 +164,42 @@
             </div>
         </div>
 
-        <!-- Columna Lateral - Información y Acciones -->
         <div class="col-lg-4">
-            <!-- Estadísticas Rápidas -->
+            
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
                     <h6 class="text-uppercase text-muted small fw-bold mb-3">
                         <i class="bi bi-bar-chart-fill me-2"></i>Estadísticas
                     </h6>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="small text-muted">Respuestas</span>
+                        <span class="h4 mb-0 fw-bold text-primary">{{ object.responses.count }}</span>
+                    </div>
                     
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="small text-muted">Respuestas</span>
-                            <span class="h4 mb-0 fw-bold text-primary">{{ object.responses.count }}</span>
-                        </div>
+                    <p class="small text-muted mb-3 border-bottom pb-3">
                         {% if object.sample_goal %}
-                            <p class="small text-muted mb-0">
-                                Meta actual: <strong>{{ object.sample_goal }}</strong> respuestas.
-                            </p>
+                            Meta actual: <strong>{{ object.sample_goal }}</strong>
                         {% else %}
-                            <p class="small text-muted mb-0">
-                                Sin meta de respuestas (ilimitado).
-                            </p>
+                            Sin límite de respuestas.
                         {% endif %}
-                    </div>
+                    </p>
 
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="small text-muted">Preguntas</span>
-                            <span class="h4 mb-0 fw-bold text-body-emphasis">{{ object.questions.count }}</span>
-                        </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small text-muted">Preguntas</span>
+                        <span class="h5 mb-0 fw-bold">{{ object.questions.count }}</span>
                     </div>
-
-                    <div class="mb-0">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="small text-muted">Creada</span>
-                            <span class="small fw-medium">{{ object.created_at|date:"d M Y" }}</span>
-                        </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="small text-muted">Creada</span>
+                        <span class="small fw-medium">{{ object.created_at|date:"d M Y" }}</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Acciones Rápidas -->
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
                     <h6 class="text-uppercase text-muted small fw-bold mb-3">
                         <i class="bi bi-lightning-fill me-2"></i>Acciones Rápidas
                     </h6>
-                    
                     <div class="d-grid gap-2">
                         <a href="{% url 'surveys:results' object.public_id %}" class="btn btn-outline-primary btn-sm show-results-loader">
                             <i class="bi bi-graph-up me-2"></i>Ver Resultados
@@ -250,24 +207,24 @@
                         <a href="{% url 'surveys:respond' object.public_id %}" class="btn btn-outline-secondary btn-sm" target="_blank">
                             <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
                         </a>
-                            <a href="{% url 'surveys:export_csv' object.public_id %}" class="btn btn-outline-success btn-sm">
+                        <a href="{% url 'surveys:export_csv' object.public_id %}" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-download me-2"></i>Exportar CSV
                         </a>
                     </div>
                 </div>
             </div>
 
-            <!-- Información Importante -->
             <div class="card info-card border-0 shadow-sm">
                 <div class="card-body p-4">
                     <h6 class="fw-bold mb-2">
                         <i class="bi bi-info-circle-fill me-2"></i>Nota Importante
                     </h6>
                     <p class="small mb-0 text-body-secondary">
-                        Desde aquí solo puedes editar la información básica. Para modificar las preguntas, necesitarás crear una nueva encuesta o contactar a soporte.
+                        Desde aquí editas la info básica. Para modificar preguntas, usa el editor de estructura o contacta a soporte.
                     </p>
                 </div>
             </div>
+
         </div>
     </div>
 </div>

@@ -150,6 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Completa los títulos de todas las preguntas.', 'warning');
                 return false;
             }
+            // Al validar el paso 2, renderizamos el preview actualizado
             renderPreview();
         }
         return true;
@@ -170,44 +171,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // =====================================================
     // 2. GESTIÓN DE PREGUNTAS
-    //    (AQUÍ SE ARREGLA LA NUMERACIÓN)
     // =====================================================
 
     // Recalcula los textos "Pregunta X" y sincroniza questionCount
-        function refreshQuestionNumbers() {
-            if (!dom.questionsList) return;
-            const items = dom.questionsList.querySelectorAll('.question-item');
+    function refreshQuestionNumbers() {
+        if (!dom.questionsList) return;
+        const items = dom.questionsList.querySelectorAll('.question-item');
 
-            items.forEach((card, idx) => {
-                const numberLabel = card.querySelector('.question-number');
-                if (numberLabel) {
-                    numberLabel.textContent = `Pregunta ${idx + 1}`;
+        items.forEach((card, idx) => {
+            const numberLabel = card.querySelector('.question-number');
+            if (numberLabel) {
+                numberLabel.textContent = `Pregunta ${idx + 1}`;
+            }
+        });
+
+        // Mantener el contador global igual al número real de preguntas
+        questionCount = items.length;
+    }
+
+    // Observador que renumera automáticamente cuando se agregan o eliminan tarjetas
+    if (dom.questionsList && 'MutationObserver' in window) {
+        const questionListObserver = new MutationObserver((mutations) => {
+            let shouldRefresh = false;
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    shouldRefresh = true;
+                    break;
                 }
-            });
+            }
+            if (shouldRefresh) {
+                refreshQuestionNumbers();
+            }
+        });
 
-            // Mantener el contador global igual al número real de preguntas
-            questionCount = items.length;
-        }
-
-        // Observador que renumera automáticamente cuando se agregan o eliminan tarjetas
-        if (dom.questionsList && 'MutationObserver' in window) {
-            const questionListObserver = new MutationObserver((mutations) => {
-                let shouldRefresh = false;
-                for (const mutation of mutations) {
-                    if (mutation.type === 'childList') {
-                        shouldRefresh = true;
-                        break;
-                    }
-                }
-                if (shouldRefresh) {
-                    refreshQuestionNumbers();
-                }
-            });
-
-            questionListObserver.observe(dom.questionsList, {
-                childList: true
-            });
-        }
+        questionListObserver.observe(dom.questionsList, {
+            childList: true
+        });
+    }
 
     function createQuestionElement(data = null) {
         const template = document.getElementById('questionTemplate');
@@ -228,21 +228,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const labelCheck = card.querySelector('.form-check-label');
         if(labelCheck) labelCheck.setAttribute('for', uniqueId);
 
-        // El texto de la pregunta se asigna después con refreshQuestionNumbers(),
-        // así evitamos saltos en la numeración.
         if (numberLabel) {
             numberLabel.textContent = 'Pregunta'; // placeholder temporal
         }
 
         if (data) {
             titleInput.value = data.texto || data.text; // Soporte para 'text' o 'texto'
-            typeSelect.value = data.tipo || data.type;
+            // Usar 'dtype' si está presente (de backend CSV preview), si no, fallback a tipo/type
+            typeSelect.value = data.dtype || data.tipo || data.type;
             if(reqCheck) reqCheck.checked = data.required || data.is_required || false;
-            
-            const currentType = data.tipo || data.type;
+
+            const currentType = data.dtype || data.tipo || data.type;
             const options = data.opciones || data.options;
 
-            if (['single', 'multi'].includes(currentType) && options) {
+            // CORRECCIÓN: Ahora incluimos 'select' para mostrar las opciones si viene cargado
+            if (['single', 'multi', 'select'].includes(currentType) && options) {
                 optsContainer.classList.remove('d-none');
                 optsInput.value = Array.isArray(options) ? options.join(', ') : options;
             }
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleSaveTemplateBtn();
     }
 
-        if (dom.questionsList) {
+    if (dom.questionsList) {
         dom.questionsList.addEventListener('click', function(e) {
             if (e.target.closest('.btn-close')) {
                 const card = e.target.closest('.question-item');
@@ -275,14 +275,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        // CORRECCIÓN: Detectar cambio a 'select' para mostrar campo de opciones
         dom.questionsList.addEventListener('change', function(e) {
             if (e.target.classList.contains('question-type')) {
                 const select = e.target;
                 const card = select.closest('.question-item');
                 const optsDiv = card.querySelector('.options-container');
-                if (['single', 'multi'].includes(select.value)) {
+                
+                // Si es single, multi o SELECT, mostramos el cuadro de opciones
+                if (['single', 'multi', 'select'].includes(select.value)) {
                     optsDiv.classList.remove('d-none');
-                    setTimeout(() => optsDiv.querySelector('input').focus(), 50);
+                    // Pequeño delay para enfocar si el usuario lo acaba de cambiar
+                    setTimeout(() => {
+                        const input = optsDiv.querySelector('input') || optsDiv.querySelector('textarea');
+                        if(input) input.focus();
+                    }, 50);
                 } else {
                     optsDiv.classList.add('d-none');
                 }
@@ -451,8 +458,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qType = el.querySelector('.question-type').value;
                 const qReq = el.querySelector('.question-required').checked;
                 let qOpts = [];
-                if(['single','multi'].includes(qType)){
-                    qOpts = el.querySelector('.question-options').value.split(',').map(s=>s.trim()).filter(Boolean);
+                // CORRECCIÓN: Guardar opciones también si es 'select'
+                if(['single','multi', 'select'].includes(qType)){
+                    qOpts = el.querySelector('.question-options').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
                 }
                 structure.push({ text: qTitle, type: qType, required: qReq, options: qOpts, order: i+1 });
             });
@@ -592,7 +600,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- ELIMINACIÓN DE PLANTILLAS (Corregido y con Fallback) ---
+    // --- ELIMINACIÓN DE PLANTILLAS ---
     let templateToDeleteId = null;
     const deleteTemplateModal = document.getElementById('deleteTemplateModal');
     const btnConfirmDeleteTemplate = document.getElementById('btn-confirm-delete-template');
@@ -708,8 +716,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qType = el.querySelector('.question-type').value;
                 const qReq = el.querySelector('.question-required').checked;
                 let qOpts = [];
-                if(['single','multi'].includes(qType)){
-                    qOpts = el.querySelector('.question-options').value.split(',').map(s=>s.trim()).filter(Boolean);
+                if(['single','multi', 'select'].includes(qType)){
+                    qOpts = el.querySelector('.question-options').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
                 }
                 structure.push({ text: qTitle, type: qType, required: qReq, options: qOpts, order: i+1 });
             });
@@ -717,8 +725,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const payload = {
                 title: title,
                 description: description,
-                structure: structure, // Aquí va la estructura de preguntas para crear la Survey
-                status: 'active' // Sugiere que la encuesta se publique inmediatamente
+                structure: structure, 
+                status: 'active' 
             };
 
             const originalBtnText = this.innerHTML;
@@ -729,10 +737,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const token = getCSRFToken();
                 if (!token) throw new Error('No CSRF token found');
 
-                // NOTA CRÍTICA:
-                // El endpoint '/surveys/create/' se usa para TEMPLATES.
-                // Necesitas un endpoint en el backend que reciba esta data y cree un objeto SURVEY.
-                // Usaré /surveys/create_survey/ como una URL lógica, pero debes mapearla en urls.py
                 const publishUrl = '/surveys/create_survey/'; 
                 
                 const resp = await fetch(publishUrl, {
@@ -745,7 +749,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if(data.success) {
                     showToast('¡Encuesta publicada exitosamente!', 'success');
-                    // Redirigir al detalle de la encuesta creada
                     window.location.href = data.redirect_url || '/surveys/list/'; 
                 } else {
                     showToast(data.error || 'Error al publicar la encuesta.', 'danger');
@@ -763,42 +766,113 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // =====================================================
-    // 7. PREVIEW RENDER
+    // 7. PREVIEW RENDER (CORREGIDO Y MEJORADO)
     // =====================================================
     function renderPreview() {
         const title = dom.surveyTitle.value || 'Sin título';
         const desc = dom.surveyDesc.value || 'Sin descripción';
+
+        // Detectar modo noche
+        const isDarkMode = document.body.classList.contains('dark-mode') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        // Colores para modo noche
+        const darkBg = 'background-color: #23272b;';
+        const darkBorder = 'border: 1px solid #444;';
+        const darkText = 'color: #e0e0e0;';
+        const darkMuted = 'color: #b0b0b0;';
+        const darkCard = 'background-color: #181a1b; border: 1px solid #333;';
+
+        // Actualizar textos del header del preview
         ['review-title', 'preview-header-title'].forEach(id => {
             const el = document.getElementById(id); if(el) el.innerText = title;
         });
         ['review-description', 'preview-header-desc'].forEach(id => {
              const el = document.getElementById(id); if(el) el.innerText = desc;
         });
+
         const container = document.getElementById('preview-container');
         if(!container) return;
+
         container.innerHTML = '';
         const items = dom.questionsList.querySelectorAll('.question-item');
+
         const countBadge = document.getElementById('review-count');
         if(countBadge) countBadge.innerText = items.length;
+
         items.forEach((q, idx) => {
             const qTitle = q.querySelector('.question-title').value;
             const qType = q.querySelector('.question-type').value;
             const qReq = q.querySelector('.question-required').checked;
+
             const card = document.createElement('div');
             card.className = 'card mb-3 border-0 shadow-sm';
+            if (isDarkMode) card.style = darkCard;
+
             let inputHTML = '';
+            // Estilos inline para consistencia en el preview
+            const bgStyle = isDarkMode ? darkBg : 'background-color: var(--bs-body-tertiary);';
+            const borderStyle = isDarkMode ? darkBorder : 'border: 1px solid var(--bs-border-color);';
+            const textStyle = isDarkMode ? darkText : '';
+            const mutedStyle = isDarkMode ? darkMuted : 'color: var(--bs-secondary-color);';
+
             if(qType === 'text') {
-                inputHTML = '<textarea class="form-control bg-light" rows="2" disabled></textarea>';
+                inputHTML = `<textarea class="form-control" rows="2" disabled style="${bgStyle} ${borderStyle} ${textStyle}"></textarea>`;
             } else if (qType === 'number') {
-                inputHTML = '<input type="number" class="form-control bg-light" disabled placeholder="123">';
+                inputHTML = `<input type="number" class="form-control" disabled placeholder="123" style="${bgStyle} ${borderStyle} ${textStyle}">`;
             } else if (qType === 'scale') {
-                inputHTML = `<div class="d-flex justify-content-between gap-1 mt-2">${[0,1,2,3,4,5,6,7,8,9,10].map(n => `<div class="border rounded text-center py-2 flex-fill bg-light text-muted small">${n}</div>`).join('')}</div>`;
-            } else if (['single', 'multi'].includes(qType)) {
-                const opts = q.querySelector('.question-options').value.split(',').filter(s=>s.trim());
-                const inputType = qType === 'single' ? 'radio' : 'checkbox';
-                inputHTML = opts.map(opt => `<div class="form-check"><input class="form-check-input" type="${inputType}" disabled><label class="form-check-label">${opt}</label></div>`).join('') || '<div class="text-muted fst-italic small">Sin opciones</div>';
+                // Escala 0-10 mejorada (NPS style)
+                const scaleNums = [0,1,2,3,4,5,6,7,8,9,10];
+                inputHTML = `
+                    <div class="d-flex justify-content-between gap-1 mt-2 overflow-auto pb-2">
+                        ${scaleNums.map(n => `
+                            <div class="d-flex align-items-center justify-content-center border rounded flex-fill p-2" 
+                                 style="min-width: 35px; height: 35px; ${bgStyle} ${borderStyle} ${mutedStyle} font-weight: 500;">
+                                ${n}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="d-flex justify-content-between small px-1" style="${mutedStyle}">
+                        <span>Nada probable</span>
+                        <span>Muy probable</span>
+                    </div>`;
+            } else if (['single', 'multi', 'select'].includes(qType)) {
+                const rawOpts = q.querySelector('.question-options').value;
+                const opts = rawOpts.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+                if (opts.length === 0) {
+                    inputHTML = `<div class="fst-italic small p-2 border border-dashed rounded text-center" style="${bgStyle} ${borderStyle} ${mutedStyle}">Sin opciones definidas</div>`;
+                } else {
+                    if (qType === 'select') {
+                        inputHTML = `
+                            <select class="form-select" disabled style="${bgStyle} ${borderStyle} ${textStyle}">
+                                <option selected>Selecciona una opción...</option>
+                                ${opts.map(opt => `<option>${opt}</option>`).join('')}
+                            </select>`;
+                    } else {
+                        const inputType = qType === 'single' ? 'radio' : 'checkbox';
+                        // Forzar fondo y borde en modo noche
+                        const checkBg = isDarkMode ? 'background-color:#23272b !important;border-color:#666 !important;' : '';
+                        inputHTML = `<div class="d-flex flex-column gap-2">` + 
+                            opts.map((opt, i) => {
+                                const darkClass = isDarkMode ? 'dark-preview' : '';
+                                return `<div class="form-check p-2 border rounded" style="${bgStyle} ${borderStyle}">
+                                    <input class="form-check-input ms-1 ${darkClass}" type="${inputType}" disabled style="${bgStyle} ${borderStyle} ${checkBg}">
+                                    <label class="form-check-label w-100 ps-2" style="${textStyle}">${opt}</label>
+                                </div>`;
+                            }).join('') + 
+                        `</div>`;
+                    }
+                }
             }
-            card.innerHTML = `<div class="card-body"><h6 class="card-title fw-bold mb-3">${idx + 1}. ${qTitle} ${qReq ? '<span class="text-danger">*</span>' : ''}</h6>${inputHTML}</div>`;
+
+            card.innerHTML = `
+                <div class="card-body p-4">
+                    <h6 class="card-title fw-bold mb-3" style="${textStyle}">
+                        ${idx + 1}. ${qTitle} 
+                        ${qReq ? '<span class="text-danger" title="Obligatorio">*</span>' : ''}
+                    </h6>
+                    ${inputHTML}
+                </div>`;
+
             container.appendChild(card);
         });
     }

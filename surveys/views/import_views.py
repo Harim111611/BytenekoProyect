@@ -110,7 +110,7 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                     author=request.user,
                     title=survey_title,
                     description="Importación masiva desde CSV",
-                    status='active',
+                    status='closed',
                     is_imported=True
                 )
 
@@ -288,10 +288,21 @@ def csv_preview_view(request: HttpRequest, public_id: str = None) -> JsonRespons
 
         df = df.fillna("")
         columns_info = []
+        from surveys.utils.bulk_import import _infer_column_type
         for col in df.columns:
-            dtype = "text"
-            if pd.api.types.is_numeric_dtype(df[col]): dtype = "number"
-            columns_info.append({"name": col, "dtype": dtype, "display_name": col, "unique_values": 0})
+            # Tomar una muestra de hasta 50 valores no vacíos para inferir tipo
+            sample = [str(v) for v in df[col].values if v]
+            dtype = _infer_column_type(col, sample)
+            # Tomar hasta 10 valores únicos para mostrar en la columna 'Muestra'
+            sample_values = list({str(v) for v in df[col].values if v})[:10]
+            columns_info.append({
+                "name": col,
+                "dtype": dtype,
+                "type": dtype,
+                "display_name": col,
+                "unique_values": len(set(sample)),
+                "sample_values": sample_values
+            })
 
         return JsonResponse({
             "success": True,

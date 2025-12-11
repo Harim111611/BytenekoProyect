@@ -6,10 +6,13 @@ from django.views.generic.base import RedirectView
 from django.conf import settings
 
 from core import views as core_views
+from . import views_checkout
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("i18n/", include("django.conf.urls.i18n")),
+    # API Checkout global
+    path("api/create-checkout/basic/", views_checkout.create_checkout_basic, name="create_checkout_basic"),
 
     # Autenticación
     path(

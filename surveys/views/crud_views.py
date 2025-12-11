@@ -39,7 +39,7 @@ def api_create_survey_from_json(request):
         title = data.get('title') or 'Encuesta Publicada'
         description = data.get('description') or ''
         category = data.get('category') or 'General'
-        status = data.get('status') or Survey.STATUS_ACTIVE 
+        status = data.get('status') or Survey.STATUS_DRAFT 
         sample_goal = int(data.get('sample_goal', 0) or 0)
         
         questions_data = data.get('structure', []) # El JS envía la estructura en 'structure'

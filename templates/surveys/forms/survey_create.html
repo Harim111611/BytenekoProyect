@@ -28,6 +28,24 @@
         border-radius: 0.75rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
+
+    /* Vista previa: radios y checkboxes en modo noche */
+    body.dark-mode .form-check-input.dark-preview,
+    [data-bs-theme="dark"] .form-check-input.dark-preview {
+        background-color: #23272b !important;
+        border-color: #666 !important;
+        box-shadow: none !important;
+        filter: brightness(1.2) grayscale(0.2);
+    }
+    body.dark-mode .form-check-input.dark-preview:checked,
+    [data-bs-theme="dark"] .form-check-input.dark-preview:checked {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+    }
+    body.dark-mode .form-check-input.dark-preview:disabled,
+    [data-bs-theme="dark"] .form-check-input.dark-preview:disabled {
+        opacity: 0.7;
+    }
 </style>
 {% endblock %}
 
@@ -59,7 +77,6 @@
                     <div>
                         <h3 class="h6 mb-1 fw-semibold text-body-emphasis">Información básica</h3>
                         <p class="text-muted small mb-0">Nombre y categoría</p>
-                        {# El modal de eliminación estaba aquí. Se movió al final de la plantilla para evitar problemas de DOM/z-index. #}
                     </div>
                 </div>
             </div>
@@ -381,7 +398,7 @@
     </div>
 </div>
 
-{# MODAL DE ELIMINACIÓN (MOVIDO AL FINAL DEL CONTENIDO PRINCIPAL) #}
+{# MODAL DE ELIMINACIÓN #}
 <div class="modal fade" id="deleteTemplateModal" tabindex="-1" aria-labelledby="deleteTemplateModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -412,6 +429,7 @@
                         <option value="scale">Escala 1-10</option>
                         <option value="single">Opción única</option>
                         <option value="multi">Opción múltiple</option>
+                        <option value="select">Lista Desplegable</option>
                     </select>
                     <button type="button" class="btn btn-close btn-remove-question" aria-label="Eliminar"></button>
                 </div>
@@ -428,7 +446,7 @@
 
             <div class="options-container d-none bg-body-tertiary p-3 rounded">
                 <label class="small fw-bold text-muted mb-1">Opciones (separadas por coma)</label>
-                <input type="text" class="form-control question-options bg-body border-0" placeholder="Ej: Rojo, Verde, Azul">
+                <textarea class="form-control question-options bg-body border-0" rows="2" placeholder="Ej: Rojo, Verde, Azul"></textarea>
             </div>
         </div>
     </div>

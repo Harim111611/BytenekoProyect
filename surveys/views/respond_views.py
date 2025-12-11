@@ -21,10 +21,12 @@ logger = logging.getLogger("surveys")
 def respond_survey_view(request, public_id):
     """
     Vista pública para responder una encuesta.
-
-    Cambios implementados:
-    - Se genera 'logic_map' JSON para manejar preguntas condicionales en el template.
-    - Se pasa 'logic_map_json' al contexto.
+    
+    Mejoras implementadas:
+    - Validación estricta de lógica condicional en el servidor (Server-Side Logic).
+    - Prevención de inyección de datos en preguntas ocultas.
+    - Optimización de consultas SQL (prefetch_related).
+    - Atomicidad en la transacción de guardado.
     """
     try:
         # Optimizamos la query para traer preguntas y opciones en una sola vuelta
@@ -40,185 +42,175 @@ def respond_survey_view(request, public_id):
             status=404,
         )
 
-    # Encuesta no activa (cerrada, pausada, fuera de ventana, etc.)
+    # Verificar si la encuesta está activa (cerrada, pausada, fuera de ventana, etc.)
     if not PermissionHelper.verify_survey_is_active(survey):
         messages.warning(request, "Esta encuesta no está activa actualmente.")
         return redirect(
             f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
         )
 
-    # --- LÓGICA CONDICIONAL PARA EL FRONTEND (NUEVO) ---
-    # Construimos un mapa JSON para que JavaScript sepa qué ocultar/mostrar
-    questions = survey.questions.all().order_by('order')  # Asegurar orden
-    logic_map = {}
+    # --- PREPARACIÓN DE DATOS (Orden garantizado) ---
+    # Convertimos a lista para iterar sin re-consultar la BD
+    questions_list = list(survey.questions.all().order_by('order'))
     
-    for q in questions:
+    # Construimos el mapa lógico para el Frontend (JavaScript)
+    logic_map = {}
+    for q in questions_list:
         if q.depends_on:
             logic_map[q.id] = {
                 'parent_id': q.depends_on.id,
                 'trigger_option_id': q.visible_if_option.id if q.visible_if_option else None,
-                'condition': 'equals'  # Por defecto validamos igualdad de opción
+                'condition': 'equals'
             }
     
     context = {
         "survey": survey,
         "logic_map_json": json.dumps(logic_map) 
     }
-    # ----------------------------------------------------
 
     if request.method == "POST":
         try:
             with transaction.atomic():
-                # Usuario autenticado o respuesta anónima
+                # 1. Crear la cabecera de la respuesta
                 user_obj = request.user if request.user.is_authenticated else None
-
                 survey_response = SurveyResponse.objects.create(
                     survey=survey,
                     user=user_obj,
                     is_anonymous=(user_obj is None),
                 )
 
-                # Usamos la lista de preguntas ya cargada en memoria
-                questions_cached = list(questions)
-
-                # --- FASE 1: recolectar IDs de opciones seleccionadas ---
-                all_raw_option_ids = []
-                for q in questions_cached:
-                    field_name = f"pregunta_{q.id}"
-                    if q.type == "multi":
-                        all_raw_option_ids.extend(request.POST.getlist(field_name))
-                    elif q.type == "single":
-                        val = request.POST.get(field_name)
-                        if val:
-                            all_raw_option_ids.append(val)
-
-                # Traemos todas las opciones involucradas en una sola query
-                options_map = {
-                    str(op.id): op
-                    for op in AnswerOption.objects.filter(id__in=all_raw_option_ids)
+                # --- VALIDACIÓN DE LÓGICA DEL SERVIDOR (Evaluador Secuencial) ---
+                # Rastreamos qué opciones ha seleccionado el usuario para validar dependencias
+                # Formato: { question_id: selected_option_id }
+                user_selection_map = {}
+                
+                # Optimización: Recolectar todos los valores enviados para hacer una sola query de Opciones
+                all_post_values = []
+                for q in questions_list:
+                    # Buscamos tanto valores simples como listas (multi-select)
+                    raw_val = request.POST.get(f"pregunta_{q.id}")
+                    raw_list = request.POST.getlist(f"pregunta_{q.id}")
+                    if raw_val: all_post_values.append(raw_val)
+                    if raw_list: all_post_values.extend(raw_list)
+                
+                # Diccionario de opciones válidas traídas de la BD
+                valid_options_db = {
+                    str(opt.id): opt for opt in AnswerOption.objects.filter(id__in=all_post_values)
                 }
 
-                # --- FASE 2: crear QuestionResponse válidas ---
                 responses_to_create = []
 
-                for q in questions_cached:
-                    field = f"pregunta_{q.id}"
+                # Iteramos las preguntas EN ORDEN para respetar la cadena de dependencia lógica
+                for q in questions_list:
+                    
+                    # A. Verificar Visibilidad (Lógica Condicional)
+                    is_visible = True
+                    if q.depends_on:
+                        parent_selection = user_selection_map.get(q.depends_on.id)
+                        required_option = q.visible_if_option.id if q.visible_if_option else None
+                        
+                        # Si la selección de la pregunta padre no coincide con la requerida, ocultar.
+                        if parent_selection != required_option:
+                            is_visible = False
+                    
+                    # Si la pregunta está oculta por lógica, NO guardamos nada (aunque venga en el POST)
+                    if not is_visible:
+                        continue 
 
-                    # Nota: Aquí se podría validar logic_map para no guardar respuestas de preguntas ocultas.
-                    # Por robustez, procesamos lo que envía el formulario.
-
-                    # Selección múltiple
+                    # B. Procesar y Validar Respuesta
+                    field_name = f"pregunta_{q.id}"
+                    
+                    # Caso 1: Selección Múltiple
                     if q.type == "multi":
-                        raw_ids = request.POST.getlist(field)
+                        raw_ids = request.POST.getlist(field_name)
                         valid_texts = []
-
                         for rid in raw_ids:
-                            opt = options_map.get(str(rid))
+                            opt = valid_options_db.get(str(rid))
+                            # Validar que la opción pertenece a esta pregunta específica
                             if opt and opt.question_id == q.id:
                                 valid_texts.append(opt.text)
                             elif opt:
-                                logger.warning(
-                                    "Intento de inyección de opción %s ajena a pregunta %s",
-                                    rid,
-                                    q.id,
-                                )
-
+                                logger.warning(f"Intento de inyección: Opción {rid} no pertenece a pregunta {q.id}")
+                        
                         if valid_texts:
-                            responses_to_create.append(
-                                QuestionResponse(
+                            responses_to_create.append(QuestionResponse(
+                                survey_response=survey_response,
+                                question=q,
+                                text_value=",".join(valid_texts)
+                            ))
+
+                    # Caso 2: Selección Única
+                    elif q.type == "single":
+                        raw_id = request.POST.get(field_name)
+                        if raw_id:
+                            opt = valid_options_db.get(str(raw_id))
+                            if opt and opt.question_id == q.id:
+                                # Guardamos selección en el mapa para evaluar preguntas hijas futuras
+                                user_selection_map[q.id] = opt.id
+                                
+                                responses_to_create.append(QuestionResponse(
                                     survey_response=survey_response,
                                     question=q,
-                                    text_value=",".join(valid_texts),
-                                )
-                            )
+                                    selected_option=opt,
+                                    text_value=opt.text
+                                ))
 
-                    # Selección única
-                    elif q.type == "single":
-                        raw_id = request.POST.get(field)
-                        if raw_id:
-                            opt = options_map.get(str(raw_id))
-                            if opt and opt.question_id == q.id:
-                                responses_to_create.append(
-                                    QuestionResponse(
-                                        survey_response=survey_response,
-                                        question=q,
-                                        selected_option=opt, # Guardamos la FK para facilitar análisis
-                                        text_value=opt.text,
-                                    )
-                                )
-                            elif opt:
-                                logger.warning(
-                                    "Intento de inyección de opción %s ajena a pregunta %s",
-                                    raw_id,
-                                    q.id,
-                                )
-
-                    # Numérica
+                    # Caso 3: Numérico
                     elif q.type == "numeric":
-                        val = request.POST.get(field)
+                        val = request.POST.get(field_name)
                         if val not in (None, ""):
                             try:
                                 if getattr(q, "allow_decimal", False):
                                     validated = ResponseValidator.validate_decimal_response(val)
+                                    # Guardamos como float o int según corresponda la lógica de negocio, aquí int simplificado
+                                    num_val = int(float(validated))
                                 else:
                                     validated = ResponseValidator.validate_numeric_response(val)
-
-                                responses_to_create.append(
-                                    QuestionResponse(
-                                        survey_response=survey_response,
-                                        question=q,
-                                        numeric_value=int(validated),
-                                    )
-                                )
-                            except ValidationError:
-                                pass # Ignoramos valores inválidos
-
-                    # Texto libre / otros tipos
-                    else:
-                        val = request.POST.get(field)
-                        validated = ResponseValidator.validate_text_response(val)
-                        if validated:
-                            responses_to_create.append(
-                                QuestionResponse(
+                                    num_val = int(validated)
+                                    
+                                responses_to_create.append(QuestionResponse(
                                     survey_response=survey_response,
                                     question=q,
-                                    text_value=validated,
-                                )
-                            )
+                                    numeric_value=num_val
+                                ))
+                            except (ValidationError, ValueError):
+                                pass # Ignoramos valores numéricos inválidos
 
-                # Bulk insert de respuestas
+                    # Caso 4: Texto libre / Escala / Otros
+                    else:
+                        val = request.POST.get(field_name)
+                        validated = ResponseValidator.validate_text_response(val)
+                        if validated:
+                            responses_to_create.append(QuestionResponse(
+                                survey_response=survey_response,
+                                question=q,
+                                text_value=validated
+                            ))
+
+                # Insert masivo de respuestas validadas
                 QuestionResponse.objects.bulk_create(responses_to_create)
 
-                # --- Auto pausa por meta de respuestas -------------------------
+                # --- LÓGICA DE META DE MUESTRA (Auto-Pausa) ---
                 original_status = survey.status
-                if getattr(survey, "sample_goal", 0) and survey.sample_goal > 0:
-                    total_responses = SurveyResponse.objects.filter(survey=survey).count()
-
-                    if (
-                        total_responses >= survey.sample_goal
-                        and survey.status == Survey.STATUS_ACTIVE
-                    ):
+                if survey.sample_goal > 0 and survey.status == Survey.STATUS_ACTIVE:
+                    # Contamos de nuevo para asegurar consistencia
+                    current_count = SurveyResponse.objects.filter(survey=survey).count()
+                    if current_count >= survey.sample_goal:
                         survey.status = Survey.STATUS_PAUSED
                         survey.save(update_fields=["status"])
-                        logger.info(
-                            "Encuesta %s pausada automáticamente al alcanzar la meta de %s respuestas",
-                            survey.id,
-                            survey.sample_goal,
-                        )
+                        logger.info(f"Encuesta {survey.id} pausada automáticamente. Meta: {survey.sample_goal}")
 
-                logger.info("Respuesta registrada encuesta %s", survey.id)
+                logger.info(f"Respuesta registrada exitosamente para encuesta {survey.id}")
 
-                # Mantenemos el status original para el mensaje de éxito
-                final_status = original_status
-                
+                # Redirección final
                 return redirect(
                     f"{reverse('surveys:thanks')}?"
-                    f"public_id={survey.public_id}&status={final_status}&success=1"
+                    f"public_id={survey.public_id}&status={original_status}&success=1"
                 )
 
         except Exception as e:
-            logger.exception("Error respondiendo encuesta %s: %s", public_id, e)
+            logger.exception(f"Error crítico respondiendo encuesta {public_id}: {e}")
             messages.error(request, "Error guardando respuesta. Intenta nuevamente.")
 
-    # GET → mostrar formulario con el contexto actualizado
+    # GET → Renderizar formulario
     return render(request, "surveys/responses/fill.html", context)

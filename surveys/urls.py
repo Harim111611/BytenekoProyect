@@ -3,6 +3,7 @@ from django.urls import path
 # Importamos las vistas
 from .views import import_views, report_views, respond_views, question_views
 from .views import crud_views, template_views
+from .views import checkout_views
 from .views.crud_views import (
     SurveyListView,
     SurveyCreateView,
@@ -12,6 +13,7 @@ from .views.crud_views import (
     bulk_delete_surveys_view,
     legacy_survey_redirect_view,
 )
+from surveys.views_preview import import_csv_preview_view
 
 app_name = "surveys"
 
@@ -23,7 +25,7 @@ urlpatterns = [
     path('<str:public_id>/import/start/', import_views.csv_upload_start_import, name='survey_import_start'),
     
     # 2. Crear NUEVA encuesta desde CSV (Listado) - SOLUCIONA EL ERROR NoReverseMatch
-    path('import/new/preview/', import_views.csv_create_preview_view, name='import_preview'), 
+    path('import/new/preview/', import_csv_preview_view, name='import_preview'),
     path('import/new/start/', import_views.csv_create_start_import, name='import_survey_csv_async'), # Mantenemos el nombre que busca el template
     
     # 3. Polling de Estado (Para ambos casos)
@@ -36,6 +38,7 @@ urlpatterns = [
     # API endpoints for survey templates
     path("templates/list/", template_views.list_templates, name="template_list"),
     path("templates/create/", template_views.create_template, name="template_create"),
+    path("templates/<int:template_id>/delete/", template_views.delete_template, name="template_delete"),
     # =================================================
     path("", SurveyListView.as_view(), name="list"),
     path("create/", SurveyCreateView.as_view(), name="create"),
@@ -59,6 +62,9 @@ urlpatterns = [
     
     # Resultados
     path("<str:public_id>/results/", report_views.survey_results_view, name="results"),
+        # =================================================
+        # CHECKOUT API
+        path("api/create-checkout/basic/", checkout_views.create_checkout_basic, name="create_checkout_basic"),
     path("<str:public_id>/results/debug/", report_views.debug_analysis_view, name="results_debug"),
     path("<str:public_id>/export/", report_views.export_survey_csv_view, name="export_csv"),
     path("<str:public_id>/api/crosstab/", report_views.api_crosstab_view, name="api_crosstab"),

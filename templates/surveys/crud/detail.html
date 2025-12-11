@@ -80,6 +80,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script>
+function mostrarModalPublicacion() {
+    var modalEl = document.getElementById('publicarEncuestaModal');
+    var modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+function publicarEncuesta(modo) {
+    // modo: 'draft' o 'active'
+    if (modo === 'active') {
+        if (!confirm('¿Estás seguro? Una vez activa, la encuesta no podrá modificarse.')) {
+            return;
+        }
+    }
+    fetch('/surveys/{{ survey.public_id }}/change-status/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({ status: modo })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error al cambiar estado: ' + (data.error || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error al cambiar el estado de la encuesta');
+    });
+}
+</script>
 {% endblock %}
 
 {% block app_content %}
@@ -90,6 +126,46 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="modal fade" id="goalReachedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content text-center shadow-lg border-0">
+        <!-- Modal para elegir estado de publicación -->
+        <div class="modal fade" id="publicarEncuestaModal" tabindex="-1" aria-labelledby="publicarEncuestaModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header bg-info-subtle border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="publicarEncuestaModalLabel">
+                            ¿Cómo deseas publicar la encuesta?
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-warning border-warning mb-3">
+                            <strong>Si eliges "Activa":</strong>
+                            <ul class="mb-0 small">
+                                <li>No podrás modificar las preguntas existentes</li>
+                                <li>No podrás agregar nuevas preguntas</li>
+                                <li>No podrás eliminar preguntas</li>
+                                <li>El título y descripción seguirán siendo editables</li>
+                            </ul>
+                        </div>
+                        <p class="mb-0">Puedes publicar en modo <strong>Borrador</strong> para seguir editando la encuesta, o en modo <strong>Activa</strong> para comenzar a recibir respuestas inmediatamente.</p>
+                    </div>
+                    <div class="modal-footer border-top-0 bg-body-tertiary">
+                        <button type="button" class="btn btn-secondary" onclick="publicarEncuesta('draft')">
+                            <i class="bi bi-file-earmark-text me-2"></i>Publicar en Borrador
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="publicarEncuesta('active')">
+                            <i class="bi bi-check-lg me-2"></i>Publicar en Activa
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón para mostrar el modal -->
+        <div class="text-center my-4">
+            <button type="button" class="btn btn-primary btn-lg" onclick="mostrarModalPublicacion()">
+                <i class="bi bi-upload me-2"></i>Finalizar y Publicar Encuesta
+            </button>
+        </div>
                 <div class="modal-header bg-success text-white justify-content-center border-0">
                     <h5 class="modal-title fw-bold">🎉 ¡Meta Conseguida!</h5>
                 </div>
