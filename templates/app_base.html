@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block styles %}
+    {# CSS Principal Unificado #}
     <link rel="stylesheet" href="{% static 'css/byteneko.css' %}">
     {% block page_styles %}{% endblock %}
 {% endblock %}
@@ -9,10 +10,10 @@
 {% block content %}
 
     {# --- BOTÓN HAMBURGUESA PARA MÓVIL --- #}
-    {# Se aumentó z-index a 1035 para estar por encima de overlays estándar pero debajo del sidebar #}
-    <button class="btn btn-sm btn-icon d-lg-none position-fixed top-0 start-0 m-3" 
+    {# Ahora usa la clase .mobile-toggle-btn definida en CSS para z-index y colores #}
+    <button class="btn btn-sm btn-icon d-lg-none position-fixed top-0 start-0 m-3 mobile-toggle-btn" 
             id="sidebarToggleBtn" 
-            style="background: var(--sidebar-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 1035;">
+            aria-label="Abrir menú">
         <i class="bi bi-list" style="font-size: 1.5rem;"></i>
     </button>
 
@@ -26,7 +27,7 @@
                 <span class="fs-5 fw-bold text-body">Byteneko</span>
             </div>
             {# Botón cerrar en móvil #}
-            <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn">
+            <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn" aria-label="Cerrar menú">
                 <i class="bi bi-x-lg"></i>
             </button>
         </div>
@@ -56,19 +57,19 @@
 
         <div class="app-sidebar-footer">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="rounded-circle bg-secondary text-body d-flex align-items-center justify-content-center"
+                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
                      style="width: 40px; height: 40px; font-weight: 500;">
                     {{ request.user.username|first|upper }}
                 </div>
-                <div>
-                    <h6 class="mb-0 fw-bold">{{ request.user.username }}</h6>
-                    <small class="text-muted">Plan Básico</small>
+                <div class="overflow-hidden">
+                    <h6 class="mb-0 fw-bold text-truncate">{{ request.user.username }}</h6>
+                    <small class="text-muted d-block text-truncate">Plan Básico</small>
                 </div>
             </div>
 
             <form method="post" action="{% url 'logout' %}" class="w-100">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-secondary w-100">
+                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
                     <i class="bi bi-box-arrow-left me-2"></i>
                     Cerrar Sesión
                 </button>
@@ -81,12 +82,13 @@
         {% endblock %}
     </main>
 
+    {# Modal de carga reutilizable #}
     <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 bg-transparent shadow-none">
                 <div class="modal-body text-center">
                     <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
-                    <div class="mt-3"><strong>Cargando resultados...</strong></div>
+                    <div class="mt-3 text-white text-shadow"><strong>Cargando...</strong></div>
                 </div>
             </div>
         </div>
@@ -95,68 +97,58 @@
 {% endblock %}
 
 {% block scripts %}
-    {# --- LÓGICA UNIFICADA DE LA UI DE LA APP --- #}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Lógica del Sidebar Móvil (Corregida: Solo se declara una vez)
+            // 1. Lógica del Sidebar Móvil
             const toggleBtn = document.getElementById('sidebarToggleBtn');
             const closeBtn = document.getElementById('sidebarCloseBtn');
             const overlay = document.getElementById('sidebarOverlay');
             const body = document.body;
 
-            function toggleSidebar() { body.classList.toggle('sidebar-open'); }
-            function closeSidebar() { body.classList.remove('sidebar-open'); }
+            // Función unificada para cerrar el sidebar
+            function closeSidebar() {
+                body.classList.remove('sidebar-open');
+            }
+
+            // Función para abrir/cerrar
+            function toggleSidebar() {
+                body.classList.toggle('sidebar-open');
+            }
 
             if(toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
             if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
             if(overlay) overlay.addEventListener('click', closeSidebar);
 
-            // 2. Gestión del Modal Loader (Si quedó abierto por cache de navegación)
-            var modalEl = document.getElementById('globalResultsLoaderModal');
-            if (modalEl && modalEl.classList.contains('show')) {
-                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-                modal.hide();
+            // Cerrar sidebar al hacer click en un link (UX móvil)
+            if (window.innerWidth < 992) {
+                const navLinks = document.querySelectorAll('.nav-item-button');
+                navLinks.forEach(link => {
+                    link.addEventListener('click', closeSidebar);
+                });
             }
 
-            // 3. Persistencia del Tema (Dark Mode)
+            // 2. Persistencia del Tema
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
                         const newTheme = document.documentElement.getAttribute('data-bs-theme');
                         document.cookie = `theme=${newTheme}; path=/; max-age=31536000; SameSite=Lax`;
                         
-                        // Recarga forzada solo en vistas críticas de gráficos
-                        if (window.location.pathname.includes('/results/') || window.location.pathname.includes('/dashboard/')) {
-                            setTimeout(() => window.location.reload(), 300);
+                        // Recarga suave para gráficos si es necesario
+                        if (document.querySelector('canvas') || window.location.pathname.includes('/results/')) {
+                            // Opcional: recargar si los gráficos no reaccionan al CSS variable
+                            // window.location.reload(); 
                         }
                     }
                 });
             });
             observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
             
-            // Inicialización de cookie si no existe
+            // Cookie inicial
             if (!document.cookie.includes('theme=')) {
                 const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
                 document.cookie = `theme=${currentTheme}; path=/; max-age=31536000; SameSite=Lax`;
             }
         });
-
-        // 4. Interceptor de navegación para mostrar Loader
-        document.addEventListener('click', function(e) {
-            var el = e.target.closest && e.target.closest('a.show-results-loader');
-            if (!el) return;
-            
-            try {
-                // Solo prevenimos default si vamos a mostrar el loader
-                e.preventDefault();
-                var href = el.href;
-                var modalEl = document.getElementById('globalResultsLoaderModal');
-                var modal = modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-                if (modal) modal.show();
-                setTimeout(function() { window.location.href = href; }, 80);
-            } catch (err) {
-                window.location.href = el.href;
-            }
-        }, { capture: true });
     </script>
 {% endblock %}

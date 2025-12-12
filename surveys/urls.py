@@ -62,11 +62,16 @@ urlpatterns = [
     
     # Resultados
     path("<str:public_id>/results/", report_views.survey_results_view, name="results"),
-        # =================================================
-        # CHECKOUT API
-        path("api/create-checkout/basic/", checkout_views.create_checkout_basic, name="create_checkout_basic"),
+    
+    # =================================================
+    # CHECKOUT API
+    path("api/create-checkout/basic/", checkout_views.create_checkout_basic, name="create_checkout_basic"),
+    
     path("<str:public_id>/results/debug/", report_views.debug_analysis_view, name="results_debug"),
-    path("<str:public_id>/export/", report_views.export_survey_csv_view, name="export_csv"),
+    
+    # --- CORRECCIÓN AQUÍ: Cambiado name="export_csv" a name="export" ---
+    path("<str:public_id>/export/", report_views.export_survey_csv_view, name="export"),
+    
     path("<str:public_id>/api/crosstab/", report_views.api_crosstab_view, name="api_crosstab"),
     
     # Detalle (Al final)

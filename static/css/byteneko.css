@@ -1,6 +1,6 @@
 /* ============================================================
    BYTENEKO DESIGN SYSTEM — DEFINITIVE EDITION
-   Version: 2.0 (Responsive & Dark Mode Optimized)
+   Version: 3.0 (Unified & Optimized)
    ============================================================ */
 
 /* ------------------------------------------------------------
@@ -11,11 +11,12 @@
     --sidebar-width: 280px;
     --header-height: 70px;
     
-    /* Z-Index Layers (Crucial para móviles) */
+    /* Z-Index Layers */
+    --z-bulk-actions: 1030;
+    --z-mobile-toggle: 1035; /* Botón hamburguesa */
     --z-overlay: 1040;
     --z-sidebar: 1050;
     --z-toast: 1060;
-    --z-bulk-actions: 1030;
 
     /* Colores Base (Modo Claro) */
     --bk-body-bg: #F5F7FA;
@@ -26,11 +27,11 @@
     --bk-text-primary: #1B1D21;
     --bk-text-secondary: #6B7281;
 
-    /* Sidebar */
+    /* Sidebar & Nav */
     --sidebar-bg: #FFFFFF;
     --sidebar-border: #E5E7EB;
     --sidebar-item-hover: #F3F4F6;
-    --sidebar-item-active-bg: rgba(79, 70, 229, 0.1); /* Primary con opacidad */
+    --sidebar-item-active-bg: rgba(79, 70, 229, 0.1);
     --sidebar-item-active-text: #4F46E5;
 
     /* Brand Colors (Indigo/Primary) */
@@ -41,11 +42,10 @@
 
 /* ------------------------------------------------------------
    2. MODO OSCURO (DARK MODE)
-   Overrides automáticos basados en data-bs-theme="dark"
    ------------------------------------------------------------ */
 [data-bs-theme="dark"] {
     /* Base Dark */
-    --bk-body-bg: #0D1117; /* GitHub Dark Dimmed style */
+    --bk-body-bg: #0D1117;
     --bk-card-bg: #161B22;
     --bk-card-border: #30363D;
 
@@ -57,333 +57,216 @@
     --sidebar-bg: #0D1117;
     --sidebar-border: #30363D;
     --sidebar-item-hover: #21262D;
-    --sidebar-item-active-bg: rgba(56, 139, 253, 0.15);
+    --sidebar-item-active-bg: rgba(88, 166, 255, 0.15);
     --sidebar-item-active-text: #58A6FF;
 
-    /* Bootstrap Overrides para consistencia */
+    /* Bootstrap Overrides */
     --bs-body-bg: var(--bk-body-bg);
     --bs-body-color: var(--bk-text-primary);
     --bs-border-color: var(--bk-card-border);
-    --bs-primary: #58A6FF; /* Azul más brillante para dark mode */
+    --bs-primary: #58A6FF;
 }
 
 /* ------------------------------------------------------------
-   3. ESTILOS BASE & UTILIDADES
+   3. ESTILOS BASE
    ------------------------------------------------------------ */
 body {
     background-color: var(--bk-body-bg);
     color: var(--bk-text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 a { text-decoration: none; }
 
-/* Utilidad para inputs personalizados (Usado en Forms) */
-.form-input-custom {
-    background-color: var(--bs-tertiary-bg);
-    border: 1px solid transparent;
-    transition: all 0.2s;
-}
-/* static/css/byteneko.css */
-
-/* --- TEMA GENERAL --- */
-body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-color: #f4f6f9; /* Fondo gris muy suave para contraste */
-}
-
-/* --- TARJETAS (Card Design) --- */
-.analysis-card {
-    background: #ffffff;
-    border: 1px solid rgba(226, 232, 240, 0.8) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    overflow: hidden;
-    position: relative;
+/* ------------------------------------------------------------
+   4. LAYOUT PRINCIPAL (Sidebar & Content)
+   ------------------------------------------------------------ */
+/* Sidebar Container */
+.app-sidebar {
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: var(--z-sidebar);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, border 0.2s;
 }
 
-.analysis-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.1) !important;
-    border-color: rgba(59, 130, 246, 0.3) !important;
+/* Sidebar Header */
+.app-sidebar-logo {
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    min-height: var(--header-height);
 }
 
-.card-header-clean {
-    padding: 1.25rem 1.5rem 0.5rem;
-    background: transparent;
-    border: none;
-}
-
-.card-body-clean {
-    padding: 0.5rem 1.5rem 1.25rem;
+/* Sidebar Nav */
+.app-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1rem;
+    overflow-y: auto;
     flex-grow: 1;
 }
 
-.card-footer-clean {
-    padding: 1rem 1.5rem;
-    background: #f8fafc;
-    border-top: 1px solid #f1f5f9;
-}
-
-/* --- TIPOGRAFÍA Y BADGES --- */
-.metric-big {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #1e293b;
-    line-height: 1;
-}
-
-.metric-label {
-    font-size: 0.75rem;
-    color: #64748b;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-/* Badges "Soft" */
-.badge-soft {
-    padding: 0.35em 0.65em;
-    font-size: 0.75em;
-    font-weight: 600;
-    border-radius: 6px;
-    display: inline-block;
-}
-
-.badge-soft-primary { background-color: #eff6ff; color: #3b82f6; }
-.badge-soft-success { background-color: #f0fdf4; color: #16a34a; }
-.badge-soft-warning { background-color: #fefce8; color: #ca8a04; }
-.badge-soft-danger  { background-color: #fef2f2; color: #dc2626; }
-.badge-soft-gray    { background-color: #f1f5f9; color: #64748b; }
-
-/* --- CAJA DE NARRATIVA --- */
-.insight-box {
-    position: relative;
-    padding-left: 12px;
-    font-size: 0.9rem;
-    color: #475569;
-    line-height: 1.5;
-}
-
-.insight-box::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 4px;
-    bottom: 4px;
-    width: 3px;
-    background: linear-gradient(to bottom, #3b82f6, #8b5cf6);
-    border-radius: 2px;
-}
-
-.insight-icon {
-    font-size: 1rem;
-    margin-right: 6px;
-    color: #8b5cf6;
-}
-
-/* --- ELEMENTOS GRÁFICOS --- */
-.progress-slim {
-    height: 8px;
-    border-radius: 4px;
-    background-color: #e2e8f0;
-    overflow: hidden;
-}
-
-.tag-cloud-item {
-    background-color: #fff;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    display: inline-block;
-    margin: 2px;
-}
-    margin-right: 0.75rem;
-}
-
+/* Sidebar Footer */
 .app-sidebar-footer {
     padding: 1rem;
     border-top: 1px solid var(--sidebar-border);
     background-color: var(--sidebar-bg);
 }
 
+/* Main Content Area */
 .app-content {
     margin-left: var(--sidebar-width);
     min-height: 100vh;
-    transition: margin-left 0.3s ease;
+    padding-top: 1rem;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* --- Responsive Behavior (Mobile < 992px) --- */
+/* Botón Hamburguesa Móvil (Estilizado por clase) */
+.mobile-toggle-btn {
+    background: var(--sidebar-bg) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    z-index: var(--z-mobile-toggle);
+    border: 1px solid var(--sidebar-border);
+    color: var(--bk-text-primary);
+}
+
+/* Overlay para Móvil */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-overlay);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(2px);
+}
+
+/* ------------------------------------------------------------
+   5. NAVEGACIÓN (Items del Menú)
+   ------------------------------------------------------------ */
+.nav-item-button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    color: var(--bk-text-primary);
+    background: transparent;
+    font-weight: 500;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+}
+
+.nav-item-button i {
+    font-size: 1.25rem;
+    opacity: 0.75;
+    transition: opacity 0.2s;
+}
+
+.nav-item-button:hover {
+    background: var(--sidebar-item-hover);
+    color: var(--bk-primary);
+}
+
+.nav-item-button:hover i {
+    opacity: 1;
+}
+
+.nav-item-button.active {
+    background: var(--sidebar-item-active-bg);
+    color: var(--sidebar-item-active-text);
+}
+
+.nav-item-button.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 15%;
+    bottom: 15%;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--bk-primary);
+}
+
+/* ------------------------------------------------------------
+   6. RESPONSIVE BEHAVIOR (Mobile < 992px)
+   ------------------------------------------------------------ */
 @media (max-width: 991.98px) {
+    /* Ocultar sidebar por defecto desplazándolo a la izquierda */
     .app-sidebar {
-        transform: translateX(-100%); /* Oculto por defecto en móvil */
+        width: 85vw; /* Más ancho en móvil para mejor UX */
+        max-width: 320px;
+        transform: translateX(-100%); 
     }
 
+    /* Content ocupa todo el ancho */
     .app-content {
-        margin-left: 0; /* Contenido ocupa todo el ancho */
+        margin-left: 0;
     }
 
-    /* Estado Abierto (activado por JS) */
+    /* ESTADO ABIERTO (Activado por JS) */
     body.sidebar-open .app-sidebar {
         transform: translateX(0);
         box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-    }
-
-    /* Overlay oscuro para fondo en móvil */
-    .sidebar-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: var(--z-overlay);
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-        backdrop-filter: blur(2px);
     }
 
     body.sidebar-open .sidebar-overlay {
         opacity: 1;
         visibility: visible;
     }
+    
+    /* Prevenir scroll en el body cuando el menú está abierto */
+    body.sidebar-open {
+        overflow: hidden;
+    }
 }
 
 /* ------------------------------------------------------------
-   5. CARDS & COMPONENTES DASHBOARD
+   7. COMPONENTES DE UI (Cards, Badges, Loaders)
    ------------------------------------------------------------ */
-.card {
+
+/* Tarjetas */
+.card, .analysis-card {
     background-color: var(--bk-card-bg);
-    border: 1px solid var(--bk-card-border);
+    border: 1px solid var(--bk-card-border) !important;
     border-radius: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
-.icon-square {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    font-size: 1.5rem;
-}
-
-/* Efectos Hover Unificados */
-.hover-lift, 
-.mini-stat-card, 
-.quick-action-card, 
-.survey-card {
+.hover-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.hover-lift:hover, 
-.mini-stat-card:hover, 
-.quick-action-card:hover, 
-.survey-card:hover {
+.hover-lift:hover {
     transform: translateY(-4px);
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
     border-color: var(--bk-primary) !important;
 }
 
-/* Link con animación de subrayado */
-.hover-underline-animation {
-    display: inline-block;
-    position: relative;
-}
-.hover-underline-animation::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    transform: scaleX(0);
-    height: 2px;
-    bottom: 0;
-    left: 0;
-    background-color: var(--bk-primary);
-    transform-origin: bottom right;
-    transition: transform 0.25s ease-out;
-}
-.hover-underline-animation:hover::after {
-    transform: scaleX(1);
-    transform-origin: bottom left;
-}
-
-/* ------------------------------------------------------------
-   6. LISTAS & ACCIONES MASIVAS
-   ------------------------------------------------------------ */
-.search-input:focus {
-    box-shadow: none;
-    background-color: var(--bk-card-bg) !important;
-}
-
-/* Barra Flotante de Acciones Masivas */
-.bulk-actions-bar-custom {
-    position: fixed;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: var(--z-bulk-actions);
-    width: 90%;
-    max-width: 800px;
-    border-radius: 50rem;
-    padding: 0.75rem 1.5rem;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(0,0,0,0.1);
-    animation: slideUp 0.3s ease-out;
-    background: #fff;
-    color: #000;
-}
-
-[data-bs-theme="dark"] .bulk-actions-bar-custom {
-    background: #1F2937; /* Gris oscuro para contraste */
-    color: #fff;
-    border-color: #374151;
-}
-
-@keyframes slideUp {
-    from { transform: translate(-50%, 100%); opacity: 0; }
-    to { transform: translate(-50%, 0); opacity: 1; }
-}
-
-/* Botón de selección en cards */
-.survey-select-btn {
-    background: var(--bk-card-bg);
-    transition: all 0.2s;
-}
-.survey-select-btn.selected {
-    background: var(--bk-primary);
-    border-color: var(--bk-primary) !important;
-    color: white;
-}
-
-/* ------------------------------------------------------------
-   7. LOGIN PAGE
-   ------------------------------------------------------------ */
-.login-container {
-    min-height: 100vh;
-}
-.card-login-form {
-    border: none;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-    border-radius: 1.5rem;
-}
-[data-bs-theme="dark"] .card-login-form {
-    background-color: var(--bk-card-bg);
-    border: 1px solid var(--bk-card-border);
-}
-.link-accent {
-    color: var(--bk-primary);
-    text-decoration: none;
+/* Badges */
+.badge-soft {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
     font-weight: 600;
-}
-.link-accent:hover {
-    text-decoration: underline;
+    border-radius: 6px;
 }
 
-/* ------------------------------------------------------------
-   8. ANIMACIONES & LOADERS
-   ------------------------------------------------------------ */
+/* Loaders & Animaciones */
 @keyframes float {
     0% { transform: translateY(0px); }
     50% { transform: translateY(-10px); }
@@ -393,20 +276,19 @@ body {
     animation: float 4s ease-in-out infinite;
 }
 
-/* Walking Cat Loader (Usado en el CSS anterior, mantenido por estilo) */
-.walking-cat {
+/* Theme Switcher Options */
+.theme-option {
     display: inline-block;
-    width: 64px;
-    height: 64px;
-    background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48ZGVmcz48c3R5bGU+LmNhdCB7IGZpbGw6ICMwZjE3MmE7IH0uZXllIHsgZmlsbDogI2ZiYmYyNDsgfTwvc3R5bGU+PC9kZWZzPjxnIGlkPSJmcmFtZTEiPjxyZWN0IGNsYXNzPSJjYXQiIHg9IjMyIiB5PSIzMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4IiByeD0iOCIvPjxyZWN0IGNsYXNzPSJjYXQiIHg9IjE2IiB5PSIxNiIgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iOCIvPjxwb2x5Z29uIGNsYXNzPSJjYXQiIHBvaW50cz0iMjAsMTYgMjgsMTYgMjQsOCIvPjxwb2x5Z29uIGNsYXNzPSJjYXQiIHBvaW50cz0iNTIsMTYgNjAsMTYgNTYsOCIvPjxjaXJjbGUgY2xhc3M9ImV5ZSIgY3g9IjMyIiBjeT0iMzYiIHI9IjQiLz48Y2lyY2xlIGNsYXNzPSJleWUiIGN4PSI0OCIgY3k9IjM2IiByPSI0Ii8+PHJlY3QgY2xhc3M9ImNhdCIgeD0iNDAiIHk9Ijc2IiB3aWR0aD0iOCIgaGVpZ2h0PSIyNCIgcng9IjQiLz48cmVjdCBjbGFzcz0iY2F0IiB4PSI3MiIgeT0iODAiIHdpZHRoPSI4IiBoZWlnaHQ9IjIwIiByeD0iNCIvPjxwYXRoIGNsYXNzPSJjYXQiIGQ9Ik05Niw1NiBRMTEyLDU2IDExMiw0MCBRMTEyLDI0IDEwNCwyNCIgc3Ryb2tlLXdpZHRoPSI4IiBmaWxsPSJub25lIiBzdHJva2U9IiMwZjE3MmEiLz48L2c+PC9zdmc=') no-repeat center;
-    background-size: contain;
-    animation: walkCycle 0.8s steps(4) infinite;
+    padding: 0.5rem 1rem;
+    margin: 0.25rem;
+    border-radius: 8px;
+    background: var(--bk-card-bg);
+    border: 1px solid var(--bk-card-border);
+    cursor: pointer;
+    transition: all 0.2s;
 }
-@keyframes walkCycle {
-    0% { background-position: 0 0; }
-    100% { background-position: -256px 0; }
-}
-
-[data-bs-theme="dark"] .walking-cat {
-    filter: invert(1) brightness(2); /* Gato blanco en modo oscuro */
+.theme-option.active {
+    background: var(--sidebar-item-active-bg);
+    color: var(--sidebar-item-active-text);
+    border-color: var(--bk-primary);
 }

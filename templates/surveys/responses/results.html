@@ -2,252 +2,551 @@
 {% load static humanize %}
 
 {% block app_content %}
-<div class="container-fluid bg-light min-vh-100 p-4 p-md-5">
+{# --- ESTILOS: BYTENEKO DATA STUDIO (ULTRA) --- #}
+<style>
+    :root {
+        --bk-body-bg: #f8fafc;
+        --bk-text-primary: #1e293b;
+        --bk-text-secondary: #64748b;
+        --bk-card-bg: #ffffff;
+        --bk-card-border: rgba(226, 232, 240, 0.8);
+        --bk-primary: #6366f1;
+        --bk-accent: #ec4899;
+        --bk-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --bk-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --bk-glass-bg: rgba(255, 255, 255, 0.95);
+        --bk-glass-border: rgba(255, 255, 255, 0.5);
+    }
+
+    [data-theme="dark"], .dark {
+        --bk-body-bg: #0f172a;
+        --bk-text-primary: #f1f5f9;
+        --bk-text-secondary: #94a3b8;
+        --bk-card-bg: #1e293b;
+        --bk-card-border: rgba(51, 65, 85, 0.5);
+        --bk-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+        --bk-shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+        --bk-glass-bg: rgba(30, 41, 59, 0.95);
+        --bk-glass-border: rgba(255, 255, 255, 0.05);
+    }
+
+    .dashboard-container {
+        background: var(--bk-body-bg);
+        color: var(--bk-text-primary);
+        min-height: 100vh;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Inputs & Controls */
+    .form-control, .form-select {
+        background-color: var(--bk-card-bg);
+        color: var(--bk-text-primary);
+        border: 1px solid var(--bk-card-border);
+        font-size: 0.95rem;
+        border-radius: 0.5rem;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--bk-primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    /* Interactive Cards */
+    .hover-card {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+        will-change: transform;
+        border: 1px solid var(--bk-card-border) !important;
+    }
+    .hover-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--bk-shadow-lg) !important;
+        border-color: var(--bk-primary) !important;
+    }
+
+    /* Chart Surfaces */
+    .chart-surface {
+        position: relative;
+        border-radius: 1rem;
+        border: 1px solid var(--bk-card-border);
+        background: var(--bk-card-bg);
+        overflow: hidden;
+    }
+    .chart-pad {
+        position: relative;
+        padding: 1.25rem;
+        z-index: 1;
+    }
+
+    /* Crosstab Table */
+    .table-container-scroll {
+        max-height: 600px;
+        overflow-y: auto;
+        overflow-x: auto;
+        position: relative;
+    }
+    .sticky-col-head {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: var(--bk-glass-bg) !important;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 1px 0 var(--bk-card-border);
+    }
+    .sticky-col-first {
+        position: sticky;
+        left: 0;
+        z-index: 11;
+        background-color: var(--bk-card-bg);
+        border-right: 1px solid var(--bk-card-border);
+    }
+    thead th.sticky-col-first { z-index: 12; }
+
+    .data-bar-bg {
+        position: absolute;
+        top: 15%; bottom: 15%; left: 0.5rem;
+        border-radius: 0.25rem;
+        opacity: 0.15;
+        z-index: -1;
+        background-color: currentColor;
+        transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        min-width: 2px;
+    }
+</style>
+
+<div class="container-fluid p-4 p-md-5 dashboard-container">
     
-    {# HEADER #}
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-5">
+    {# --- HEADER --- #}
+    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center mb-5 gap-4">
         <div>
-            <h1 class="display-6 fw-bold text-dark mb-1">{{ survey.title }}</h1>
-            <p class="text-muted mb-0">
-                <i class="bi bi-bar-chart-line-fill me-1"></i> Dashboard Inteligente &bull; 
-                <span class="fw-medium text-dark">{{ total_respuestas|intcomma }}</span> respuestas
+            <div class="d-flex align-items-center mb-3">
+                <span class="badge rounded-pill px-3 py-2 fw-bold me-2" 
+                      style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                    <i class="bi bi-pie-chart-fill me-1"></i> Data Studio
+                </span>
+                <span class="small text-uppercase fw-bold text-muted ls-1">Resultados en Tiempo Real</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-1 ls-tight" style="color: var(--bk-text-primary);">{{ survey.title }}</h1>
+            <p class="mb-0 fs-5 text-muted">
+                Base total: <span class="fw-bold text-primary">{{ total_respuestas|intcomma }}</span> respuestas analizadas
             </p>
         </div>
-        <div class="d-flex gap-2 mt-3 mt-md-0">
-            <button class="btn btn-white border shadow-sm text-dark fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse">
-                <i class="bi bi-filter"></i> Filtros
+        
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-lg shadow-sm fw-bold px-4 rounded-pill d-flex align-items-center gap-2 hover-card" 
+                    style="background: var(--bk-card-bg); color: var(--bk-text-primary);"
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#filtersCollapse">
+                <i class="bi bi-sliders2 text-primary"></i>
+                <span>Filtros y Cruces</span>
             </button>
-            <a href="{% url 'reports' %}?public_id={{ survey.public_id }}" class="btn btn-dark fw-medium shadow-sm">
-                <i class="bi bi-file-earmark-arrow-down me-1"></i> Exportar
+            
+            {% if request.GET.crosstab_col %}
+            <a href="?" class="btn btn-lg btn-danger bg-opacity-10 border-0 text-danger fw-bold px-4 rounded-pill d-flex align-items-center gap-2 hover-card">
+                <i class="bi bi-x-circle-fill"></i> Limpiar Vista
             </a>
+            {% endif %}
         </div>
     </div>
 
-    {# FILTROS #}
-    <div class="collapse mb-5" id="filtersCollapse">
-        <div class="card card-body border-0 shadow-sm rounded-4 p-4">
-            <form method="GET" class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold text-uppercase text-muted">Desde</label>
-                    <input type="date" name="start" class="form-control bg-light border-0" value="{{ filter_start }}">
+    {# --- FILTROS --- #}
+    <div class="collapse mb-5 {% if request.GET.crosstab_col %}show{% endif %}" id="filtersCollapse">
+        <div class="card border-0 shadow-lg rounded-4 p-4 p-lg-5" style="background: var(--bk-card-bg);">
+            <form method="GET" class="row g-4">
+                <div class="col-12">
+                    <h6 class="fw-bold text-uppercase small mb-2 text-muted opacity-75">Configuración de Análisis</h6>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold text-uppercase text-muted">Hasta</label>
-                    <input type="date" name="end" class="form-control bg-light border-0" value="{{ filter_end }}">
+                
+                <div class="col-md-6 col-lg-3">
+                    <label class="form-label small fw-bold text-muted">Desde Fecha</label>
+                    <input type="date" name="start" class="form-control form-control-lg" value="{{ request.GET.start }}">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold text-uppercase text-muted">Segmentar</label>
-                    <select name="segment_col" class="form-select bg-light border-0">
-                        <option value="">Todo el público</option>
+                <div class="col-md-6 col-lg-3">
+                    <label class="form-label small fw-bold text-muted">Hasta Fecha</label>
+                    <input type="date" name="end" class="form-control form-control-lg" value="{{ request.GET.end }}">
+                </div>
+                
+                <div class="col-md-6 col-lg-3">
+                    <label class="form-label small fw-bold text-muted">Segmentar (Filtrar)</label>
+                    <select name="segment_col" class="form-select form-select-lg">
+                        <option value="">-- Todos los datos --</option>
                         {% for p in preguntas_filtro %}
-                            <option value="{{ p.id }}" {% if filter_col == p.id|stringformat:"s" %}selected{% endif %}>
-                                {{ p.text|truncatechars:30 }}
-                            </option>
+                            <option value="{{ p.id }}" {% if request.GET.segment_col == p.id|stringformat:"s" %}selected{% endif %}>{{ p.text|truncatechars:25 }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100 fw-bold">Actualizar Datos</button>
+                <div class="col-md-6 col-lg-3">
+                     <label class="form-label small fw-bold text-muted">Valor del Segmento</label>
+                     <input type="text" name="segment_val" class="form-control form-control-lg" placeholder="Ej. Ventas" value="{{ request.GET.segment_val|default:'' }}">
+                </div>
+
+                <div class="col-12 mt-4"><hr class="opacity-10"></div>
+
+                <div class="col-12 col-lg-6">
+                    <h6 class="fw-bold text-primary text-uppercase small mb-2">
+                        <i class="bi bi-grid-3x3-gap-fill me-1"></i> Tabla Cruzada (Comparativa)
+                    </h6>
+                    <div class="input-group input-group-lg shadow-sm">
+                        <select name="crosstab_col" class="form-select border-primary">
+                            <option value="">-- Seleccionar Variable de Cruce --</option>
+                            {% for p in preguntas_filtro %}
+                                <option value="{{ p.id }}" {% if request.GET.crosstab_col == p.id|stringformat:"s" %}selected{% endif %}>Vs: {{ p.text|truncatechars:40 }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-primary px-4 fw-bold">
+                            <i class="bi bi-lightning-charge-fill me-1"></i> Analizar
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 
-    {# KPI GLOBAL #}
-    <div class="row g-4 mb-5">
-        <div class="col-12 col-xl-4">
-            <div class="card border-0 shadow-sm h-100 bg-dark text-white overflow-hidden position-relative rounded-4">
-                <div class="position-absolute top-0 end-0 opacity-10 p-3">
-                    <i class="bi bi-trophy-fill" style="font-size: 8rem;"></i>
-                </div>
-                <div class="card-body p-4 d-flex flex-column justify-content-center">
-                    <h6 class="text-uppercase opacity-75 fw-bold mb-3">Satisfacción General</h6>
-                    <div class="d-flex align-items-baseline">
-                        <span class="display-3 fw-bold">{{ kpi_score }}</span>
-                        <span class="fs-4 ms-2 opacity-50">/ 10</span>
-                    </div>
-                    <div class="mt-3">
-                        <div class="progress" style="height: 6px; background: rgba(255,255,255,0.2);">
-                            <div class="progress-bar bg-white" role="progressbar" 
-                                 style="width: {% widthratio kpi_score 10 100 %}%"></div>
+    {# --- VISTA 1: TABLA CRUZADA (MODO COMPARATIVO) --- #}
+    {% if crosstab_data %}
+        <div class="card border-0 shadow-lg rounded-4 overflow-hidden mb-5 hover-card" style="background: var(--bk-card-bg);">
+            <div class="card-header border-0 p-4 bg-transparent border-bottom">
+                <h4 class="fw-bold mb-0 text-break">
+                    <span class="text-muted">{{ crosstab_data.row_label }}</span> 
+                    <span class="mx-2 opacity-25">vs</span> 
+                    <span class="text-primary">{{ crosstab_data.col_label }}</span>
+                </h4>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="px-4 py-5 border-bottom">
+                    <div class="chart-surface chart-pad shadow-sm">
+                        <div id="crosstabChartContainer" style="width: 100%; position: relative; min-height: 450px;">
+                            <canvas id="crosstabChart"></canvas>
                         </div>
                     </div>
                 </div>
+                
+                <div class="table-container-scroll">
+                    <table class="table align-middle mb-0 table-hover" style="color: var(--bk-text-primary); font-size: 0.9rem;">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4 py-3 sticky-col-head sticky-col-first" style="min-width: 200px;">{{ crosstab_data.row_label }}</th>
+                                {% for h in crosstab_data.headers %}
+                                    <th class="text-center py-3 sticky-col-head" style="min-width: 120px;">{{ h }}</th>
+                                {% endfor %}
+                                <th class="text-end pe-4 py-3 sticky-col-head bg-light border-start">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crosstab_data.rows %}
+                            <tr>
+                                <td class="ps-4 py-3 fw-bold sticky-col-first">{{ row.label }}</td>
+                                {% for cell in row.values %}
+                                    <td class="text-center py-3 position-relative">
+                                        <div class="data-bar-bg" style="width: {{ cell.percentage }}%; color: var(--bk-primary);"></div>
+                                        <div class="d-flex flex-column align-items-center z-1 position-relative">
+                                            <span class="fw-bold">{{ cell.count }}</span>
+                                            <small class="opacity-50 font-monospace" style="font-size: 0.75em;">{{ cell.percentage }}%</small>
+                                        </div>
+                                    </td>
+                                {% endfor %}
+                                <td class="text-end pe-4 py-3 fw-bold bg-light border-start">{{ row.total }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
+    {% else %}
+    
+    {# --- VISTA 2: DASHBOARD GLOBAL KPI --- #}
+    <div class="row g-4 mb-5">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-lg h-100 rounded-4 p-4 position-relative overflow-hidden" 
+                 style="background: linear-gradient(145deg, var(--bk-card-bg) 0%, var(--bk-body-bg) 100%);">
+                 <div class="position-absolute top-0 end-0 p-3 opacity-10">
+                     <i class="bi bi-trophy-fill display-1 text-primary"></i>
+                 </div>
+                <h6 class="text-uppercase text-muted fw-bold mb-3 ls-1">Satisfacción Global (NPS)</h6>
+                <div class="d-flex align-items-baseline mb-4">
+                    <span class="display-2 fw-bold" style="background: linear-gradient(45deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                        {{ kpi_score }}
+                    </span>
+                    <span class="fs-4 ms-2 opacity-50 text-muted">/ 10</span>
+                </div>
+                <div class="progress rounded-pill bg-primary bg-opacity-10" style="height: 10px;">
+                    <div class="progress-bar rounded-pill shadow-sm" role="progressbar"
+                         style="background: linear-gradient(90deg, #6366f1 0%, #ec4899 100%); width: {% widthratio kpi_score 10 100 %}%">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-12 col-xl-8">
-            <div class="card border-0 shadow-sm h-100 rounded-4">
-                <div class="card-body p-4">
-                    <h6 class="fw-bold text-muted text-uppercase mb-4">Evolución de Respuestas</h6>
-                    <div style="height: 200px; width: 100%;">
-                        <canvas id="evolutionChart"></canvas>
+            <div class="card border-0 shadow-lg h-100 rounded-4 p-4" style="background: var(--bk-card-bg);">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h6 class="fw-bold text-uppercase text-muted">Tendencia de Participación</h6>
+                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 border border-success border-opacity-10">
+                        <i class="bi bi-graph-up-arrow me-1"></i> {{ total_respuestas }} Totales
+                    </span>
+                </div>
+                <div class="chart-surface chart-pad" style="height: 280px;">
+                    <canvas id="evolutionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- SECCIÓN: ANÁLISIS ESTADÍSTICO AVANZADO --- #}
+    {% if advanced_stats.cronbach_alpha or advanced_stats.correlation_matrix %}
+    <div class="card border-0 shadow-lg rounded-4 mb-5" style="background: var(--bk-card-bg);">
+        <div class="card-header bg-transparent border-0 p-4">
+            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-calculator me-2"></i>Análisis Estadístico Avanzado</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="p-4 rounded-3 bg-light border text-center h-100">
+                        <h6 class="text-muted text-uppercase small fw-bold mb-3">Confiabilidad (Cronbach)</h6>
+                        <div class="display-4 fw-bold {% if advanced_stats.cronbach_alpha >= 0.7 %}text-success{% else %}text-warning{% endif %}">
+                            {{ advanced_stats.cronbach_alpha|floatformat:2 }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="table-responsive rounded-3 border">
+                        <table class="table table-sm table-hover mb-0 text-center small">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="text-start p-2">Variable</th>
+                                    {% for key in advanced_stats.correlation_matrix.keys %}
+                                        <th class="p-2">{{ forloop.counter }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row_key, row_values in advanced_stats.correlation_matrix.items %}
+                                <tr>
+                                    <td class="text-start fw-bold p-2 text-truncate" style="max-width: 150px;">{{ forloop.counter }}. {{ row_key }}</td>
+                                    {% for col_key, val in row_values.items %}
+                                        <td class="p-2" style="background-color: rgba(99, 102, 241, {{ val|default:0 }}); color: {% if val > 0.5 %}#fff{% else %}#000{% endif %};">
+                                            {{ val|floatformat:1 }}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
-    {# GRID DE INSIGHTS #}
-    <h5 class="fw-bold text-dark mb-4 ps-1">Análisis Detallado</h5>
-    <div class="row g-4">
+    {# --- GRID DE INSIGHTS --- #}
+    {% if analysis_data %}
+    <div class="d-flex align-items-center mb-4 mt-5 ps-1">
+        <div class="rounded-pill me-3" style="width: 5px; height: 32px; background: linear-gradient(to bottom, #6366f1, #ec4899);"></div>
+        <h4 class="fw-bold mb-0" style="color: var(--bk-text-primary);">Desglose por Pregunta</h4>
+    </div>
+    
+    <div class="row g-4 pb-5">
         {% for item in analysis_data %}
-            <div class="col-md-6 col-xl-4">
+            <div class="col-md-6 col-xxl-4 d-flex">
+                {# UTILIZAMOS EL COMPONENTE COMPLETO QUE CONTIENE LOS TEXTOS #}
                 {% include "surveys/components/insight_card.html" with data=item scale_max=item.insight_data.max %}
-            </div>
-        {% empty %}
-            <div class="col-12 py-5 text-center">
-                <div class="text-muted mb-3"><i class="bi bi-inbox fs-1"></i></div>
-                <h5 class="fw-normal text-muted">No hay datos que coincidan con los filtros.</h5>
             </div>
         {% endfor %}
     </div>
-
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        
-        // 1. GLOBAL EVOLUTION
-        const evolCtx = document.getElementById('evolutionChart');
-        if (evolCtx) {
-            const evolData = JSON.parse('{{ evolution_chart|escapejs }}');
-            new Chart(evolCtx, {
-                type: 'line',
+document.addEventListener('DOMContentLoaded', function () {
+    
+    // --- Configuración Global ---
+    Chart.register(ChartDataLabels);
+    const getCssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    
+    const theme = () => ({
+        primary: getCssVar('--bk-primary') || '#6366f1',
+        text: getCssVar('--bk-text-primary') || '#1f2937',
+        grid: getCssVar('--bk-card-border') || 'rgba(0,0,0,0.1)',
+        font: "'Inter', sans-serif"
+    });
+    
+    // PALETA MULTICOLOR (VIBRANTE)
+    const PALETTE = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#06b6d4', '#84cc16', '#14b8a6'];
+    
+    const hexToRgba = (hex, alpha) => {
+        let c = hex.substring(1).split('');
+        if(c.length==3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+        c = '0x'+c.join('');
+        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')';
+    };
+    
+    const wrapLabel = (str, maxLen = 22) => {
+        if (!str) return '';
+        str = str.toString();
+        if (str.length <= maxLen) return str;
+        return str.substring(0, maxLen) + '...';
+    };
+
+    Chart.defaults.font.family = theme().font;
+    Chart.defaults.color = theme().text;
+    Chart.defaults.scale.grid.color = theme().grid;
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 6;
+    Chart.defaults.maintainAspectRatio = false; // CRUCIAL para evitar deformaciones
+
+
+    // ==========================================
+    // 2. EVOLUTION CHART (Tendencia de Participación)
+    // ==========================================
+    const evolutionData = (typeof evolution_chart !== 'undefined') ? evolution_chart : {{ evolution_chart|default:'{"labels":[],"data":[]}'|safe }};
+    const ctxEvolution = document.getElementById('evolutionChart');
+    if (ctxEvolution && evolutionData && evolutionData.labels && evolutionData.labels.length > 0) {
+        new Chart(ctxEvolution, {
+            type: 'line',
+            data: {
+                labels: evolutionData.labels,
+                datasets: [{
+                    label: 'Respuestas',
+                    data: evolutionData.data,
+                    fill: true,
+                    backgroundColor: hexToRgba(theme().primary, 0.13),
+                    borderColor: theme().primary,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: theme().primary,
+                    pointBorderColor: theme().primary,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    datalabels: { display: false },
+                    tooltip: {
+                        padding: 10,
+                        cornerRadius: 6
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: theme().text, font: { size: 12 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: theme().grid },
+                        ticks: { color: theme().text, font: { size: 12 } }
+                    }
+                }
+            }
+        });
+    }
+
+    // ==========================================
+    // 3. MINI CHARTS (INSIGHT CARDS) - CORREGIDO
+    // ==========================================
+    (function initMiniCharts() {
+        if (!window.chartRegistry || !window.chartRegistry.length) return;
+
+        window.chartRegistry.forEach((conf, index) => {
+            const canvas = document.getElementById(conf.id);
+            if (!canvas) return;
+
+            const jsonElem = document.getElementById(conf.dataId);
+            if (!jsonElem) return;
+            const data = JSON.parse(jsonElem.textContent);
+            
+            // --- COLORES SIEMPRE VARIADOS ---
+            const backgroundColors = data.data.map((_, i) => hexToRgba(PALETTE[i % PALETTE.length], 0.85));
+            const borderColors = data.data.map((_, i) => PALETTE[i % PALETTE.length]);
+
+            // Detección de horizontalidad necesaria
+            const needsHorizontal = (conf.displayType === 'bar' && data.labels.length > 5);
+            const isPie = (conf.displayType === 'doughnut' || conf.displayType === 'pie');
+
+            let chartConfig = {
+                type: conf.displayType,
                 data: {
-                    labels: evolData.labels || [],
+                    labels: data.labels.map(l => wrapLabel(l, 25)),
                     datasets: [{
-                        label: 'Respuestas',
-                        data: evolData.data || [],
-                        borderColor: '#0d6efd',
-                        backgroundColor: (context) => {
-                            const ctx = context.chart.ctx;
-                            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-                            gradient.addColorStop(0, 'rgba(13, 110, 253, 0.2)');
-                            gradient.addColorStop(1, 'rgba(13, 110, 253, 0)');
-                            return gradient;
-                        },
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
+                        data: data.data,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        barPercentage: 0.7, // Grosor equilibrado
+                        categoryPercentage: 0.8
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { 
-                        x: { grid: { display: false } },
-                        y: { beginAtZero: true, border: { display: false } }
+                    indexAxis: needsHorizontal ? 'y' : 'x',
+                    layout: { padding: { top: 15, bottom: 5, left: 5, right: 15 } },
+                    plugins: {
+                        legend: { 
+                            display: isPie, 
+                            position: 'right', 
+                            labels: { boxWidth: 10, font: { size: 10 }, padding: 10 } 
+                        },
+                        datalabels: {
+                            color: isPie ? '#fff' : theme().text,
+                            anchor: isPie ? 'center' : (needsHorizontal ? 'end' : 'end'),
+                            align: isPie ? 'center' : (needsHorizontal ? 'end' : 'top'),
+                            font: { size: 10, weight: 'bold' },
+                            offset: isPie ? 0 : -2,
+                            formatter: (val, ctx) => {
+                                const total = ctx.dataset.data.reduce((a,b) => a+Number(b), 0);
+                                const pct = Math.round((val/total)*100);
+                                return pct > 4 ? pct + '%' : '';
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            display: !isPie, 
+                            grid: { display: false },
+                            ticks: { font: { size: 10 } }
+                        },
+                        y: { 
+                            display: !isPie, 
+                            grid: { display: false },
+                            ticks: { font: { size: 10 }, autoSkip: false } 
+                        }
                     }
                 }
-            });
-        }
+            };
+            
+            // --- AJUSTE DE ALTURA INTELIGENTE ---
+            if (needsHorizontal && data.labels.length > 5) {
+                // 40px por barra: Ni muy fino ni muy grueso. Perfecto para leer.
+                const newHeight = data.labels.length * 40 + 50; 
+                canvas.parentNode.style.height = `${newHeight}px`;
+            } else {
+                // Altura estándar base (210px) para que Pie/Barras cortas se vean bien
+                canvas.parentNode.style.height = '210px';
+            }
 
-        // 2. MINI CHARTS REGISTRY
-        if (window.chartRegistry) {
-            window.chartRegistry.forEach(chartItem => {
-                const ctx = document.getElementById(chartItem.id);
-                if (!ctx) return;
+            // Excepción para tarjetas KPI (Numéricas) que van en columna pequeña
+            // Si el canvas está dentro de un col-8 (KPI), forzamos altura menor pero suficiente
+            if (canvas.closest('.col-8')) {
+                 canvas.parentNode.style.height = '160px'; // Fijo para KPI
+            }
 
-                const rawData = JSON.parse(document.getElementById(chartItem.dataId).textContent);
-                let chartConfig = {};
-
-                // --- CONFIGURACIÓN DINÁMICA ---
-                
-                if (chartItem.isDemographic) {
-                    // DEMOGRÁFICOS = DONUT
-                    chartConfig = {
-                        type: 'doughnut',
-                        data: {
-                            labels: rawData.labels,
-                            datasets: [{
-                                data: rawData.data,
-                                backgroundColor: [
-                                    '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545',
-                                    '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
-                                ],
-                                borderWidth: 0,
-                                hoverOffset: 4
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            cutout: '75%',
-                            plugins: { 
-                                legend: { 
-                                    display: true, 
-                                    position: 'right',
-                                    labels: { boxWidth: 10, font: { size: 10 }, usePointStyle: true }
-                                } 
-                            }
-                        }
-                    };
-
-                } else if (chartItem.type === 'numeric' || chartItem.type === 'scale') {
-                    // NUMÉRICOS = BARRAS VERTICALES
-                    chartConfig = {
-                        type: 'bar',
-                        data: {
-                            labels: rawData.labels,
-                            datasets: [{
-                                data: rawData.data,
-                                backgroundColor: '#0d6efd',
-                                borderRadius: 4,
-                                barThickness: 'flex',
-                                maxBarThickness: 15
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { display: false },
-                                y: { display: false, beginAtZero: true }
-                            }
-                        }
-                    };
-
-                } else if (chartItem.type === 'single' || chartItem.type === 'multi') {
-                    // CATEGÓRICAS NO DEMOGRÁFICAS = BARRAS HORIZONTALES
-                    chartConfig = {
-                        type: 'bar',
-                        data: {
-                            labels: rawData.labels,
-                            datasets: [{
-                                data: rawData.data,
-                                backgroundColor: '#198754', // Verde para opciones
-                                borderRadius: 4,
-                                barThickness: 12
-                            }]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { display: false, beginAtZero: true },
-                                y: { 
-                                    grid: { display: false, drawBorder: false },
-                                    ticks: { font: { size: 11 }, autoSkip: false }
-                                }
-                            }
-                        }
-                    };
-                }
-
-                if (chartConfig.type) {
-                    new Chart(ctx, chartConfig);
-                }
-            });
-        }
-    });
+            new Chart(canvas, chartConfig);
+        });
+    })();
+});
 </script>
 {% endblock %}

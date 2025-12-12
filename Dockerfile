@@ -53,5 +53,8 @@ COPY . /usr/src/app/
 # Exponer el puerto de Django
 EXPOSE 8000
 
+# Recopilar archivos estáticos para producción
+RUN python manage.py collectstatic --noinput
+
 # Comando por defecto (no se ejecutará directamente, docker-compose lo sobrescribe)
 CMD ["gunicorn", "byteneko.wsgi:application", "--bind", "0.0.0.0:8000"]

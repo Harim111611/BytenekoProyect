@@ -1,92 +1,210 @@
 {% load humanize %}
 
-<div class="analysis-card h-100 position-relative">
-    <div class="card-body d-flex flex-column p-4">
-        
-        {# HEADER #}
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <h5 class="fw-bold mb-0 text-dark" style="font-size: 1rem; line-height: 1.4;">
-                <span class="text-muted fw-normal me-1">#{{ data.order }}</span> 
-                {{ data.text }}
-            </h5>
-            {% if data.type == 'numeric' or data.type == 'scale' %}
-                <span class="badge badge-soft-primary rounded-pill">Métrica</span>
-            {% elif data.type == 'single' or data.type == 'multi' %}
-                <span class="badge badge-soft-success rounded-pill">Opción</span>
-            {% elif data.type == 'text' %}
-                <span class="badge badge-soft-secondary rounded-pill">Texto</span>
-            {% endif %}
-        </div>
+{# --- ESTILOS: TARJETA DE INSIGHT (EQUILIBRADA) --- #}
+<style>
+    .insight-card {
+        background: var(--bk-card-bg, #fff);
+        border: 1px solid var(--bk-card-border, #e2e8f0);
+        transition: all 0.2s ease-in-out;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        font-size: 1.01rem;
+        min-height: 310px;
+        max-width: 440px;
+        margin: 0 auto;
+        box-sizing: border-box;
+    }
+    
+    .insight-card:hover {
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.10), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-color: var(--bk-primary, #6366f1);
+    }
 
-        {# BODY #}
-        <div class="flex-grow-1">
-            {% if data.type == 'numeric' or data.type == 'scale' %}
-                <div class="row align-items-center">
-                    <div class="col-5">
-                        <div class="text-center">
-                            <h2 class="display-4 fw-bold text-dark mb-0">{{ data.insight_data.avg|floatformat:1 }}</h2>
-                            <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Promedio</small>
-                        </div>
-                    </div>
-                    <div class="col-7">
-                        <div style="height: 80px; width: 100%;">
-                            <canvas id="chart-{{ data.id }}"></canvas>
-                        </div>
-                    </div>
-                </div>
-            {% elif data.type == 'single' or data.type == 'multi' %}
-                <div class="row">
-                    <div class="col-12 mb-3">
-                        <div style="height: 140px; width: 100%;">
-                            <canvas id="chart-{{ data.id }}"></canvas>
-                        </div>
-                    </div>
-                </div>
-                {% if data.insight_data.top_option %}
-                    <div class="d-flex align-items-center p-2 bg-light rounded border border-light-subtle">
-                        <i class="bi bi-check-circle-fill text-success me-2"></i>
-                        <div class="small text-truncate">
-                            <span class="text-muted">Top:</span> 
-                            <strong>{{ data.insight_data.top_option.option }}</strong>
-                        </div>
-                    </div>
-                {% endif %}
-            {% elif data.type == 'text' %}
-                <div class="mt-2">
-                    <p class="small text-uppercase fw-bold text-muted mb-2">Palabras Frecuentes</p>
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for topic in data.insight_data.topics %}
-                            <span class="badge bg-white text-dark border shadow-sm fw-normal px-2 py-1">{{ topic }}</span>
-                        {% empty %}
-                            <span class="text-muted small fst-italic">Sin patrones claros.</span>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endif %}
-        </div>
+    .ic-header {
+        border-bottom: 1px solid transparent;
+        padding: 1.1rem 1.5rem !important;
+    }
+    
+    .insight-card:hover .ic-header {
+        border-color: var(--bk-card-border, #e2e8f0);
+    }
 
-        {# FOOTER: NARRATIVA EXTENDIDA #}
-        {% if data.insight_data.narrative %}
-            <div class="mt-3 p-3 bg-body-tertiary rounded-3 border border-light-subtle position-relative overflow-hidden">
-                <div class="position-absolute top-0 start-0 w-1 h-100 bg-info"></div>
-                <p class="mb-0 small text-secondary" style="font-size: 0.9rem; line-height: 1.5; text-align: justify;">
-                    <i class="bi bi-stars text-info me-1"></i> {{ data.insight_data.narrative }}
-                </p>
+    .ic-badge {
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 0.33em 0.85em;
+        border-radius: 0.3rem;
+        text-transform: uppercase;
+    }
+    .ic-badge-num { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+    .ic-badge-txt { background: rgba(16, 185, 129, 0.1); color: #059669; }
+    .ic-badge-sel { background: rgba(139, 92, 246, 0.1); color: #7c3aed; }
+
+    .ic-comment {
+        background: var(--bk-body-bg, #f8fafc);
+        border-radius: 0.5rem;
+        padding: 0.75rem 1.15rem;
+        margin-bottom: 0.55rem;
+        font-size: 0.97rem;
+        border-left: 2px solid transparent;
+    }
+    .ic-comment:hover {
+        border-left-color: var(--bk-primary, #6366f1);
+        background: rgba(99, 102, 241, 0.05);
+    }
+
+    .ic-key-insight {
+        background: linear-gradient(to right, rgba(99, 102, 241, 0.07), rgba(236, 72, 153, 0.07));
+        border: 1px dashed var(--bk-primary, #6366f1);
+        border-radius: 0.5rem;
+        padding: 0.9rem 1.3rem !important;
+        margin-top: 0.9rem;
+        font-size: 1.01em;
+    }
+    
+    /* Contenedor Base de Gráfica */
+    .chart-container-base {
+        position: relative;
+        width: 100%;
+        min-height: 210px;
+        height: 210px;
+        max-height: 230px;
+    }
+</style>
+
+<article class="card insight-card rounded-4 border-0 w-100" data-card-id="{{ data.id }}">
+    
+    {# --- HEADER --- #}
+    <div class="card-header bg-transparent ic-header">
+        <div class="d-flex gap-3 align-items-start">
+            <div class="flex-shrink-0 mt-1">
+                <div class="d-flex align-items-center justify-content-center rounded-circle bg-light text-primary fw-bolder shadow-sm border" 
+                     style="width: 28px; height: 28px; font-size: 0.8rem;">
+                    {{ data.order }}
+                </div>
             </div>
-        {% endif %}
+            
+            <div class="flex-grow-1 min-w-0">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    {% if data.type == 'numeric' or data.type == 'scale' %}
+                        <span class="ic-badge ic-badge-num"><i class="bi bi-123 me-1"></i> Escala</span>
+                    {% elif data.type == 'text' %}
+                        <span class="ic-badge ic-badge-txt"><i class="bi bi-chat-quote me-1"></i> Abierta</span>
+                    {% else %}
+                        <span class="ic-badge ic-badge-sel"><i class="bi bi-pie-chart me-1"></i> Selección</span>
+                    {% endif %}
+                    
+                    <small class="text-muted fw-bold" style="font-size: 0.75rem;">
+                        {{ data.total_responses|intcomma }} Respuestas
+                    </small>
+                </div>
+                
+                <h3 class="fw-bold mb-0 text-truncate text-dark" style="font-size: 1rem; line-height: 1.3;" title="{{ data.text }}">
+                    {{ data.text }}
+                </h3>
+            </div>
+        </div>
     </div>
 
-    {# DATA SCRIPT #}
+    {# --- BODY --- #}
+    <div class="card-body px-4 pb-4 pt-2 d-flex flex-column">
+        
+        {# ZONA VISUAL (Chart / Text / KPI) #}
+        <div class="flex-grow-1 mb-3 position-relative d-flex flex-column justify-content-center">
+            
+            {% if data.type == 'text' %}
+                {# MODO TEXTO #}
+                <div class="ic-scroll-area pe-2" style="max-height: 220px; overflow-y: auto;">
+                    {% if data.top_responses %}
+                        {% for resp in data.top_responses %}
+                            <div class="ic-comment text-secondary text-break">
+                                {{ resp }}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-5 opacity-50">
+                            <i class="bi bi-chat-square-dots fs-2"></i>
+                            <p class="small mt-2 mb-0">Sin comentarios registrados</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+            {% elif data.type == 'numeric' or data.type == 'scale' %}
+                {# MODO KPI + GRÁFICA #}
+                <div class="row align-items-center h-100 g-0">
+                    <div class="col-4 border-end pe-3 text-center d-flex flex-column justify-content-center">
+                        <span class="text-uppercase text-muted fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">Promedio</span>
+                        <div class="display-6 fw-bold text-primary my-1">
+                            {{ data.insight_data.average|default:"0.0"|floatformat:1 }}
+                        </div>
+                        
+                        {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
+                        <div class="progress mt-2 w-75 mx-auto" style="height: 6px; background-color: rgba(99,102,241,0.1);">
+                            <div class="progress-bar bg-primary" role="progressbar" 
+                                 style="width: {% widthratio avg max_val 100 %}%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted mt-1 w-75 mx-auto" style="font-size: 0.6rem;">
+                            <span>0</span><span>{{ max_val }}</span>
+                        </div>
+                        {% endwith %}
+                    </div>
+                    
+                    <div class="col-8 ps-3">
+                        {# Aumentamos altura aquí para evitar que se vea 'raro' o aplastado #}
+                        <div class="chart-container-base" style="height: 160px; min-height: 160px;">
+                            <canvas id="chart-{{ data.id }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            {% else %}
+                {# MODO GRÁFICO ESTÁNDAR #}
+                <div class="chart-container-base">
+                    <canvas id="chart-{{ data.id }}"></canvas>
+                </div>
+            {% endif %}
+        </div>
+
+        {# FOOTER: INSIGHTS #}
+        <div class="mt-auto">
+            {% if data.insight_data.key_insight %}
+                <div class="ic-key-insight d-flex gap-3 align-items-start">
+                    <i class="bi bi-lightbulb-fill text-warning flex-shrink-0 mt-1"></i>
+                    <p class="mb-0 small text-secondary lh-sm">
+                        {{ data.insight_data.key_insight }}
+                    </p>
+                </div>
+            {% endif %}
+
+            {% if data.insight_data.topics %}
+                <div class="d-flex flex-wrap gap-2 mt-3 pt-2 border-top border-light opacity-75">
+                    {% for topic in data.insight_data.topics|slice:":4" %}
+                        <span class="badge bg-light text-secondary border fw-normal py-1 px-2">
+                            #{{ topic }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --- JS INLINE --- #}
     {% if data.chart %}
         {{ data.chart|json_script:data.id }}
         <script>
-            if (!window.chartRegistry) window.chartRegistry = [];
-            window.chartRegistry.push({
-                id: 'chart-{{ data.id }}',
-                type: '{{ data.type }}',
-                isDemographic: {{ data.is_demographic|yesno:"true,false" }},
-                dataId: '{{ data.id }}'
-            });
+            (function() {
+                const config = {
+                    id: 'chart-{{ data.id }}',
+                    dataId: '{{ data.id }}',
+                    rawType: '{{ data.type }}',
+                    displayType: ('{{ data.is_demographic }}' === 'True' || ('{{ data.type }}' === 'single' && {{ data.chart.labels|length }} <= 4)) ? 'doughnut' : 'bar',
+                    isDemographic: '{{ data.is_demographic }}' === 'True'
+                };
+                window.chartRegistry = window.chartRegistry || [];
+                window.chartRegistry.push(config);
+            })();
         </script>
     {% endif %}
-</div>
+</article>
