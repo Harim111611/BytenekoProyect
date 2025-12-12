@@ -2,63 +2,56 @@
 {% load static %}
 
 {% block styles %}
-    {# CSS Principal Unificado #}
-    <link rel="stylesheet" href="{% static 'css/byteneko.css' %}">
+    {# ELIMINADO: <link rel="stylesheet" href="{% static 'css/byteneko.css' %}"> #}
+    {# Ya se carga en base.html, evitamos duplicidad #}
     {% block page_styles %}{% endblock %}
 {% endblock %}
 
 {% block content %}
-
+    {# ... (El resto del contenido se mantiene igual) ... #}
+    
     {# --- BOTÓN HAMBURGUESA PARA MÓVIL --- #}
-    {# Ahora usa la clase .mobile-toggle-btn definida en CSS para z-index y colores #}
     <button class="btn btn-sm btn-icon d-lg-none position-fixed top-0 start-0 m-3 mobile-toggle-btn" 
             id="sidebarToggleBtn" 
             aria-label="Abrir menú">
         <i class="bi bi-list" style="font-size: 1.5rem;"></i>
     </button>
-
-    {# --- OVERLAY PARA MÓVILES --- #}
+    
+    {# ... (Resto del sidebar y scripts se mantienen igual) ... #}
+    
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <aside class="app-sidebar">
+        {# ... Contenido del Sidebar igual ... #}
         <div class="app-sidebar-logo">
             <div class="d-flex align-items-center gap-2">
                 <img src="{% static 'img/favicon.ico' %}" alt="Logo" style="width: 32px; height: 32px;" class="rounded-2 shadow-sm">
                 <span class="fs-5 fw-bold text-body">Byteneko</span>
             </div>
-            {# Botón cerrar en móvil #}
-            <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn" aria-label="Cerrar menú">
-                <i class="bi bi-x-lg"></i>
-            </button>
+            <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn"><i class="bi bi-x-lg"></i></button>
         </div>
 
         <nav class="app-sidebar-nav">
             <a href="{% url 'dashboard' %}" class="nav-item-button {% if page_name == 'dashboard' %}active{% endif %}">
-                <i class="bi bi-grid-fill"></i>
-                <span>Dashboard</span>
+                <i class="bi bi-grid-fill"></i><span>Dashboard</span>
             </a>
             <a href="{% url 'surveys:list' %}" class="nav-item-button {% if page_name == 'surveys' %}active{% endif %}">
-                <i class="bi bi-clipboard-data-fill"></i>
-                <span>Encuestas</span>
+                <i class="bi bi-clipboard-data-fill"></i><span>Encuestas</span>
             </a>
             <a href="{% url 'dashboard_results' %}" class="nav-item-button {% if page_name == 'results' %}active{% endif %}">
-                <i class="bi bi-bar-chart-line-fill"></i>
-                <span>Resultados</span>
+                <i class="bi bi-bar-chart-line-fill"></i><span>Resultados</span>
             </a>
             <a href="{% url 'reports' %}" class="nav-item-button {% if page_name == 'reports' %}active{% endif %}">
-                <i class="bi bi-file-earmark-text-fill"></i>
-                <span>Reportes</span>
+                <i class="bi bi-file-earmark-text-fill"></i><span>Reportes</span>
             </a>
             <a href="{% url 'settings' %}" class="nav-item-button {% if page_name == 'settings' %}active{% endif %}">
-                <i class="bi bi-gear-fill"></i>
-                <span>Configuración</span>
+                <i class="bi bi-gear-fill"></i><span>Configuración</span>
             </a>
         </nav>
 
         <div class="app-sidebar-footer">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                     style="width: 40px; height: 40px; font-weight: 500;">
+                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px;">
                     {{ request.user.username|first|upper }}
                 </div>
                 <div class="overflow-hidden">
@@ -66,24 +59,19 @@
                     <small class="text-muted d-block text-truncate">Plan Básico</small>
                 </div>
             </div>
-
             <form method="post" action="{% url 'logout' %}" class="w-100">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
-                    <i class="bi bi-box-arrow-left me-2"></i>
-                    Cerrar Sesión
-                </button>
+                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">Cerrar Sesión</button>
             </form>
         </div>
     </aside>
 
     <main class="app-content">
-        {% block app_content %}
-        {% endblock %}
+        {% block app_content %}{% endblock %}
     </main>
-
-    {# Modal de carga reutilizable #}
-    <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+    
+    {# Loader Modal #}
+    <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 bg-transparent shadow-none">
                 <div class="modal-body text-center">
@@ -93,7 +81,6 @@
             </div>
         </div>
     </div>
-
 {% endblock %}
 
 {% block scripts %}
