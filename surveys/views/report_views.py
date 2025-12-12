@@ -218,21 +218,25 @@ def survey_results_view(request, public_id):
     # --- 2. Obtener Análisis General ---
     cache_key = f"analysis_view_v17_{survey.id}_{start}_{end}_{segment_col}_{segment_val}"
     
+    # Puedes personalizar el tono y si quieres citas aquí:
     analysis_result = SurveyAnalysisService.get_analysis_data(
-        survey, 
-        respuestas_qs, 
-        include_charts=True,
-        cache_key=cache_key
+        survey,
+        respuestas_qs,
+        config={'tone': 'FORMAL', 'include_quotes': True}
     )
-    
-    # IMPORTANTE: Serializar Charts para el Template
+
+    # Serializar Charts para el Template (asegura chart_json como string JSON)
     insights_list = analysis_result.get('analysis_data', [])
     for item in insights_list:
         if 'chart' in item and item['chart']:
-            # Creamos la variable chart_json que espera el template
-            item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
-    
-    kpi_score = analysis_result.get('kpi_score', 0)
+            # Si ya es string, úsalo directo; si es dict, serializa
+            if isinstance(item['chart'], str):
+                item['chart_json'] = item['chart']
+            else:
+                item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
+
+    # Mapear correctamente el KPI de satisfacción
+    kpi_score = analysis_result.get('kpi_prom_satisfaccion', 0)
     evolution = analysis_result.get('evolution', {})
     
     # Top Insights (Mood crítico o excelente)

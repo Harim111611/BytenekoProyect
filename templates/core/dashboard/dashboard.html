@@ -1,53 +1,6 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
-{% block page_styles %}
-<style>
-    .mini-stat-card {
-        border-left: 3px solid;
-        transition: transform 0.2s;
-    }
-    .mini-stat-card:hover {
-        transform: translateY(-2px);
-    }
-    .activity-timeline {
-        position: relative;
-        padding-left: 2rem;
-    }
-    .activity-timeline::before {
-        content: '';
-        position: absolute;
-        left: 7px;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: var(--bs-border-color);
-    }
-    .activity-item {
-        position: relative;
-        padding-bottom: 1.5rem;
-    }
-    .activity-item::before {
-        content: '';
-        position: absolute;
-        left: -1.6rem;
-        top: 0.3rem;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: 2px solid var(--bs-primary);
-        background: var(--bs-body-bg);
-    }
-    .quick-action-card {
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-    .quick-action-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important;
-    }
-</style>
-{% endblock %}
 
 {% block app_content %}
 <div class="container-xl p-4 p-md-5">
@@ -72,7 +25,7 @@
     <div class="row g-4 mb-4">
         {% for kpi in kpis %}
         <div class="col-lg-3 col-md-6">
-            <div class="card mini-stat-card h-100 border-0 shadow-sm" style="border-color: var(--bs-{{ kpi.color }}) !important;">
+            <div class="card mini-stat-card h-100 border-0 shadow-sm bk-kpi-border-{{ kpi.color }}">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div class="icon-square bg-{{ kpi.color }}-subtle text-{{ kpi.color }}">
@@ -255,7 +208,7 @@
                             <tr>
                                 <td class="px-4 py-3">
                                     <div class="d-flex align-items-center">
-                                        <div class="icon-square bg-primary-subtle text-primary me-3 flex-shrink-0" style="width: 40px; height: 40px;">
+                                        <div class="icon-square bg-primary-subtle text-primary me-3 flex-shrink-0 bk-icon-square">
                                             <i class="bi bi-clipboard-data"></i>
                                         </div>
                                         <div>
@@ -292,9 +245,8 @@
                                         <span class="fw-bold">{{ item.respuestas }}</span>
                                         <span class="text-muted">{{ item.objetivo }} meta</span>
                                     </div>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar {% if item.visual_progress >= 100 %}bg-success{% else %}bg-primary{% endif %}" 
-                                             style="width: {{ item.visual_progress }}%"></div>
+                                    <div class="progress bk-progress-8">
+                                        <div class="progress-bar {% if item.visual_progress >= 100 %}bg-success{% else %}bg-primary{% endif %} bk-progress-bar" data-progress="{{ item.visual_progress }}"></div>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-end">
@@ -342,8 +294,7 @@
                             <div class="{% if not forloop.last %}border-bottom pb-3 mb-3{% endif %}">
                                 <div class="d-flex align-items-start">
                                     <div class="flex-shrink-0 me-2">
-                                        <div class="rounded-circle bg-{{ alerta.color }}-subtle text-{{ alerta.color }} d-flex align-items-center justify-content-center" 
-                                             style="width: 36px; height: 36px;">
+                                        <div class="rounded-circle bg-{{ alerta.color }}-subtle text-{{ alerta.color }} d-flex align-items-center justify-content-center bk-alerta-circle">
                                             <i class="{{ alerta.icon }}"></i>
                                         </div>
                                     </div>

@@ -1,88 +1,145 @@
 /* ============================================================
    BYTENEKO DESIGN SYSTEM — DEFINITIVE EDITION
-   Version: 3.0 (Unified & Optimized)
+   Versión: 5.0 (Final Polish)
    ============================================================ */
 
 /* ------------------------------------------------------------
-   1. VARIABLES GLOBALES & PALETA DE COLORES
+   1. VARIABLES & TEMATIZACIÓN
    ------------------------------------------------------------ */
 :root {
     /* Dimensiones */
     --sidebar-width: 280px;
     --header-height: 70px;
-    
+
     /* Z-Index Layers */
     --z-bulk-actions: 1030;
-    --z-mobile-toggle: 1035; /* Botón hamburguesa */
+    --z-mobile-toggle: 1035;
     --z-overlay: 1040;
     --z-sidebar: 1050;
     --z-toast: 1060;
+    --z-modal: 1070;
 
     /* Colores Base (Modo Claro) */
     --bk-body-bg: #F5F7FA;
     --bk-card-bg: #FFFFFF;
-    --bk-card-border: rgba(0, 0, 0, 0.05);
-    
+    --bk-card-border: rgba(0, 0, 0, 0.08);
+    --bk-input-bg: #F9FAFB;
+    --bk-hover-bg: #F3F4F6;
+
     /* Texto */
-    --bk-text-primary: #1B1D21;
+    --bk-text-primary: #111827;
     --bk-text-secondary: #6B7281;
+    --bk-text-muted: #9CA3AF;
 
     /* Sidebar & Nav */
     --sidebar-bg: #FFFFFF;
     --sidebar-border: #E5E7EB;
     --sidebar-item-hover: #F3F4F6;
-    --sidebar-item-active-bg: rgba(79, 70, 229, 0.1);
+    --sidebar-item-active-bg: rgba(79, 70, 229, 0.08);
     --sidebar-item-active-text: #4F46E5;
 
     /* Brand Colors (Indigo/Primary) */
     --bk-primary: #4F46E5;
     --bk-primary-hover: #4338CA;
-    --bk-primary-rgb: 79, 70, 229;
+    --bk-primary-subtle: rgba(79, 70, 229, 0.1);
+    
+    /* Status Colors */
+    --bk-success: #10B981;
+    --bk-success-subtle: rgba(16, 185, 129, 0.1);
+    --bk-warning: #F59E0B;
+    --bk-warning-subtle: rgba(245, 158, 11, 0.1);
+    --bk-danger: #EF4444;
+    --bk-info: #3B82F6;
 }
 
-/* ------------------------------------------------------------
-   2. MODO OSCURO (DARK MODE)
-   ------------------------------------------------------------ */
+/* Modo Oscuro */
 [data-bs-theme="dark"] {
     /* Base Dark */
     --bk-body-bg: #0D1117;
     --bk-card-bg: #161B22;
     --bk-card-border: #30363D;
+    --bk-input-bg: #21262D;
+    --bk-hover-bg: #21262D;
 
     /* Texto Dark */
-    --bk-text-primary: #E6EDF3;
+    --bk-text-primary: #F0F6FC;
     --bk-text-secondary: #8B949E;
+    --bk-text-muted: #6E7681;
 
     /* Sidebar Dark */
     --sidebar-bg: #0D1117;
     --sidebar-border: #30363D;
     --sidebar-item-hover: #21262D;
-    --sidebar-item-active-bg: rgba(88, 166, 255, 0.15);
+    --sidebar-item-active-bg: rgba(56, 139, 253, 0.15);
     --sidebar-item-active-text: #58A6FF;
 
-    /* Bootstrap Overrides */
+    /* Brand Colors Dark Override */
+    --bk-primary: #58A6FF;
+    --bk-primary-subtle: rgba(88, 166, 255, 0.15);
+    
+    /* Bootstrap Overrides para consistencia */
     --bs-body-bg: var(--bk-body-bg);
     --bs-body-color: var(--bk-text-primary);
     --bs-border-color: var(--bk-card-border);
     --bs-primary: #58A6FF;
+    --bs-card-bg: var(--bk-card-bg);
+    
+    /* Ajustes específicos dark (Bootstrap Utilities) */
+    .bg-light { background-color: #21262D !important; }
+    .text-dark { color: #F0F6FC !important; }
+    .border-light { border-color: #30363D !important; }
+    .bg-white { background-color: #161B22 !important; }
+    .text-muted { color: #8B949E !important; }
 }
 
 /* ------------------------------------------------------------
-   3. ESTILOS BASE
+   2. RESET & ESTILOS GLOBALES
    ------------------------------------------------------------ */
 body {
     background-color: var(--bk-body-bg);
     color: var(--bk-text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
+    min-height: 100vh;
 }
 
-a { text-decoration: none; }
+a { 
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.2s;
+}
+
+a:hover { color: var(--bk-primary); }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+[data-bs-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
+[data-bs-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+/* Bootstrap Icons Fix */
+.bi, [class^="bi-"], [class*=" bi-"] {
+    line-height: 1 !important;
+    vertical-align: middle;
+}
+
+/* Utilería de Texto */
+.text-balance { text-wrap: balance; }
+.fw-medium { font-weight: 500 !important; }
+.ls-1 { letter-spacing: 0.5px !important; }
+.lh-13 { line-height: 1.3 !important; }
+.fs-7 { font-size: 0.9rem !important; }
+.fs-8 { font-size: 0.75rem !important; }
+.fs-9 { font-size: 0.65rem !important; }
+.fs-10 { font-size: 0.6rem !important; }
 
 /* ------------------------------------------------------------
-   4. LAYOUT PRINCIPAL (Sidebar & Content)
+   3. LAYOUT PRINCIPAL
    ------------------------------------------------------------ */
-/* Sidebar Container */
 .app-sidebar {
     width: var(--sidebar-width);
     background: var(--sidebar-bg);
@@ -94,10 +151,9 @@ a { text-decoration: none; }
     z-index: var(--z-sidebar);
     display: flex;
     flex-direction: column;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, border 0.2s;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Sidebar Header */
 .app-sidebar-logo {
     padding: 1.5rem;
     display: flex;
@@ -105,7 +161,6 @@ a { text-decoration: none; }
     min-height: var(--header-height);
 }
 
-/* Sidebar Nav */
 .app-sidebar-nav {
     display: flex;
     flex-direction: column;
@@ -115,45 +170,22 @@ a { text-decoration: none; }
     flex-grow: 1;
 }
 
-/* Sidebar Footer */
 .app-sidebar-footer {
     padding: 1rem;
     border-top: 1px solid var(--sidebar-border);
     background-color: var(--sidebar-bg);
 }
 
-/* Main Content Area */
 .app-content {
     margin-left: var(--sidebar-width);
     min-height: 100vh;
-    padding-top: 1rem;
     transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Botón Hamburguesa Móvil (Estilizado por clase) */
-.mobile-toggle-btn {
-    background: var(--sidebar-bg) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    z-index: var(--z-mobile-toggle);
-    border: 1px solid var(--sidebar-border);
-    color: var(--bk-text-primary);
-}
-
-/* Overlay para Móvil */
-.sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: var(--z-overlay);
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(2px);
-}
-
-/* ------------------------------------------------------------
-   5. NAVEGACIÓN (Items del Menú)
-   ------------------------------------------------------------ */
+/* Nav Items */
 .nav-item-button {
     display: flex;
     align-items: center;
@@ -172,19 +204,9 @@ a { text-decoration: none; }
     position: relative;
 }
 
-.nav-item-button i {
-    font-size: 1.25rem;
-    opacity: 0.75;
-    transition: opacity 0.2s;
-}
-
 .nav-item-button:hover {
     background: var(--sidebar-item-hover);
     color: var(--bk-primary);
-}
-
-.nav-item-button:hover i {
-    opacity: 1;
 }
 
 .nav-item-button.active {
@@ -204,91 +226,282 @@ a { text-decoration: none; }
 }
 
 /* ------------------------------------------------------------
-   6. RESPONSIVE BEHAVIOR (Mobile < 992px)
+   4. COMPONENTES: TARJETAS GENERALES
    ------------------------------------------------------------ */
-@media (max-width: 991.98px) {
-    /* Ocultar sidebar por defecto desplazándolo a la izquierda */
-    .app-sidebar {
-        width: 85vw; /* Más ancho en móvil para mejor UX */
-        max-width: 320px;
-        transform: translateX(-100%); 
-    }
-
-    /* Content ocupa todo el ancho */
-    .app-content {
-        margin-left: 0;
-    }
-
-    /* ESTADO ABIERTO (Activado por JS) */
-    body.sidebar-open .app-sidebar {
-        transform: translateX(0);
-        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-    }
-
-    body.sidebar-open .sidebar-overlay {
-        opacity: 1;
-        visibility: visible;
-    }
-    
-    /* Prevenir scroll en el body cuando el menú está abierto */
-    body.sidebar-open {
-        overflow: hidden;
-    }
-}
-
-/* ------------------------------------------------------------
-   7. COMPONENTES DE UI (Cards, Badges, Loaders)
-   ------------------------------------------------------------ */
-
-/* Tarjetas */
-.card, .analysis-card {
+.card {
     background-color: var(--bk-card-bg);
-    border: 1px solid var(--bk-card-border) !important;
+    border: 1px solid var(--bk-card-border);
     border-radius: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .hover-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
-
-.hover-lift:hover {
+.hover-lift:hover, .hover-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08) !important;
     border-color: var(--bk-primary) !important;
 }
 
-/* Badges */
-.badge-soft {
-    padding: 0.35em 0.65em;
-    font-size: 0.75em;
-    font-weight: 600;
-    border-radius: 6px;
+/* KPI Cards */
+.mini-stat-card, .kpi-card-modern {
+    background-color: var(--bk-card-bg);
+    border-left: 3px solid transparent;
+    transition: transform 0.2s;
+}
+.mini-stat-card:hover { transform: translateY(-2px); }
+
+/* Bordes de KPI */
+.bk-kpi-border-success { border-color: var(--bk-success) !important; }
+.bk-kpi-border-primary { border-color: var(--bk-primary) !important; }
+.bk-kpi-border-warning { border-color: var(--bk-warning) !important; }
+.bk-kpi-border-danger { border-color: var(--bk-danger) !important; }
+.bk-kpi-border-info { border-color: var(--bk-info) !important; }
+
+/* ------------------------------------------------------------
+   5. COMPONENTES: ENCUESTAS Y LISTAS
+   ------------------------------------------------------------ */
+.survey-card {
+    position: relative;
+    background-color: var(--bk-card-bg);
+    transition: all 0.2s ease-in-out;
+}
+.status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
+.text-truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.selection-checkbox { position: absolute; top: 10px; left: 10px; z-index: 20; }
+
+/* Barra de Acciones Masivas */
+.bulk-actions-bar-custom {
+    position: sticky; top: 10px; z-index: var(--z-bulk-actions);
+    background-color: #fff3cd; border: 1px solid #ffecb5; color: #664d03;
+}
+[data-bs-theme="dark"] .bulk-actions-bar-custom {
+    background-color: #3f3113; border-color: #55441d; color: #ffda6a;
 }
 
-/* Loaders & Animaciones */
+/* ------------------------------------------------------------
+   6. COMPONENTES: CHARTS & RESULTADOS
+   ------------------------------------------------------------ */
+.chart-container-base {
+    position: relative;
+    width: 100%;
+}
+.bk-chart-280 { height: 280px !important; }
+
+/* Tabla Cruzada */
+.bk-crosstab-chart-container {
+    width: 100% !important;
+    position: relative !important;
+    min-height: 350px !important;
+}
+.data-bar-bg {
+    position: absolute; top: 5px; bottom: 5px; left: 5px;
+    background-color: var(--bk-primary-subtle);
+    border-radius: 4px; z-index: 0;
+}
+
+/* ------------------------------------------------------------
+   7. INSIGHT CARDS (Estilos Específicos para tarjetas de resultados)
+   ------------------------------------------------------------ */
+.insight-card {
+    background-color: var(--bk-card-bg);
+    border: 1px solid var(--bk-card-border) !important;
+    transition: box-shadow 0.2s;
+}
+.insight-card:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.06) !important;
+}
+
+/* Header */
+.ic-header {
+    padding: 1.25rem 1.5rem 0.5rem 1.5rem;
+}
+
+/* Badges (Etiquetas de tipo de pregunta) */
+.ic-badge {
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+}
+.ic-badge-num { background-color: var(--bk-primary-subtle); color: var(--bk-primary); }
+.ic-badge-txt { background-color: var(--bk-success-subtle); color: var(--bk-success); }
+.ic-badge-sel { background-color: var(--bk-warning-subtle); color: var(--bk-warning); }
+
+/* Avatar Numérico (Circle 1, 2, 3...) */
+.bk-avatar-28 { 
+    width: 28px !important; 
+    height: 28px !important; 
+    font-size: 0.85rem !important;
+    /* No forzamos background color para respetar bg-light del HTML */
+    border: 1px solid var(--bk-card-border);
+}
+
+/* Zona de Texto (Respuestas abiertas) */
+.ic-scroll-area {
+    scrollbar-width: thin;
+    padding-right: 5px;
+}
+.ic-comment {
+    background-color: var(--bk-input-bg);
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--bk-card-border);
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--bk-text-primary);
+}
+
+/* Zona KPI y Gráficas Pequeñas */
+.display-6 { 
+    font-weight: 700 !important; 
+    letter-spacing: -1px;
+    color: var(--bk-text-primary) !important;
+}
+
+/* Alturas forzadas para layout de tarjeta KPI */
+.h-160 { height: 160px !important; }
+.minh-160 { min-height: 160px !important; }
+.maxh-220 { max-height: 220px !important; }
+
+/* Barra de progreso custom para KPI */
+.bk-progress-6 { height: 6px !important; }
+.bg-bk-primary-10 { background-color: var(--bk-primary-subtle) !important; }
+
+/* Key Insight Footer (Bombilla) */
+.ic-key-insight {
+    background-color: transparent;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--bk-card-border);
+    margin-top: 1rem;
+}
+
+/* ------------------------------------------------------------
+   8. UTILIDADES DE LOGIN Y RESPUESTA PÚBLICA
+   ------------------------------------------------------------ */
+.survey-fill-page {
+    background-color: var(--bk-body-bg);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+.option-card {
+    transition: all 0.2s ease;
+    border: 1px solid var(--bk-card-border);
+    background-color: var(--bk-card-bg);
+}
+.option-card:hover {
+    border-color: var(--bk-primary);
+    background-color: var(--bk-hover-bg);
+}
+
+.login-container {
+    min-height: 100vh;
+    display: flex; align-items: center;
+}
+.card-login-form {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    background-color: var(--bk-card-bg);
+    border-radius: 1.5rem;
+    padding: 2rem;
+}
+
+/* ------------------------------------------------------------
+   9. ELEMENTOS DE UI & ANIMACIONES
+   ------------------------------------------------------------ */
+#upload-drop-zone {
+    border: 2px dashed var(--sidebar-border);
+    background-color: var(--bk-input-bg);
+    transition: all 0.3s;
+}
+#upload-drop-zone:hover {
+    border-color: var(--bk-primary);
+    background-color: var(--bk-primary-subtle);
+}
+
+.bk-gradient-text {
+    background: linear-gradient(45deg, #4F46E5, #EC4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent !important;
+}
+
+.bk-progress-bar-gradient {
+     background: linear-gradient(90deg, #6366f1 0%, #ec4899 100%) !important;
+}
+
+.bk-vertical-gradient-bar {
+     width: 5px !important;
+     height: 32px !important;
+     background: linear-gradient(to bottom, #6366f1, #ec4899) !important;
+     border-radius: 4px;
+}
+
+/* Animaciones */
+.animate-float { animation: float 4s ease-in-out infinite; }
 @keyframes float {
     0% { transform: translateY(0px); }
     50% { transform: translateY(-10px); }
     100% { transform: translateY(0px); }
 }
-.animate-float {
-    animation: float 4s ease-in-out infinite;
+
+/* ------------------------------------------------------------
+   10. MEDIA QUERIES
+   ------------------------------------------------------------ */
+.mobile-toggle-btn {
+    background: var(--bk-card-bg) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    z-index: var(--z-mobile-toggle);
+    border: 1px solid var(--sidebar-border);
+    color: var(--bk-text-primary);
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
 }
 
-/* Theme Switcher Options */
-.theme-option {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    margin: 0.25rem;
-    border-radius: 8px;
-    background: var(--bk-card-bg);
-    border: 1px solid var(--bk-card-border);
-    cursor: pointer;
-    transition: all 0.2s;
+.sidebar-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-overlay);
+    opacity: 0; visibility: hidden;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(2px);
 }
-.theme-option.active {
-    background: var(--sidebar-item-active-bg);
-    color: var(--sidebar-item-active-text);
-    border-color: var(--bk-primary);
+
+@media (max-width: 991.98px) {
+    .app-sidebar {
+        width: 85vw; max-width: 320px;
+        transform: translateX(-100%);
+        box-shadow: none;
+    }
+    .app-content {
+        margin-left: 0;
+        padding-top: 4rem;
+    }
+    body.sidebar-open .app-sidebar {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    }
+    body.sidebar-open .sidebar-overlay {
+        opacity: 1; visibility: visible;
+    }
+    body.sidebar-open { overflow: hidden; }
+}
+
+@media print {
+    .app-sidebar, .mobile-toggle-btn, .d-print-none { display: none !important; }
+    .app-content { margin: 0; padding: 0; }
+    body, .card {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+    .page-break-avoid { page-break-inside: avoid; }
 }

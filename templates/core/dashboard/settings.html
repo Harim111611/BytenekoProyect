@@ -1,27 +1,7 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
-{% block page_styles %}
-<style>
-    /* Estilos específicos para los botones de tema */
-    .theme-option {
-        cursor: pointer;
-        border: 2px solid transparent;
-        border-radius: 12px;
-        padding: 15px;
-        transition: all 0.2s;
-        background-color: var(--bs-tertiary-bg); /* Fondo dinámico suave */
-        color: var(--bs-body-color);
-    }
-    .theme-option:hover { border-color: var(--bs-primary); }
-    .theme-option.active {
-        border-color: var(--bs-primary);
-        background-color: rgba(13, 110, 253, 0.1); /* Primary muy suave */
-    }
-    .theme-icon { font-size: 2rem; margin-bottom: 10px; color: var(--bs-secondary); }
-    .theme-option.active .theme-icon { color: var(--bs-primary); }
-</style>
-{% endblock %}
+{% comment %} Estilos migrados a static/css/byteneko.css {% endcomment %}
 
 {% block app_content %}
 <div class="container-xl p-4 p-md-5">
@@ -71,7 +51,7 @@
                 </div>
                 <div class="card-body p-4">
                     <div class="d-flex align-items-center">
-                        <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px; font-size: 1.5rem;">
+                        <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center me-3 bk-avatar-50">
                             {{ user.username|slice:":1"|upper }}
                         </div>
                         <div>

@@ -1,53 +1,7 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
-{% block page_styles %}
-<style>
-    /* ESTILOS DE TU DISEÑO */
-    .step-card { border: 1px solid var(--bs-border-color); transition: all 0.2s ease-in-out; cursor: pointer; }
-    .step-card.active { border-color: var(--bs-primary); background-color: var(--bs-primary-bg-subtle); box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.15); }
-    .step-card.completed { border-color: var(--bs-success); background-color: var(--bs-success-bg-subtle); }
-    .step-card:not(.active):not(.completed) { opacity: 0.6; }
-    .step-icon { width: 2.5rem; height: 2.5rem; flex-shrink: 0; }
-
-    /* Corrección Modo Noche */
-    [data-bs-theme="dark"] .step-card.active { background-color: rgba(13, 110, 253, 0.15); }
-    [data-bs-theme="dark"] .step-card.completed { background-color: rgba(25, 135, 84, 0.15); }
-
-    /* Estilos de Vista Previa (Simulador) */
-    .preview-device {
-        background-color: var(--bs-body-tertiary);
-        border-radius: 1rem;
-        border: 1px solid var(--card-border-color);
-        padding: 1.5rem;
-        min-height: 400px;
-    }
-    .preview-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--card-border-color);
-        border-radius: 0.75rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-
-    /* Vista previa: radios y checkboxes en modo noche */
-    body.dark-mode .form-check-input.dark-preview,
-    [data-bs-theme="dark"] .form-check-input.dark-preview {
-        background-color: #23272b !important;
-        border-color: #666 !important;
-        box-shadow: none !important;
-        filter: brightness(1.2) grayscale(0.2);
-    }
-    body.dark-mode .form-check-input.dark-preview:checked,
-    [data-bs-theme="dark"] .form-check-input.dark-preview:checked {
-        background-color: #0d6efd !important;
-        border-color: #0d6efd !important;
-    }
-    body.dark-mode .form-check-input.dark-preview:disabled,
-    [data-bs-theme="dark"] .form-check-input.dark-preview:disabled {
-        opacity: 0.7;
-    }
-</style>
-{% endblock %}
+{% comment %} Estilos migrados a static/css/byteneko.css {% endcomment %}
 
 {% block app_content %}
 <div class="p-4 p-md-5">
@@ -60,7 +14,7 @@
     </div>
 
     <div class="mb-4">
-        <div class="progress bg-body-tertiary" style="height: 0.5rem;">
+        <div class="progress bg-body-tertiary bk-progress-5">
             <div class="progress-bar" role="progressbar" style="width: 0%;" id="progressBar"></div>
         </div>
         <div class="d-flex justify-content-between text-muted small mt-2">
@@ -151,7 +105,7 @@
                     <button class="btn btn-outline-secondary btn-lg border-dashed text-body" id="btn-add-custom-question">
                         <i class="bi bi-plus-lg me-2"></i> Crear pregunta personalizada
                     </button>
-                    <button class="btn btn-success btn-lg ms-2" id="btn-save-template" style="display:none;">
+                    <button class="btn btn-success btn-lg ms-2 d-none" id="btn-save-template">
                         <i class="bi bi-save me-2"></i> Guardar como plantilla
                     </button>
                 </div>
