@@ -1,3 +1,24 @@
+/* Ajuste visual para botones de acciones en modo oscuro */
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light {
+    background-color: #23272e !important;
+    color: #e6e6e6 !important;
+    border-color: #30363d !important;
+}
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light:hover,
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light:focus {
+    background-color: #30363d !important;
+    color: #58A6FF !important;
+    border-color: #58A6FF !important;
+}
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger {
+    color: #ff6b6b !important;
+}
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger:hover,
+[data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger:focus {
+    background-color: #2d1517 !important;
+    color: #ff6b6b !important;
+    border-color: #ff6b6b !important;
+}
 /* ============================================================
    BYTENEKO DESIGN SYSTEM — DEFINITIVE EDITION
    Versión: 5.0 (Final Polish & Fixes)
@@ -121,10 +142,20 @@ a:hover { color: var(--bk-primary); }
 [data-bs-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
 [data-bs-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
 
-/* Bootstrap Icons Fix */
+/* ------------------------------------------------------------
+   FIX BOOTSTRAP ICONS (ROBUSTO)
+   ------------------------------------------------------------ */
 .bi, [class^="bi-"], [class*=" bi-"] {
+    display: inline-block !important;
+    font-family: 'bootstrap-icons' !important; /* CRÍTICO: Fuerza la fuente de iconos */
+    font-style: normal !important;
+    font-weight: normal !important;
+    font-variant: normal !important;
+    text-transform: none !important;
     line-height: 1 !important;
-    vertical-align: middle;
+    vertical-align: -0.125em !important; /* Alineación vertical perfecta con texto */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Utilería de Texto */
