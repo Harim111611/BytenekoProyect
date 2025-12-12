@@ -127,7 +127,16 @@ CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = '/static/'
 
-MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+# --- WHITENOISE CONFIGURATION (Cache Busting) ---
+# Aseguramos que WhiteNoiseMiddleware esté justo después de SecurityMiddleware
+try:
+    security_middleware_index = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
+    MIDDLEWARE.insert(security_middleware_index + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ValueError:
+    # Si no está SecurityMiddleware, lo insertamos al principio
+    MIDDLEWARE.insert(0, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+# Habilitar compresión y hashing (versionado automático)
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 if config('USE_S3', default=False, cast=bool):

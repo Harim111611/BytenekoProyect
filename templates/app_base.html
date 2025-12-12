@@ -2,14 +2,11 @@
 {% load static %}
 
 {% block styles %}
-    {# ELIMINADO: <link rel="stylesheet" href="{% static 'css/byteneko.css' %}"> #}
-    {# Ya se carga en base.html, evitamos duplicidad #}
+    {# Bloque para estilos específicos de página #}
     {% block page_styles %}{% endblock %}
 {% endblock %}
 
 {% block content %}
-    {# ... (El resto del contenido se mantiene igual) ... #}
-    
     {# --- BOTÓN HAMBURGUESA PARA MÓVIL --- #}
     <button class="btn btn-sm btn-icon d-lg-none position-fixed top-0 start-0 m-3 mobile-toggle-btn" 
             id="sidebarToggleBtn" 
@@ -17,12 +14,9 @@
         <i class="bi bi-list" style="font-size: 1.5rem;"></i>
     </button>
     
-    {# ... (Resto del sidebar y scripts se mantienen igual) ... #}
-    
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <aside class="app-sidebar">
-        {# ... Contenido del Sidebar igual ... #}
         <div class="app-sidebar-logo">
             <div class="d-flex align-items-center gap-2">
                 <img src="{% static 'img/favicon.ico' %}" alt="Logo" style="width: 32px; height: 32px;" class="rounded-2 shadow-sm">
@@ -70,7 +64,7 @@
         {% block app_content %}{% endblock %}
     </main>
     
-    {# Loader Modal #}
+    {# Loader Modal Global #}
     <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 bg-transparent shadow-none">
@@ -92,12 +86,10 @@
             const overlay = document.getElementById('sidebarOverlay');
             const body = document.body;
 
-            // Función unificada para cerrar el sidebar
             function closeSidebar() {
                 body.classList.remove('sidebar-open');
             }
 
-            // Función para abrir/cerrar
             function toggleSidebar() {
                 body.classList.toggle('sidebar-open');
             }
@@ -106,7 +98,6 @@
             if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
             if(overlay) overlay.addEventListener('click', closeSidebar);
 
-            // Cerrar sidebar al hacer click en un link (UX móvil)
             if (window.innerWidth < 992) {
                 const navLinks = document.querySelectorAll('.nav-item-button');
                 navLinks.forEach(link => {
@@ -123,8 +114,7 @@
                         
                         // Recarga suave para gráficos si es necesario
                         if (document.querySelector('canvas') || window.location.pathname.includes('/results/')) {
-                            // Opcional: recargar si los gráficos no reaccionan al CSS variable
-                            // window.location.reload(); 
+                            // window.location.reload(); // Descomentar si los gráficos necesitan recarga
                         }
                     }
                 });
