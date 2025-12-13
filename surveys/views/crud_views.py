@@ -140,7 +140,7 @@ def delete_task_status(request, task_id):
 @require_POST
 @ratelimit(key="user", rate="50/h", method="POST", block=True)
 def bulk_delete_surveys_view(request):
-    from surveys.tasks import delete_surveys_task
+    from surveys.tasks import bulk_delete_surveys
     
     survey_ids = request.POST.getlist('survey_ids')
 
@@ -169,7 +169,7 @@ def bulk_delete_surveys_view(request):
 
     task_result = None
     try:
-        task_result = delete_surveys_task.delay(clean_ids, request.user.id)
+        task_result = bulk_delete_surveys.delay(clean_ids)
         logger.info(f'[BULK_DELETE][CELERY] Lanzada tarea {task_result.id} para borrar {len(clean_ids)} items.')
     except Exception as e:
         logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")

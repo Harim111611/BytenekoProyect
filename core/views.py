@@ -440,10 +440,10 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
     top_preguntas = Question.objects.filter(
         survey__in=surveys, 
         type='scale',
-        question_responses__isnull=False # FIX: Plural
+        question_responses__isnull=False # FIX: Plural y con guion bajo
     ).annotate(
-        avg_score=Avg('question_responses__numeric_value'), # FIX: Plural
-        num_responses=Count('question_responses') # FIX: Plural
+        avg_score=Avg('question_responses__numeric_value'), # FIX: Plural y con guion bajo
+        num_responses=Count('question_responses') # FIX: Plural y con guion bajo
     ).filter(
         num_responses__gte=1
     ).select_related('survey').order_by('-avg_score')[:10]
