@@ -250,7 +250,6 @@ class NumericNarrative:
                 ]
             }
         },
-        # ... (Agregar más variaciones para BAJO, CRITICO, POLARIZED siguiendo el mismo patrón de 15 items) ...
         'POLARIZED': {
             'FORMAL': {'fact': ["El promedio es {avg:.1f}, pero oculta una alta polarización.", "Opiniones divididas: promedio engañoso de {avg:.1f}.", "Fenómeno de polarización con media de {avg:.1f}.", "Alta varianza con media de {avg:.1f}."], 'meaning': ["Los usuarios o aman u odian la propuesta.", "Hay dos segmentos opuestos.", "Falta consistencia en la entrega."], 'action': ["Crucial segmentar para entender las diferencias.", "No guiarse solo por el promedio.", "Estandarizar la experiencia."]},
             'MOTIVATIONAL': {'fact': ["¡Guerra civil! Unos nos aman, otros no.", "Promedio de {avg:.1f}, pero opiniones extremas.", "Amor y odio en partes iguales."], 'meaning': ["Somos controversiales.", "No dejamos a nadie indiferente.", "Despertamos pasiones encontradas."], 'action': ["¡Ganemos a los detractores!", "¡Repliquemos lo que aman los fans!", "¡A unificar la experiencia!"]}
@@ -597,9 +596,10 @@ class SurveyAnalysisService:
         include_quotes = config.get('include_quotes', True)
         
         if cache_key is None:
-            total = responses_queryset.count()
-            last_id = responses_queryset.order_by('-id').values_list('id', flat=True).first() or 0
-            cache_key = f"analysis_v20_ultra:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}"
+            # FIX #1: Usar una clave de caché basada en tiempo (TTL) y el ID de la encuesta,
+            # eliminando 'total' y 'last_id' para evitar invalidación constante.
+            # Se confía en el timeout de caché.
+            cache_key = f"analysis_v21_opt:{survey.id}:{tone}:{include_quotes}"
             
         cached = cache.get(cache_key)
         if cached: return cached
@@ -640,12 +640,7 @@ class SurveyAnalysisService:
                 narrative = NumericNarrative.analyze(st['avg'], st['max'], min_val=st['min'], stats_dist=raw_dist, tone=tone, is_demographic=is_demo)
                 item['insight'] = narrative
                 item['insight_data'] = {'type': 'numeric', 'average': st['avg'], 'max': st['max'], 'min': st['min'], 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']:
-                    # Generar gráfico Plotly interactivo
-                    from core.utils.charts import ChartGenerator
-                    item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
-                        item['chart_labels'], item['chart_data'], title=None, dark_mode=False
-                    )
+                if item['chart_labels']: item['chart'] = {'labels': item['chart_labels'], 'data': item['chart_data'], 'type': 'bar'}
 
             elif q.id in text_responses:
                 texts = text_responses[q.id]
@@ -671,16 +666,7 @@ class SurveyAnalysisService:
                 narrative = DemographicNarrative.analyze(raw_dist, total_q, tone=tone)
                 item['insight'] = narrative
                 item['insight_data'] = {'type': 'categorical', 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']:
-                    from core.utils.charts import ChartGenerator
-                    if chart_type == 'bar':
-                        item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
-                            item['chart_labels'], item['chart_data'], title=None, dark_mode=False
-                        )
-                    else:
-                        item['chart'] = ChartGenerator.generate_doughnut_chart_plotly(
-                            item['chart_labels'], item['chart_data'], title=None, dark_mode=False
-                        )
+                if item['chart_labels']: item['chart'] = {'labels': item['chart_labels'], 'data': item['chart_data'], 'type': chart_type}
 
             analysis_data.append(item)
 
@@ -692,6 +678,7 @@ class SurveyAnalysisService:
             'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': responses_queryset.count(),
             'evolution': evolution
         }
+        # Aumentamos el caché a 1 hora ya que no se invalidará manualmente tan seguido
         cache.set(cache_key, result, 3600)
         return result
 
@@ -722,10 +709,13 @@ class SurveyAnalysisService:
         ids = [q.id for q in analyzable_q if q.type == 'text']
         if not ids: return {}
         res = defaultdict(list)
+        
+        # FIX #2: Límite reducido a 50 para evitar bloqueo de CPU en tiempo real
+        limit = 50
         try:
-            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:200]
+            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:limit]
         except Exception:
-            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:200]
+            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:limit]
         for x in res_qs: res[x['question_id']].append(x['text_value'])
         return res
     
