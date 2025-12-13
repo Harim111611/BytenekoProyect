@@ -2,10 +2,10 @@
 
 {# Estilos migrados a static/css/byteneko.css #}
 
-<article class="card insight-card rounded-4 border-0 w-100" data-card-id="{{ data.id }}">
+<article class="card insight-card rounded-4 border-0 w-100 h-100 shadow-sm" data-card-id="{{ data.id }}">
     
     {# --- HEADER --- #}
-    <div class="card-header bg-transparent ic-header">
+    <div class="card-header bg-transparent ic-header border-0 pt-3 px-4">
         <div class="d-flex gap-3 align-items-start">
             <div class="flex-shrink-0 mt-1">
                  <div class="d-flex align-items-center justify-content-center rounded-circle bg-light text-primary fw-bolder shadow-sm border bk-avatar-28">
@@ -16,19 +16,19 @@
             <div class="flex-grow-1 min-w-0">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     {% if data.type == 'numeric' or data.type == 'scale' %}
-                        <span class="ic-badge ic-badge-num"><i class="bi bi-123 me-1"></i> Escala</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-123 me-1"></i> Escala</span>
                     {% elif data.type == 'text' %}
-                        <span class="ic-badge ic-badge-txt"><i class="bi bi-chat-quote me-1"></i> Abierta</span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-chat-quote me-1"></i> Abierta</span>
                     {% else %}
-                        <span class="ic-badge ic-badge-sel"><i class="bi bi-pie-chart me-1"></i> Selección</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-pie-chart me-1"></i> Selección</span>
                     {% endif %}
                     
-                    <small class="text-muted fw-bold fs-8">
+                    <small class="text-muted fw-bold" style="font-size: 0.75rem;">
                         {{ data.total_responses|intcomma }} Respuestas
                     </small>
                 </div>
                 
-                <h3 class="fw-bold mb-0 text-truncate text-dark fs-6 lh-13" title="{{ data.text }}">
+                <h3 class="fw-bold mb-0 text-truncate text-dark fs-6 lh-base" title="{{ data.text }}">
                     {{ data.text }}
                 </h3>
             </div>
@@ -43,10 +43,10 @@
             
             {% if data.type == 'text' %}
                 {# MODO TEXTO #}
-                <div class="ic-scroll-area pe-2 maxh-220 overflow-y-auto">
+                <div class="pe-2 overflow-y-auto" style="max-height: 250px;">
                     {% if data.top_responses %}
                         {% for resp in data.top_responses %}
-                            <div class="ic-comment text-secondary text-break">
+                            <div class="p-2 mb-2 bg-light rounded-3 text-secondary border border-light small text-break">
                                 {{ resp }}
                             </div>
                         {% endfor %}
@@ -59,54 +59,73 @@
                 </div>
 
             {% elif data.type == 'numeric' or data.type == 'scale' %}
-                {# MODO KPI + GRÁFICA #}
-                <div class="row align-items-center h-100 g-0">
-                    <div class="col-4 border-end pe-3 text-center d-flex flex-column justify-content-center">
-                        <span class="text-uppercase text-muted fw-bold fs-9 ls-1">Promedio</span>
-                        <div class="display-6 fw-bold text-primary my-1">
-                            {{ data.insight_data.average|default:"0.0"|floatformat:1 }}
+                {# MODO KPI + GRÁFICA (Layout Vertical - KPI Arriba, Gráfica Abajo) #}
+                <div class="d-flex flex-column h-100 w-100">
+                    <div class="d-flex align-items-center border-bottom pb-3 mb-3">
+                        <div class="me-4 text-center">
+                            <span class="text-uppercase text-muted fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">Promedio</span>
+                            <span class="display-6 fw-bold text-primary">{{ data.insight_data.average|default:"0.0"|floatformat:1 }}</span>
                         </div>
                         
-                        {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
-                        <div class="progress mt-2 w-75 mx-auto bk-progress-6 bg-bk-primary-10">
-                            <div class="progress-bar bg-primary" role="progressbar" 
-                                 style="width: {% widthratio avg max_val 100 %}%;"></div>
+                        <div class="flex-grow-1">
+                            {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
+                            <div class="progress w-100 rounded-pill bg-light border" style="height: 8px;">
+                                <div class="progress-bar bg-primary rounded-pill" role="progressbar" 
+                                     style="width: {% widthratio avg max_val 100 %}%;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 0.7rem;">
+                                <span>0</span><span>{{ max_val }}</span>
+                            </div>
+                            {% endwith %}
                         </div>
-                        <div class="d-flex justify-content-between text-muted mt-1 w-75 mx-auto fs-10">
-                            <span>0</span><span>{{ max_val }}</span>
-                        </div>
-                        {% endwith %}
                     </div>
                     
-                    <div class="col-8 ps-3">
-                        {# Aumentamos altura aquí para evitar que se vea 'raro' o aplastado #}
-                        <div class="chart-container-base h-160 minh-160">
-                            <canvas id="chart-{{ data.id }}"></canvas>
-                        </div>
+                    <div class="w-100 text-center mt-auto">
+                        {% if data.chart %}
+                            <img src="data:image/png;base64,{{ data.chart|safe }}" 
+                                 class="img-fluid rounded-3" 
+                                 style="width: 100%; height: auto; object-fit: contain; min-height: 220px;"
+                                 alt="Gráfico de {{ data.text }}">
+                        {% else %}
+                            <div class="text-muted py-4 small d-flex flex-column align-items-center justify-content-center h-100" style="min-height: 200px;">
+                                <i class="bi bi-bar-chart fs-3 opacity-50 mb-2"></i>
+                                No hay datos suficientes
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
 
             {% else %}
-                {# MODO GRÁFICO ESTÁNDAR #}
-                <div class="chart-container-base">
-                    <canvas id="chart-{{ data.id }}"></canvas>
+                {# MODO GRÁFICO ESTÁNDAR (Selección múltiple, etc) #}
+                <div class="text-center w-100 h-100 d-flex align-items-center justify-content-center">
+                    {% if data.chart %}
+                         <img src="data:image/png;base64,{{ data.chart|safe }}" 
+                              class="img-fluid rounded-3" 
+                              style="width: 100%; height: auto; object-fit: contain; min-height: 220px;"
+                              alt="Gráfico de {{ data.text }}">
+                    {% else %}
+                        <div class="text-muted py-5 small opacity-75">
+                             <i class="bi bi-pie-chart fs-3 opacity-50 mb-2 d-block"></i>
+                             No hay datos visuales
+                        </div>
+                    {% endif %}
                 </div>
             {% endif %}
         </div>
 
         {# FOOTER: INSIGHTS #}
-        <div class="mt-auto">
+        <div class="mt-auto pt-3 border-top border-light-subtle">
             {% if data.insight_data.key_insight %}
-                <div class="ic-key-insight d-flex gap-3 align-items-start">
+                <div class="d-flex gap-3 align-items-start bg-warning-subtle p-3 rounded-3 border border-warning-subtle mb-3">
                     <i class="bi bi-lightbulb-fill text-warning flex-shrink-0 mt-1"></i>
-                    <p class="mb-0 small text-secondary lh-sm">
+                    <p class="mb-0 small text-dark lh-sm">
                         {{ data.insight_data.key_insight }}
                     </p>
                 </div>
             {% endif %}
 
             {% if data.insight_data.topics %}
-                <div class="d-flex flex-wrap gap-2 mt-3 pt-2 border-top border-light opacity-75">
+                <div class="d-flex flex-wrap gap-2">
                     {% for topic in data.insight_data.topics|slice:":4" %}
                         <span class="badge bg-light text-secondary border fw-normal py-1 px-2">
                             #{{ topic }}
@@ -116,22 +135,4 @@
             {% endif %}
         </div>
     </div>
-
-    {# --- JS INLINE --- #}
-    {% if data.chart %}
-        {{ data.chart|json_script:data.id }}
-        <script>
-            (function() {
-                const config = {
-                    id: 'chart-{{ data.id }}',
-                    dataId: '{{ data.id }}',
-                    rawType: '{{ data.type }}',
-                    displayType: ('{{ data.is_demographic }}' === 'True' || ('{{ data.type }}' === 'single' && {{ data.chart.labels|length }} <= 4)) ? 'doughnut' : 'bar',
-                    isDemographic: '{{ data.is_demographic }}' === 'True'
-                };
-                window.chartRegistry = window.chartRegistry || [];
-                window.chartRegistry.push(config);
-            })();
-        </script>
-    {% endif %}
 </article>

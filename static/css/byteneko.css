@@ -44,16 +44,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    aspect-ratio: 1/1;
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 16px;
     padding: 0;
     line-height: 1;
+    box-sizing: border-box;
 }
 .icon-square i {
-    font-size: 2rem;
+    font-size: 2.2rem;
     line-height: 1;
-    width: auto;
-    height: auto;
+    width: 1em;
+    height: 1em;
     margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 /* Vista previa de encuesta (simulador) */
 .preview-device {

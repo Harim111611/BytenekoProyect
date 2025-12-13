@@ -211,6 +211,26 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     context_object_name = 'surveys'
     paginate_by = 12
 
+    def get(self, request, *args, **kwargs):
+        """
+        Interceptamos el GET para verificar si el filtro de categoría es válido.
+        Si el usuario borró la última encuesta de una categoría, ese filtro queda "huérfano"
+        y mostraría una lista vacía. Aquí lo detectamos y reseteamos.
+        """
+        category_filter = request.GET.get('category', '').strip()
+        
+        if category_filter:
+            # Comprobamos si el usuario REALMENTE tiene encuestas en esa categoría
+            exists = Survey.objects.filter(author=request.user, category=category_filter).exists()
+            
+            if not exists:
+                # Si no hay encuestas, redirigimos a la lista limpia (sin filtros de query params)
+                # Opcional: podrías conservar otros filtros como 'q' o 'status', pero limpiar es más seguro para UX.
+                messages.info(request, f"Filtro eliminado: La categoría '{category_filter}' ya no tiene encuestas.")
+                return redirect('surveys:list')
+
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.filter(author=self.request.user)
@@ -218,7 +238,7 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
             # Obtener parámetros de filtrado
             q = (self.request.GET.get('q') or '').strip()
             status = (self.request.GET.get('status') or '').strip()
-            category = (self.request.GET.get('category') or '').strip() # <--- NUEVO FILTRO
+            category = (self.request.GET.get('category') or '').strip()
 
             if q:
                 qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
@@ -226,7 +246,7 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
             if status:
                 qs = qs.filter(status=status)
             
-            if category: # <--- APLICAR FILTRO DE CATEGORÍA
+            if category: 
                 qs = qs.filter(category=category)
 
         except Exception as e:

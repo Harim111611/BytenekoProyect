@@ -29,7 +29,6 @@ class ChartGenerator:
         '#f472b6', '#a3e635'
     ]
 
-    # 🔧 Corregido: agregamos success / warning / danger usados por generate_nps_chart
     THEME_COLORS = {
         'light': {
             'text': '#374151',
@@ -51,10 +50,15 @@ class ChartGenerator:
         }
     }
 
+    # AJUSTE 1: Fuentes más grandes por defecto para mejor lectura
     BASE_STYLE = {
         'font.family': 'sans-serif',
         'font.sans-serif': ['Inter', 'system-ui', 'Segoe UI', 'sans-serif'],
-        'font.size': 11,
+        'font.size': 12,           # Aumentado de 11 a 12
+        'axes.labelsize': 12,      # Etiquetas ejes
+        'axes.titlesize': 14,      # Títulos más grandes
+        'xtick.labelsize': 11,
+        'ytick.labelsize': 11,
         'axes.unicode_minus': False,
         'axes.linewidth': 0,
     }
@@ -112,7 +116,7 @@ class ChartGenerator:
         ]
 
     @staticmethod
-    def _fig_to_base64(fig, dpi=130):
+    def _fig_to_base64(fig, dpi=140): # AJUSTE: DPI un poco más alto (130->140)
         try:
             buf = io.BytesIO()
             plt.savefig(
@@ -133,31 +137,21 @@ class ChartGenerator:
 
     @classmethod
     def _optimize_data_visuals(cls, labels, counts, limit=15):
-        """
-        Agrupa el exceso de datos en 'Otros' para evitar saturación visual.
-        Ordena de mayor a menor.
-        """
         if not labels or not counts:
             return [], []
 
-        # Unir y ordenar
         data = sorted(zip(labels, counts), key=lambda x: x[1], reverse=True)
 
         if len(data) <= limit:
-            # Devuelve (labels, counts)
             if not data:
                 return [], []
             l, c = zip(*data)
             return list(l), list(c)
 
-        # Tomar Top (limit - 1)
         top_data = data[: limit - 1]
         other_data = data[limit - 1 :]
-
-        # Calcular suma de otros
         other_count = sum(item[1] for item in other_data)
 
-        # Reconstruir
         final_labels = [item[0] for item in top_data] + ['Otros (Resto)']
         final_counts = [item[1] for item in top_data] + [other_count]
 
@@ -179,7 +173,6 @@ class ChartGenerator:
                 ).dropna(axis=1, how='all')
             if df_numeric.shape[1] < 2:
                 return None
-            # Limitar correlación a 20x20 máximo para que no explote
             if df_numeric.shape[1] > 20:
                 df_numeric = df_numeric.iloc[:, :20]
             corr_matrix = (
@@ -224,11 +217,11 @@ class ChartGenerator:
                 ax=ax,
                 cbar_kws={'shrink': 0.8, 'aspect': 20, 'pad': 0.02},
                 square=True,
-                annot_kws={'size': 9, 'weight': 'bold'},
+                annot_kws={'size': 10, 'weight': 'bold'},
             )
             ax.set_title(
                 'Mapa de Correlaciones',
-                fontsize=13,
+                fontsize=14,
                 weight='bold',
                 pad=20,
                 color=theme['text'],
@@ -236,12 +229,12 @@ class ChartGenerator:
             plt.xticks(
                 rotation=45,
                 ha='right',
-                fontsize=9,
+                fontsize=10,
                 color=theme['text'],
             )
             plt.yticks(
                 rotation=0,
-                fontsize=9,
+                fontsize=10,
                 color=theme['text'],
             )
 
@@ -263,13 +256,13 @@ class ChartGenerator:
     def generate_donut_chart(
         cls, labels, counts, title=None, colors=None, dark_mode=False
     ):
-        # Optimización: Agrupar en Otros si hay > 12 rebanadas
         f_labels, f_counts = cls._optimize_data_visuals(labels, counts, limit=12)
         if not f_labels:
             return None
 
+        # Aumentamos un poco el tamaño base del donut
         fig, ax, theme = cls._setup_figure(
-            figsize=(6, 4.5), dark_mode=dark_mode
+            figsize=(7, 5.5), dark_mode=dark_mode
         )
 
         if not colors:
@@ -284,7 +277,7 @@ class ChartGenerator:
             pctdistance=0.78,
             wedgeprops={'linewidth': 0},
             textprops=dict(
-                color='#ffffff', fontsize=10, weight='bold'
+                color='#ffffff', fontsize=11, weight='bold'
             ),
         )
 
@@ -300,13 +293,13 @@ class ChartGenerator:
             loc="center left",
             bbox_to_anchor=(1, 0, 0.5, 1),
             frameon=False,
-            fontsize=10,
+            fontsize=11,
         )
 
         if title:
             ax.set_title(
                 title,
-                fontsize=13,
+                fontsize=14,
                 weight='bold',
                 pad=15,
                 color=theme['text'],
@@ -343,12 +336,14 @@ class ChartGenerator:
     def generate_horizontal_bar_chart(
         cls, labels, counts, title, dark_mode=False
     ):
-        # Optimización: Top 20 para barras estáticas
         f_labels, f_counts = cls._optimize_data_visuals(labels, counts, limit=20)
 
-        height = max(4, len(f_labels) * 0.7)
+        # AJUSTE 2: Altura dinámica más generosa por barra
+        # Mínimo 6 pulgadas, 0.9 pulgadas por barra extra.
+        height = max(6, len(f_labels) * 0.9)
+        
         fig, ax, theme = cls._setup_figure(
-            figsize=(8, height), dark_mode=dark_mode
+            figsize=(9, height), dark_mode=dark_mode
         )
 
         y_pos = range(len(f_labels))
@@ -359,7 +354,7 @@ class ChartGenerator:
             f_counts,
             color=bar_colors,
             alpha=0.95,
-            height=0.75,
+            height=0.8,  # AJUSTE 3: Barras mucho más gruesas (0.6 -> 0.8)
             zorder=3,
         )
 
@@ -368,7 +363,7 @@ class ChartGenerator:
         ax.set_yticks(y_pos)
         ax.set_yticklabels(
             short_labels,
-            fontsize=11,
+            fontsize=12,  # Fuente más grande
             weight='medium',
             color=theme['text'],
         )
@@ -376,7 +371,7 @@ class ChartGenerator:
 
         ax.set_title(
             title,
-            fontsize=13,
+            fontsize=15,
             weight='bold',
             pad=20,
             color=theme['text'],
@@ -393,7 +388,7 @@ class ChartGenerator:
             bars,
             fmt='%d',
             padding=8,
-            fontsize=11,
+            fontsize=12, # Etiqueta de valor más grande
             weight='bold',
             color=theme['text'],
         )
@@ -405,10 +400,12 @@ class ChartGenerator:
     def generate_vertical_bar_chart(
         cls, labels, counts, title, dark_mode=False
     ):
-        # Optimización: Top 15 para vertical (más limitado por el ancho)
         f_labels, f_counts = cls._optimize_data_visuals(labels, counts, limit=15)
 
-        fig, ax, theme = cls._setup_figure(dark_mode=dark_mode)
+        # AJUSTE 4: Canvas más ancho para dar espacio
+        fig_width = max(8, len(f_labels) * 1.2)
+        
+        fig, ax, theme = cls._setup_figure(figsize=(fig_width, 6.0), dark_mode=dark_mode)
 
         short_labels = [str(l)[:15] for l in f_labels]
         bar_colors = cls._get_colors(len(f_labels))
@@ -418,13 +415,13 @@ class ChartGenerator:
             f_counts,
             color=bar_colors,
             alpha=0.95,
-            width=0.75,
+            width=0.7, # AJUSTE 5: Barras verticales más gruesas (0.5 -> 0.7)
             zorder=3,
         )
 
         ax.set_title(
             title,
-            fontsize=13,
+            fontsize=15,
             weight='bold',
             pad=20,
             color=theme['text'],
@@ -446,16 +443,16 @@ class ChartGenerator:
             axis='x',
             colors=theme['text'],
             length=0,
-            labelsize=10,
+            labelsize=11,
             rotation=30,
-        )  # Rotación para evitar overlap
+        )
         ax.tick_params(axis='y', left=False, labelleft=False)
 
         ax.bar_label(
             bars,
             fmt='%d',
             padding=4,
-            fontsize=11,
+            fontsize=12,
             weight='bold',
             color=theme['text'],
         )
@@ -463,13 +460,8 @@ class ChartGenerator:
         plt.tight_layout()
         return cls._fig_to_base64(fig)
 
-    # 🔥 Nuevo alias usado por survey_analysis.py
     @classmethod
     def generate_bar_chart(cls, labels, counts, title, dark_mode=False):
-        """
-        Alias retrocompatible que delega en generate_vertical_bar_chart.
-        Lo usamos desde el motor de análisis para desacoplar el tipo de barra.
-        """
         return cls.generate_vertical_bar_chart(
             labels, counts, title, dark_mode=dark_mode
         )
