@@ -125,13 +125,12 @@ def delete_task_status(request, task_id):
     if result.ready():
         if result.successful():
             response_data['result'] = result.result
-            response_data['deleted_count'] = result.result.get('deleted', 0) if isinstance(result.result, dict) else 0
-            response_data['deleted_surveys'] = result.result.get('deleted_surveys', 0) if isinstance(result.result, dict) else 0
+            # Mapeo de resultados para compatibilidad
+            if isinstance(result.result, dict):
+                response_data['deleted_count'] = result.result.get('deleted', 0)
+                response_data['deleted_surveys'] = result.result.get('deleted', 0)
         else:
             response_data['error'] = str(result.info)
-    else:
-        if hasattr(result.info, 'get'):
-            response_data['progress'] = result.info.get('progress', 0)
     
     return JsonResponse(response_data)
 
@@ -158,6 +157,7 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'IDs de encuestas inválidos.')
         return redirect('surveys:list')
 
+    # Validación de propiedad
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
     count = base_qs.count()
     if count == 0:
@@ -167,19 +167,23 @@ def bulk_delete_surveys_view(request):
         messages.error(request, msg)
         return redirect('surveys:list')
 
+    # Filtrar IDs válidos (solo los que pertenecen al usuario)
+    valid_ids = list(base_qs.values_list('id', flat=True))
+
     task_result = None
     try:
-        task_result = bulk_delete_surveys.delay(clean_ids)
-        logger.info(f'[BULK_DELETE][CELERY] Lanzada tarea {task_result.id} para borrar {len(clean_ids)} items.')
+        task_result = bulk_delete_surveys.delay(valid_ids)
+        logger.info(f'[BULK_DELETE][CELERY] Lanzada tarea {task_result.id} para items {valid_ids}.')
     except Exception as e:
         logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")
 
+    # Fallback síncrono si Celery falla
     if task_result is None:
         try:
             with transaction.atomic():
-                deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
+                deleted_count, _ = Survey.objects.filter(id__in=valid_ids).delete()
             
-            msg = f'Se eliminaron {len(clean_ids)} encuesta(s).'
+            msg = f'Se eliminaron {deleted_count} encuesta(s).'
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': True, 'deleted': deleted_count, 'message': msg})
             
@@ -197,7 +201,7 @@ def bulk_delete_surveys_view(request):
         return JsonResponse({
             'success': True, 
             'task_id': task_result.id,
-            'total_surveys': len(clean_ids), 
+            'total_surveys': len(valid_ids), 
             'message': 'Procesando eliminación...'
         })
 
@@ -212,73 +216,42 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     paginate_by = 12
 
     def get(self, request, *args, **kwargs):
-        """
-        Interceptamos el GET para verificar si el filtro de categoría es válido.
-        Si el usuario borró la última encuesta de una categoría, ese filtro queda "huérfano"
-        y mostraría una lista vacía. Aquí lo detectamos y reseteamos.
-        """
         category_filter = request.GET.get('category', '').strip()
-        
         if category_filter:
-            # Comprobamos si el usuario REALMENTE tiene encuestas en esa categoría
             exists = Survey.objects.filter(author=request.user, category=category_filter).exists()
-            
             if not exists:
-                # Si no hay encuestas, redirigimos a la lista limpia (sin filtros de query params)
-                # Opcional: podrías conservar otros filtros como 'q' o 'status', pero limpiar es más seguro para UX.
                 messages.info(request, f"Filtro eliminado: La categoría '{category_filter}' ya no tiene encuestas.")
                 return redirect('surveys:list')
-
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.filter(author=self.request.user)
         try:
-            # Obtener parámetros de filtrado
             q = (self.request.GET.get('q') or '').strip()
             status = (self.request.GET.get('status') or '').strip()
             category = (self.request.GET.get('category') or '').strip()
 
             if q:
                 qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
-            
             if status:
                 qs = qs.filter(status=status)
-            
             if category: 
                 qs = qs.filter(category=category)
-
-        except Exception as e:
-            logger.warning(f"SurveyListView.get_queryset: Exception: {e}")
+        except Exception:
             pass
         
-        try:
-            qs = qs.annotate(
-                total_responses=Count('responses', distinct=True),
-                total_questions=Count('questions', distinct=True),
-            )
-        except FieldError:
-            pass
-        
-        try:
-            qs = qs.order_by('-created_at')
-        except FieldError:
-            qs = qs.order_by('-id')
-        return qs
+        qs = qs.annotate(
+            total_responses=Count('responses', distinct=True),
+            total_questions=Count('questions', distinct=True),
+        )
+        return qs.order_by('-updated_at')
 
     def get_context_data(self, **kwargs):
-        """
-        Sobrescribimos para enviar las categorías únicas al template
-        y llenar el dropdown de filtros.
-        """
         context = super().get_context_data(**kwargs)
-        
-        # Obtener categorías distintas usadas por este usuario para el filtro
         context['unique_categories'] = Survey.objects.filter(
             author=self.request.user
         ).values_list('category', flat=True).distinct().order_by('category')
-        
         return context
 
 
@@ -319,7 +292,6 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             survey.sample_goal > 0 and
             responses_count >= survey.sample_goal
         )
-        
         return context
 
 
@@ -328,12 +300,6 @@ class SurveyCreateView(LoginRequiredMixin, CreateView):
     template_name = 'surveys/forms/survey_create.html'
     fields = ['title', 'description', 'category', 'sample_goal']
     success_url = reverse_lazy('surveys:list')
-
-    def post(self, request, *args, **kwargs):
-        content_type = request.content_type or ''
-        if 'application/json' in content_type:
-            pass
-        return super().post(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -377,14 +343,24 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
     slug_url_kwarg = 'public_id'
 
     def delete(self, request, *args, **kwargs):
-        from surveys.tasks import delete_surveys_task
+        # FIX: Usar la tarea correcta 'bulk_delete_surveys'
+        from surveys.tasks import bulk_delete_surveys
         self.object = self.get_object()
         survey_id = self.object.id
         survey_title = self.object.title
+        
         logger.info(f"[DELETE] Iniciando borrado asíncrono survey_id={survey_id}")
-        task_result = delete_surveys_task.delay([survey_id], request.user.id)
+        
+        # La tarea espera una lista de IDs, no acepta user_id como argumento
+        task_result = bulk_delete_surveys.delay([survey_id])
+        
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'task_id': task_result.id, 'message': f"Eliminando '{survey_title}'..."})
+            return JsonResponse({
+                'success': True, 
+                'task_id': task_result.id, 
+                'message': f"Eliminando '{survey_title}'..."
+            })
+            
         messages.success(request, f"Procesando eliminación de '{survey_title}'...")
         return redirect(self.success_url)
 

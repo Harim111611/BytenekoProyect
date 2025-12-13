@@ -9,18 +9,19 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse, HttpRequest, HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from django.apps import apps
 
 logger = logging.getLogger(__name__)
 
-# Intentar importar el modelo Survey
+# Intentar importar los modelos
 try:
-    from surveys.models import Survey
+    from surveys.models import Survey, ImportJob
 except ImportError:
     Survey = apps.get_model('surveys', 'Survey')
+    ImportJob = apps.get_model('surveys', 'ImportJob')
 
 # =============================================================================
 # Helpers
@@ -59,18 +60,17 @@ def _save_uploaded_csv(upload) -> str:
 def csv_create_start_import(request: HttpRequest) -> JsonResponse:
     """
     Crea una o varias encuestas nuevas y lanza la importación.
-    Maneja tanto carga individual ('csv_file') como múltiple ('csv_files').
+    Crea un registro ImportJob para seguimiento.
     """
-    from surveys.tasks import process_survey_import  # Import local para evitar ciclos
+    from surveys.tasks import process_survey_import
 
     # 1. Caso de Múltiples Archivos (Bulk Import)
     if 'csv_files' in request.FILES:
         files = request.FILES.getlist('csv_files')
-        jobs = []
+        jobs_data = []
 
         try:
             for uploaded_file in files:
-                # Usar el nombre del archivo como título por defecto
                 survey_title = uploaded_file.name
                 
                 # Crear encuesta
@@ -82,38 +82,43 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                     is_imported=True
                 )
 
-                # Guardar archivo y lanzar tarea
+                # Guardar archivo físico
                 file_path = _save_uploaded_csv(uploaded_file)
-                task = process_survey_import.delay(
-                    survey_id=new_survey.id,
-                    file_path=file_path,
-                    filename=uploaded_file.name,
-                    user_id=request.user.id
-                )
                 
-                jobs.append({
-                    'job_id': task.id,
+                # Crear Job en BD
+                job = ImportJob.objects.create(
+                    survey=new_survey,
+                    user=request.user,
+                    csv_file=file_path,  # Guardamos el path temporal
+                    original_filename=uploaded_file.name,
+                    status='pending'
+                )
+
+                # Lanzar tarea pasando el ID del Job
+                process_survey_import.delay(job.id)
+                
+                jobs_data.append({
+                    'job_id': job.id, # ID numérico para polling de BD
                     'filename': uploaded_file.name,
                     'survey_public_id': new_survey.public_id
                 })
             
             return JsonResponse({
                 'success': True,
-                'message': f'{len(jobs)} importaciones iniciadas.',
-                'jobs': jobs  # El frontend espera esta lista para el polling múltiple
+                'message': f'{len(jobs_data)} importaciones iniciadas.',
+                'jobs': jobs_data 
             })
 
         except Exception as exc:
             logger.error(f"[IMPORT_BULK][ERROR] {exc}", exc_info=True)
             return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
-    # 2. Caso de Archivo Único (Legacy / Flujo normal)
+    # 2. Caso de Archivo Único (Legacy)
     elif 'csv_file' in request.FILES:
         uploaded_file = request.FILES['csv_file']
         survey_title = request.POST.get('survey_title', '').strip() or uploaded_file.name
 
         try:
-            # Crear la encuesta nueva
             new_survey = Survey.objects.create(
                 author=request.user,
                 title=survey_title,
@@ -122,21 +127,24 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                 is_imported=True
             )
 
-            # Guardar archivo
             file_path = _save_uploaded_csv(uploaded_file)
 
-            # Lanzar Tarea
-            task = process_survey_import.delay(
-                survey_id=new_survey.id,
-                file_path=file_path,
-                filename=uploaded_file.name,
-                user_id=request.user.id
+            # Crear Job
+            job = ImportJob.objects.create(
+                survey=new_survey,
+                user=request.user,
+                csv_file=file_path,
+                original_filename=uploaded_file.name,
+                status='pending'
             )
+
+            # Lanzar Tarea
+            process_survey_import.delay(job.id)
 
             return JsonResponse({
                 'success': True,
                 'message': 'Importación iniciada.',
-                'job_id': task.id, 
+                'job_id': job.id, 
                 'survey_public_id': new_survey.public_id
             })
 
@@ -144,22 +152,16 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
             logger.error(f"[IMPORT_NEW][ERROR] {exc}", exc_info=True)
             return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
-    # 3. Error si no hay archivos
     else:
-        return JsonResponse({'success': False, 'error': 'No se recibió archivo CSV (csv_file o csv_files).'}, status=400)
+        return JsonResponse({'success': False, 'error': 'No se recibió archivo CSV.'}, status=400)
 
 
 @require_POST
 @csrf_exempt
 @login_required
 def csv_create_preview_view(request: HttpRequest) -> JsonResponse:
-    """
-    Preview genérico para el modal del listado (no requiere survey existente).
-    """
     if 'csv_file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'Falta archivo.'}, status=400)
-    
-    # Reutilizamos la lógica de preview
     return csv_preview_view(request, public_id=None) 
 
 
@@ -171,9 +173,6 @@ def csv_create_preview_view(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 @login_required
 def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonResponse:
-    """
-    Importa datos a una encuesta existente.
-    """
     from surveys.tasks import process_survey_import 
 
     if 'survey_file' not in request.FILES:
@@ -187,15 +186,23 @@ def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonRespons
     
     try:
         file_path = _save_uploaded_csv(uploaded_file)
-        task = process_survey_import.delay(
-            survey_id=survey.id,
-            file_path=file_path, 
-            filename=uploaded_file.name,
-            user_id=request.user.id
+        
+        # Crear Job
+        job = ImportJob.objects.create(
+            survey=survey,
+            user=request.user,
+            csv_file=file_path,
+            original_filename=uploaded_file.name,
+            status='pending'
         )
+
+        process_survey_import.delay(job.id)
+        
+        # Devolvemos job_id (DB) no task_id (Celery) para consistencia con el polling
         return JsonResponse({
             'success': True, 
-            'task_id': task.id, 
+            'task_id': job.id, # El frontend legacy puede llamarlo task_id, pero enviamos el ID del job
+            'job_id': job.id,
             'survey_public_id': survey.public_id 
         })
     except Exception as exc:
@@ -207,20 +214,24 @@ def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonRespons
 @login_required
 def get_task_status_view(request: HttpRequest, task_id: str) -> JsonResponse:
     """
-    Consulta estado de Celery.
+    Endpoint de polling para ImportJobs (basado en BD).
+    La URL debe estar configurada para aceptar el ID del job.
     """
     try:
-        result = AsyncResult(task_id)
-        response = {'task_id': task_id, 'status': result.status.lower()}
+        # Asumimos que task_id aquí es el ID del ImportJob
+        job = get_object_or_404(ImportJob, id=task_id, user=request.user)
         
-        if result.state == 'SUCCESS':
-            response['status'] = 'completed' # Mapeo para compatibilidad con JS antiguo
-            response['result'] = result.result
-        elif result.state == 'FAILURE':
-            response['status'] = 'failed'
-            response['error_message'] = str(result.result)
-        else:
-            response['status'] = 'processing' # Mapeo para JS antiguo
+        response = {
+            'task_id': job.id, 
+            'status': job.status, # pending, processing, completed, failed
+            'processed_rows': job.processed_rows,
+            'total_rows': job.total_rows
+        }
+        
+        if job.status == 'completed':
+            response['result'] = {'imported_count': job.processed_rows}
+        elif job.status == 'failed':
+            response['error_message'] = job.error_message or job.error_log
             
         return JsonResponse(response)
     except Exception as e:
@@ -231,10 +242,6 @@ def get_task_status_view(request: HttpRequest, task_id: str) -> JsonResponse:
 @csrf_exempt
 @login_required
 def csv_preview_view(request: HttpRequest, public_id: str = None) -> JsonResponse:
-    """
-    Lógica de preview compartida.
-    """
-    # Detectar el archivo ya sea 'survey_file' (detalle) o 'csv_file' (listado)
     uploaded_file = request.FILES.get('survey_file') or request.FILES.get('csv_file')
     
     if not uploaded_file:
@@ -252,10 +259,8 @@ def csv_preview_view(request: HttpRequest, public_id: str = None) -> JsonRespons
         columns_info = []
         from surveys.utils.bulk_import import _infer_column_type
         for col in df.columns:
-            # Tomar una muestra de hasta 50 valores no vacíos para inferir tipo
             sample = [str(v) for v in df[col].values if v]
             dtype = _infer_column_type(col, sample)
-            # Tomar hasta 10 valores únicos para mostrar en la columna 'Muestra'
             sample_values = list({str(v) for v in df[col].values if v})[:10]
             columns_info.append({
                 "name": col,
