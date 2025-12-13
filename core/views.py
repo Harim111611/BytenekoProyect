@@ -15,6 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.template.loader import render_to_string
 from django.core.cache import cache
 from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Max
+from django.db.models.functions import TruncWeek
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, Question
@@ -393,15 +394,43 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
     cat_labels = [status_map.get(x['status'], x['status']) for x in status_dist]
     cat_data = [x['count'] for x in status_dist]
 
+    # --- OPTIMIZACIÓN: TENDENCIA SEMANAL (1 QUERY) ---
+    four_weeks_ago = now - timedelta(weeks=4)
+    
+    # Agrupamos por semana usando TruncWeek
+    weekly_agg = SurveyResponse.objects.filter(
+        survey__in=surveys, 
+        created_at__gte=four_weeks_ago
+    ).annotate(
+        week=TruncWeek('created_at')
+    ).values('week').annotate(
+        count=Count('id')
+    ).order_by('week')
+    
+    # Mapear resultados a diccionario por fecha {date: count}
+    weekly_data_map = {}
+    for item in weekly_agg:
+        if item['week']:
+            d = item['week'].date() if isinstance(item['week'], datetime) else item['week']
+            weekly_data_map[d] = item['count']
+
+    # Generar array final de 4 elementos [Hace 3 sem, Hace 2 sem, Hace 1 sem, Actual]
     weekly_trend_data = []
-    for i in range(4):
-        s_date = now - timedelta(weeks=i+1)
-        e_date = now - timedelta(weeks=i)
-        c = SurveyResponse.objects.filter(
-            survey__in=surveys, 
-            created_at__range=(s_date, e_date)
-        ).count()
-        weekly_trend_data.insert(0, c)
+    
+    # Obtenemos el inicio de la semana actual (Lunes)
+    current_week_start = now.date() - timedelta(days=now.weekday())
+    
+    for i in range(3, -1, -1):
+        w_start = current_week_start - timedelta(weeks=i)
+        w_end = w_start + timedelta(days=6)
+        
+        # Sumamos si la fecha cae en esa semana (manejo robusto por si DB usa otro inicio de semana)
+        count_for_week = 0
+        for d_key, c_val in weekly_data_map.items():
+            if w_start <= d_key <= w_end:
+                count_for_week += c_val
+        
+        weekly_trend_data.append(count_for_week)
 
     # Tops
     top_surveys = surveys.annotate(
