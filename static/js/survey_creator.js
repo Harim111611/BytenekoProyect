@@ -417,10 +417,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // =====================================================
     // 4. GUARDAR PLANTILLA
     // =====================================================
+    // En static/js/survey_creator.js
+
     function toggleSaveTemplateBtn() {
         if (!dom.btnSaveTemplate) return;
         const count = dom.questionsList ? dom.questionsList.querySelectorAll('.question-item').length : 0;
-        dom.btnSaveTemplate.style.display = count > 0 ? 'inline-block' : 'none';
+        
+        if (count > 0) {
+            // Solución: Remover la clase d-none para que sea visible
+            dom.btnSaveTemplate.classList.remove('d-none');
+            dom.btnSaveTemplate.style.display = 'inline-block'; // Opcional si ya quitaste d-none
+        } else {
+            // Volver a ocultar
+            dom.btnSaveTemplate.classList.add('d-none');
+        }
     }
 
     if(dom.btnSaveTemplate) {

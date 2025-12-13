@@ -1,3 +1,111 @@
+/* Centrado perfecto para iconos cuadrados */
+.icon-square {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1/1;
+    padding: 0;
+    line-height: 1;
+}
+.icon-square i {
+    font-size: 2rem;
+    line-height: 1;
+    width: auto;
+    height: auto;
+    margin: 0;
+}
+/* Vista previa de encuesta (simulador) */
+.preview-device {
+    background: var(--bk-card-bg, #fff);
+    border-radius: 1.25rem;
+    box-shadow: 0 4px 24px 0 rgba(79,70,229,0.07);
+    border: 1px solid var(--bk-card-border, #e5e7eb);
+    min-height: 420px;
+    padding: 2rem 1.5rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+}
+.preview-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.preview-device .card {
+    background: #fff !important;
+    border-radius: 1.25rem;
+    border: 1px solid #e5e7eb;
+    color: #181a1b;
+    box-shadow: 0 2px 12px 0 rgba(0,0,0,0.06);
+}
+
+[data-bs-theme="dark"] .preview-device .card {
+    background: #181a1b !important;
+    border: 1px solid #333;
+    color: #e0e0e0;
+}
+.preview-device .card-title {
+    color: #181a1b;
+}
+.preview-device .form-control,
+.preview-device textarea {
+    background: #f5f7fa;
+    border: 1.5px solid #d1d5db;
+    color: #181a1b;
+    font-weight: 500;
+}
+.preview-device .d-flex > .border.rounded {
+    background: #f5f7fa;
+    border: 1.5px solid #bfc6d1;
+    color: #181a1b;
+    font-weight: 600;
+    min-width: 38px;
+    height: 38px;
+    margin-right: 0.25rem;
+    margin-left: 0.25rem;
+    font-size: 1.08rem;
+    transition: background 0.2s, color 0.2s, border 0.2s;
+    box-shadow: 0 1px 4px 0 rgba(0,0,0,0.04);
+}
+.preview-device .d-flex > .border.rounded:last-child {
+    margin-right: 0;
+}
+.preview-device .d-flex > .border.rounded:first-child {
+    margin-left: 0;
+}
+.preview-device .d-flex > .border.rounded:hover {
+    background: #6366f1;
+    color: #fff;
+    border-color: #6366f1;
+    cursor: pointer;
+}
+.preview-device .small {
+    color: #444;
+}
+/* Barra de progreso bonita para el creador de encuestas */
+.bk-progress-5 {
+    height: 12px;
+    background: var(--bk-card-bg, #fff);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px 0 rgba(79,70,229,0.07);
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+.bk-progress-5 .progress-bar {
+    background: linear-gradient(90deg, #6366f1 0%, #ec4899 100%);
+    border-radius: 6px;
+    transition: width 0.4s cubic-bezier(.4,1.3,.6,1);
+    box-shadow: 0 1px 6px 0 rgba(99,102,241,0.10);
+}
+/* Estilo para los íconos de pasos en el creador de encuestas */
+.step-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1.25rem;
+}
 /* Ajuste visual para botones de acciones en modo oscuro */
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light {
     background-color: #23272e !important;
