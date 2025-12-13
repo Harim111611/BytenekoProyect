@@ -33,9 +33,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Survey Form
         questionsList: document.getElementById('questions-list'),
+        emptyStateQuestions: document.getElementById('empty-state-questions'), // Nuevo
         btnAddQuestion: document.getElementById('btn-add-custom-question'),
         btnSuggestQuestions: document.getElementById('btn-suggest-questions'),
+        
+        // Inputs generales
         surveyTitle: document.getElementById('surveyTitle'),
+        surveyCategory: document.getElementById('surveyCategory'), // NUEVO
         surveyDesc: document.getElementById('surveyDescription'),
 
         // Templates (Guardar)
@@ -91,7 +95,10 @@ document.addEventListener('DOMContentLoaded', function() {
             toastEl.id = 'mainToast';
             document.body.appendChild(toastEl);
         }
-        toastEl.className = `toast align-items-center text-bg-${type} border-0 position-fixed bottom-0 end-0 m-3`;
+        // Compatibilidad con bootstrap colors
+        const bgClass = type === 'danger' ? 'text-bg-danger' : (type === 'warning' ? 'text-bg-warning' : (type === 'success' ? 'text-bg-success' : 'text-bg-info'));
+        
+        toastEl.className = `toast align-items-center ${bgClass} border-0 position-fixed bottom-0 end-0 m-3`;
         toastEl.style.zIndex = 9999;
         toastEl.innerHTML = `
             <div class="d-flex">
@@ -99,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>`;
         
-        const bsToast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 3000 });
+        const bsToast = new bootstrap.Toast(toastEl, { delay: 3000 });
         bsToast.show();
     }
 
@@ -127,15 +134,20 @@ document.addEventListener('DOMContentLoaded', function() {
         if(dom.stepCounter) dom.stepCounter.innerText = `Paso ${step} de 3`;
         if(dom.percentCounter) dom.percentCounter.innerText = `${percent}% completado`;
         currentStep = step;
+
+        // Si entramos al paso 3, actualizamos el preview
+        if(step === 3) renderPreview();
     }
 
     function validateStep(step) {
         if (step === 1) {
             if (!dom.surveyTitle.value.trim()) {
                 showToast('Por favor, ingresa un título para tu encuesta.', 'warning');
+                dom.surveyTitle.classList.add('is-invalid');
                 dom.surveyTitle.focus();
                 return false;
             }
+            dom.surveyTitle.classList.remove('is-invalid');
         }
         if (step === 2) {
             const items = dom.questionsList.querySelectorAll('.question-item');
@@ -157,8 +169,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Completa los títulos de todas las preguntas.', 'warning');
                 return false;
             }
-            // Al validar el paso 2, renderizamos el preview actualizado
-            renderPreview();
         }
         return true;
     }
@@ -180,11 +190,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. GESTIÓN DE PREGUNTAS
     // =====================================================
 
-    // Recalcula los textos "Pregunta X" y sincroniza questionCount
-    function refreshQuestionNumbers() {
+    // Función unificada para refrescar la UI de preguntas
+    function refreshQuestionsUI() {
         if (!dom.questionsList) return;
         const items = dom.questionsList.querySelectorAll('.question-item');
 
+        // Renumerar
         items.forEach((card, idx) => {
             const numberLabel = card.querySelector('.question-number');
             if (numberLabel) {
@@ -192,28 +203,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Mantener el contador global igual al número real de preguntas
+        // Toggle Empty State
+        if (dom.emptyStateQuestions) {
+            dom.emptyStateQuestions.classList.toggle('d-none', items.length > 0);
+        }
+
+        // Toggle Save Template Button
+        if (dom.btnSaveTemplate) {
+            // Mostrar botón solo si hay preguntas
+            if (items.length > 0) {
+                dom.btnSaveTemplate.classList.remove('d-none');
+            } else {
+                dom.btnSaveTemplate.classList.add('d-none');
+            }
+        }
+
         questionCount = items.length;
     }
 
-    // Observador que renumera automáticamente cuando se agregan o eliminan tarjetas
+    // Observador para cambios en la lista
     if (dom.questionsList && 'MutationObserver' in window) {
         const questionListObserver = new MutationObserver((mutations) => {
-            let shouldRefresh = false;
-            for (const mutation of mutations) {
-                if (mutation.type === 'childList') {
-                    shouldRefresh = true;
-                    break;
-                }
-            }
-            if (shouldRefresh) {
-                refreshQuestionNumbers();
-            }
+            refreshQuestionsUI();
         });
-
-        questionListObserver.observe(dom.questionsList, {
-            childList: true
-        });
+        questionListObserver.observe(dom.questionsList, { childList: true });
     }
 
     function createQuestionElement(data = null) {
@@ -235,30 +248,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const labelCheck = card.querySelector('.form-check-label');
         if(labelCheck) labelCheck.setAttribute('for', uniqueId);
 
-        if (numberLabel) {
-            numberLabel.textContent = 'Pregunta'; // placeholder temporal
-        }
+        if (numberLabel) numberLabel.textContent = 'Pregunta';
 
         if (data) {
-            titleInput.value = data.texto || data.text; // Soporte para 'text' o 'texto'
-            // Usar 'dtype' si está presente (de backend CSV preview), si no, fallback a tipo/type
-            typeSelect.value = data.dtype || data.tipo || data.type;
+            titleInput.value = data.texto || data.text || '';
+            const type = data.dtype || data.tipo || data.type || 'text';
+            typeSelect.value = type;
             if(reqCheck) reqCheck.checked = data.required || data.is_required || false;
 
-            const currentType = data.dtype || data.tipo || data.type;
-            const options = data.opciones || data.options;
-
-            // CORRECCIÓN: Ahora incluimos 'select' para mostrar las opciones si viene cargado
-            if (['single', 'multi', 'select'].includes(currentType) && options) {
-                optsContainer.classList.remove('d-none');
-                optsInput.value = Array.isArray(options) ? options.join(', ') : options;
+            if (['single', 'multi', 'select'].includes(type)) {
+                const options = data.opciones || data.options;
+                if(options) {
+                    optsContainer.classList.remove('d-none');
+                    optsInput.value = Array.isArray(options) ? options.join(', ') : options;
+                }
             }
         }
 
         dom.questionsList.appendChild(clone);
-
-        // Renumerar todas las tarjetas después de agregar
-        refreshQuestionNumbers();
         
         if (!data) {
             setTimeout(() => {
@@ -266,23 +273,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 titleInput.focus();
             }, 100);
         }
-        toggleSaveTemplateBtn();
     }
 
     if (dom.questionsList) {
         dom.questionsList.addEventListener('click', function(e) {
             if (e.target.closest('.btn-close')) {
                 const card = e.target.closest('.question-item');
-                if (card) {
-                    card.remove();
-                    // Renumerar después de eliminar
-                    refreshQuestionNumbers();
-                    toggleSaveTemplateBtn();
-                }
+                if (card) card.remove();
             }
         });
 
-        // CORRECCIÓN: Detectar cambio a 'select' para mostrar campo de opciones
         dom.questionsList.addEventListener('change', function(e) {
             if (e.target.classList.contains('question-type')) {
                 const select = e.target;
@@ -292,7 +292,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Si es single, multi o SELECT, mostramos el cuadro de opciones
                 if (['single', 'multi', 'select'].includes(select.value)) {
                     optsDiv.classList.remove('d-none');
-                    // Pequeño delay para enfocar si el usuario lo acaba de cambiar
                     setTimeout(() => {
                         const input = optsDiv.querySelector('input') || optsDiv.querySelector('textarea');
                         if(input) input.focus();
@@ -373,7 +372,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.addEventListener('click', function(e) {
-        
         const btnDeleteCustom = e.target.closest('.btn-delete-custom');
         if (btnDeleteCustom) {
             e.stopPropagation();
@@ -402,16 +400,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const modal = bootstrap.Modal.getInstance(dom.suggestQuestionsModal);
                 if(modal) modal.hide();
 
-                let count = 0;
                 template.structure.forEach(q => {
-                    const mappedData = {
+                    createQuestionElement({
                         texto: q.text,
                         tipo: q.type,
                         required: q.required,
                         opciones: q.options
-                    };
-                    createQuestionElement(mappedData);
-                    count++;
+                    });
                 });
                 showToast(`Se importó la plantilla "${template.title}"`, 'success');
             } else {
@@ -424,21 +419,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // =====================================================
     // 4. GUARDAR PLANTILLA
     // =====================================================
-    // En static/js/survey_creator.js
-
-    function toggleSaveTemplateBtn() {
-        if (!dom.btnSaveTemplate) return;
-        const count = dom.questionsList ? dom.questionsList.querySelectorAll('.question-item').length : 0;
-        
-        if (count > 0) {
-            // Solución: Remover la clase d-none para que sea visible
-            dom.btnSaveTemplate.classList.remove('d-none');
-            dom.btnSaveTemplate.style.display = 'inline-block'; // Opcional si ya quitaste d-none
-        } else {
-            // Volver a ocultar
-            dom.btnSaveTemplate.classList.add('d-none');
-        }
-    }
 
     if(dom.btnSaveTemplate) {
         dom.btnSaveTemplate.addEventListener('click', () => {
@@ -475,19 +455,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const qType = el.querySelector('.question-type').value;
                 const qReq = el.querySelector('.question-required').checked;
                 let qOpts = [];
-                // CORRECCIÓN: Guardar opciones también si es 'select'
                 if(['single','multi', 'select'].includes(qType)){
                     qOpts = el.querySelector('.question-options').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
                 }
                 structure.push({ text: qTitle, type: qType, required: qReq, options: qOpts, order: i+1 });
             });
 
-            if (structure.length === 0) {
-                return showToast('No puedes guardar una plantilla vacía.', 'warning');
-            }
-            if (emptyQuestion) {
-                return showToast('No puedes guardar la plantilla: hay preguntas sin texto.', 'warning');
-            }
+            if (structure.length === 0) return showToast('No puedes guardar una plantilla vacía.', 'warning');
+            if (emptyQuestion) return showToast('No puedes guardar: hay preguntas sin texto.', 'warning');
 
             const originalBtnText = this.innerHTML;
             this.disabled = true;
@@ -495,8 +470,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 const token = getCSRFToken();
-                if (!token) throw new Error('No CSRF token found');
-
                 const resp = await fetch('/surveys/templates/create/', {
                     method: 'POST',
                     headers: { 'Content-Type':'application/json', 'X-CSRFToken': token },
@@ -506,20 +479,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if(data.success) {
                     showToast('Plantilla guardada exitosamente', 'success');
-                    
                     const modalEl = document.getElementById('saveTemplateModal');
                     const modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if(modalInstance) modalInstance.hide();
-
-                    setTimeout(() => {
-                        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                        document.body.classList.remove('modal-open');
-                        document.body.style.overflow = 'auto';
-                        document.body.style.paddingRight = '';
-                    }, 300);
-
                     fetchTemplates(); 
-
                 } else {
                     showToast(data.error || 'Error al guardar plantilla', 'danger');
                 }
@@ -543,7 +506,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const templates = await resp.json();
             
             loadedCustomTemplates = templates;
-
             renderTemplateList(templates); 
             renderSelectionModalTemplates(templates); 
 
@@ -558,7 +520,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const section = document.getElementById('my-custom-templates-section');
         
         if (!container || !section) return;
-
         container.innerHTML = ''; 
 
         if (templates.length > 0) {
@@ -628,44 +589,30 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = new bootstrap.Modal(deleteTemplateModal);
             modal.show();
         } else {
-            if(confirm('¿Eliminar esta plantilla?')) {
-                performDelete(id);
-            }
+            if(confirm('¿Eliminar esta plantilla?')) performDelete(id);
         }
     }
 
     async function performDelete(id) {
         const url = `/surveys/templates/${id}/delete/`;
         const token = getCSRFToken();
-        const headers = { 
-            'X-CSRFToken': token,
-            'X-Requested-With': 'XMLHttpRequest' 
-        };
+        const headers = { 'X-CSRFToken': token, 'X-Requested-With': 'XMLHttpRequest' };
         
-        if (!token) {
-             showToast('Error de seguridad: No se encontró el token CSRF.', 'danger');
-             return false; 
-        }
-
         try {
             let resp = await fetch(url, { method: 'DELETE', headers: headers });
-            
             if (resp.status === 403 || resp.status === 405) { 
-                console.warn('DELETE falló, reintentando con POST.');
                 resp = await fetch(url, { method: 'POST', headers: headers });
             }
-
             const data = await resp.json();
-
             if(data.success) {
                 showToast('Plantilla eliminada', 'success');
                 return true;
             } else {
-                showToast('Error al eliminar: ' + (data.error || 'Respuesta inesperada'), 'danger');
+                showToast('Error al eliminar: ' + (data.error || 'Error desconocido'), 'danger');
                 return false;
             }
         } catch(err) {
-            console.error('Error de red/servidor al eliminar:', err);
+            console.error(err);
             showToast('Error de red/servidor', 'danger');
             return false;
         }
@@ -674,29 +621,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btnConfirmDeleteTemplate) {
         btnConfirmDeleteTemplate.addEventListener('click', async function() {
             if(!templateToDeleteId) return;
-            
             const originalText = this.innerHTML;
             this.disabled = true;
             this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminando...';
             
             const success = await performDelete(templateToDeleteId);
-            
             this.disabled = false;
             this.innerHTML = originalText;
             templateToDeleteId = null;
 
             const modalInstance = bootstrap.Modal.getInstance(deleteTemplateModal);
-            if (modalInstance) {
-                 modalInstance.hide();
-            } else {
-                 document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                 document.body.classList.remove('modal-open');
-                 document.body.style.overflow = 'auto';
-            }
-
-            if(success) {
-                fetchTemplates();
-            }
+            if (modalInstance) modalInstance.hide();
+            if(success) fetchTemplates();
         });
     }
 
@@ -712,31 +648,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // =====================================================
-    // 6. LÓGICA DE PUBLICACIÓN (MODIFICADA)
+    // 6. LÓGICA DE PUBLICACIÓN (CON CATEGORÍA)
     // =====================================================
     
-    // 6.1. Abrir modal de decisión
     if (dom.btnPrePublish) {
         dom.btnPrePublish.addEventListener('click', () => {
-            // Validar paso actual (preguntas) antes de abrir modal
-            if (!validateStep(2)) {
-                // Si la validación falla, nos aseguramos de que el usuario regrese a ese paso
-                goToStep(2); 
-                return;
+            if (validateStep(2)) {
+                // Renderizar preview antes de mostrar el modal
+                renderPreview(); 
+                const modal = new bootstrap.Modal(dom.publishModalElement);
+                modal.show();
+            } else {
+                // Volver al paso 2 si hay errores
+                goToStep(2);
             }
-            // Abrir el modal de opciones
-            const modal = new bootstrap.Modal(dom.publishModalElement);
-            modal.show();
         });
     }
 
-    // 6.2. Función unificada de envío
     async function submitSurvey(targetStatus, btnElement) {
-        // Recolectar datos
+        // Datos básicos
         const title = dom.surveyTitle.value.trim();
         const description = dom.surveyDesc.value.trim();
-        const structure = [];
+        // CAPTURA DE CATEGORÍA (NUEVO)
+        const category = dom.surveyCategory ? (dom.surveyCategory.value.trim() || 'General') : 'General';
         
+        // Estructura de preguntas
+        const structure = [];
         dom.questionsList.querySelectorAll('.question-item').forEach((el, i) => {
             const qTitle = el.querySelector('.question-title').value.trim();
             const qType = el.querySelector('.question-type').value;
@@ -751,20 +688,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const payload = {
             title: title,
             description: description,
+            category: category, // <--- Enviamos la categoría al backend
             structure: structure, 
-            status: targetStatus // 'draft' o 'active'
+            status: targetStatus
         };
 
-        // UI Loading
         const originalHtml = btnElement.innerHTML;
         btnElement.disabled = true;
         btnElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
 
         try {
             const token = getCSRFToken();
-            if (!token) throw new Error('No CSRF token found');
-
-            const publishUrl = '/surveys/create_survey/'; // Mismo endpoint, diferente status en payload
+            const publishUrl = '/surveys/create_survey/';
             
             const resp = await fetch(publishUrl, {
                 method: 'POST',
@@ -775,53 +710,43 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await resp.json();
             
             if(data.success) {
-                const msg = targetStatus === 'active' 
-                    ? '¡Encuesta publicada y activa!' 
-                    : 'Encuesta guardada como borrador.';
+                const msg = targetStatus === 'active' ? '¡Encuesta publicada!' : 'Borrador guardado.';
                 showToast(msg, 'success');
-                
-                // Redirigir
                 window.location.href = data.redirect_url || '/surveys/list/'; 
             } else {
-                showToast(data.error || 'Error al procesar la encuesta.', 'danger');
-                // Restaurar botón si hubo error lógico
+                showToast(data.error || 'Error al procesar.', 'danger');
                 btnElement.disabled = false;
                 btnElement.innerHTML = originalHtml;
             }
 
         } catch (err) {
-            console.error('Error de red al publicar:', err);
+            console.error(err);
             showToast('Error de conexión.', 'danger');
             btnElement.disabled = false;
             btnElement.innerHTML = originalHtml;
         }
     }
 
-    // 6.3. Listeners de los botones del modal
     if (dom.btnConfirmDraft) {
-        dom.btnConfirmDraft.addEventListener('click', function() {
-            submitSurvey('draft', this);
-        });
+        dom.btnConfirmDraft.addEventListener('click', function() { submitSurvey('draft', this); });
     }
 
     if (dom.btnConfirmActive) {
-        dom.btnConfirmActive.addEventListener('click', function() {
-            submitSurvey('active', this);
-        });
+        dom.btnConfirmActive.addEventListener('click', function() { submitSurvey('active', this); });
     }
 
 
     // =====================================================
-    // 7. PREVIEW RENDER (CORREGIDO Y MEJORADO)
+    // 7. PREVIEW RENDER (CON CATEGORÍA)
     // =====================================================
     function renderPreview() {
         const title = dom.surveyTitle.value || 'Sin título';
         const desc = dom.surveyDesc.value || 'Sin descripción';
+        // Capturar categoría para el resumen
+        const category = dom.surveyCategory ? (dom.surveyCategory.value.trim() || 'General') : 'General';
 
         // Detectar modo noche
         const isDarkMode = document.body.classList.contains('dark-mode') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        // Colores para modo noche
         const darkBg = 'background-color: #23272b;';
         const darkBorder = 'border: 1px solid #444;';
         const darkText = 'color: #e0e0e0;';
@@ -835,6 +760,10 @@ document.addEventListener('DOMContentLoaded', function() {
         ['review-description', 'preview-header-desc'].forEach(id => {
              const el = document.getElementById(id); if(el) el.innerText = desc;
         });
+
+        // Actualizar Categoría en el resumen (NUEVO)
+        const reviewCat = document.getElementById('review-category');
+        if(reviewCat) reviewCat.innerText = category;
 
         const container = document.getElementById('preview-container');
         if(!container) return;
@@ -855,7 +784,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isDarkMode) card.style = darkCard;
 
             let inputHTML = '';
-            // Estilos inline para consistencia en el preview
             const bgStyle = isDarkMode ? darkBg : 'background-color: var(--bs-body-tertiary);';
             const borderStyle = isDarkMode ? darkBorder : 'border: 1px solid var(--bs-border-color);';
             const textStyle = isDarkMode ? darkText : '';
@@ -866,7 +794,6 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (qType === 'number') {
                 inputHTML = `<input type="number" class="form-control" disabled placeholder="123" style="${bgStyle} ${borderStyle} ${textStyle}">`;
             } else if (qType === 'scale') {
-                // Escala 0-10 mejorada (NPS style)
                 const scaleNums = [0,1,2,3,4,5,6,7,8,9,10];
                 inputHTML = `
                     <div class="d-flex justify-content-between gap-1 mt-2 overflow-auto pb-2">
@@ -895,10 +822,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             </select>`;
                     } else {
                         const inputType = qType === 'single' ? 'radio' : 'checkbox';
-                        // Forzar fondo y borde en modo noche
                         const checkBg = isDarkMode ? 'background-color:#23272b !important;border-color:#666 !important;' : '';
                         inputHTML = `<div class="d-flex flex-column gap-2">` + 
-                            opts.map((opt, i) => {
+                            opts.map((opt) => {
                                 const darkClass = isDarkMode ? 'dark-preview' : '';
                                 return `<div class="form-check p-2 border rounded" style="${bgStyle} ${borderStyle}">
                                     <input class="form-check-input ms-1 ${darkClass}" type="${inputType}" disabled style="${bgStyle} ${borderStyle} ${checkBg}">
@@ -925,7 +851,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inicialización al cargar
     updateWizardUI(1);
-    toggleSaveTemplateBtn();
-    // En caso de que vengan preguntas desde el backend, renumeramos desde inicio
-    refreshQuestionNumbers();
+    refreshQuestionsUI();
 });
