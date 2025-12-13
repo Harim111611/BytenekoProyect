@@ -6,6 +6,7 @@ from django.views.generic.base import RedirectView
 from django.conf import settings
 
 from core import views as core_views
+from core.views import payment_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -46,6 +47,10 @@ urlpatterns = [
         core_views.report_preview_ajax,
         name="report_preview",
     ),
+
+    # --- Payment Routes (migrated from core/urls.py) ---
+    path("api/create-checkout/<str:plan_slug>/", payment_views.create_checkout_session, name="create_checkout"),
+    path("webhooks/stripe/", payment_views.stripe_webhook, name="stripe_webhook"),
 
     # Surveys App
     path("surveys/", include("surveys.urls")),
