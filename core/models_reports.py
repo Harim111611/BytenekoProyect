@@ -1,49 +1,55 @@
+# core/models_reports.py
+import os
 from django.db import models
 from django.conf import settings
-# Usamos una importación directa si surveys.models ya está cargado, 
-# pero 'surveys.Survey' como string es más seguro para evitar ciclos en algunos contextos.
-# Aquí importamos el modelo para tener validación fuerte de FK.
-from surveys.models import Survey
+from django.utils import timezone
 
-class ScheduledReport(models.Model):
-    """
-    [Faltante Anteproyecto]: Programación de reportes automáticos.
-    Permite configurar el envío periódico de PDFs a una lista de correos.
-    """
-    FREQUENCY_CHOICES = [
-        ('daily', 'Diario'),
-        ('weekly', 'Semanal'),
-        ('monthly', 'Mensual'),
+# Asumimos que Survey está correctamente referenciado usando una AppConfig o está en el path
+# En este caso, lo referenciamos por string para evitar circular imports si Surveys
+# también está en models.py
+SURVEY_MODEL = 'surveys.Survey'
+USER_MODEL = settings.AUTH_USER_MODEL
+
+class ReportJob(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pendiente'),
+        ('PROCESSING', 'Procesando'),
+        ('COMPLETED', 'Completado'),
+        ('FAILED', 'Fallido'),
+    ]
+    REPORT_TYPES = [
+        ('PDF', 'PDF'),
+        ('PPTX', 'PowerPoint'),
     ]
 
-    survey = models.ForeignKey(Survey, on_delete=models.CASCADE, verbose_name="Encuesta")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Propietario")
-    
-    emails = models.TextField(
-        help_text="Lista de correos destinatarios separados por coma",
-        verbose_name="Destinatarios"
-    )
-    
-    frequency = models.CharField(
-        max_length=20, 
-        choices=FREQUENCY_CHOICES,
-        verbose_name="Frecuencia de Envío"
-    )
-    
-    is_active = models.BooleanField(default=True, verbose_name="¿Activo?")
-    last_sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Última vez enviado")
-    
-    # Opciones de contenido para personalizar el reporte
-    include_charts = models.BooleanField(default=True, verbose_name="Incluir Gráficos")
-    include_raw_data = models.BooleanField(default=False, verbose_name="Incluir CSV Adjunto")
+    # Relaciones
+    user = models.ForeignKey(USER_MODEL, on_delete=models.CASCADE, related_name='report_jobs')
+    survey = models.ForeignKey(SURVEY_MODEL, on_delete=models.CASCADE, related_name='report_jobs')
 
+    # Metadatos del Job
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPES, default='PDF')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    metadata = models.JSONField(default=dict, blank=True) # Para guardar filtros, etc.
+
+    # Rastreabilidad del archivo
+    file_path = models.CharField(max_length=255, blank=True, null=True, help_text="Ruta local del archivo")
+    file_url = models.URLField(max_length=255, blank=True, null=True, help_text="URL pública para descarga")
+
+    # Tiempos
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Reporte {self.get_frequency_display()} - {self.survey.title}"
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        verbose_name = "Reporte Programado"
-        verbose_name_plural = "Reportes Programados"
         ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Report {self.id} for {self.survey.title} ({self.get_status_display()})"
+
+    @property
+    def is_finished(self):
+        return self.status in ['COMPLETED', 'FAILED']
+        
+    def get_download_url(self):
+        if self.file_url:
+            return self.file_url
+        return '#'
