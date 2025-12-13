@@ -4,10 +4,13 @@ Modelos principales para encuestas y respuestas.
 """
 import uuid
 import secrets
-from django.db import models, transaction
+import logging
+from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 class Question(models.Model):
     """
@@ -99,8 +102,16 @@ class Survey(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        # FIX: Loop de reintento para evitar colisiones de public_id
         if not self.public_id:
-            self.public_id = secrets.token_urlsafe(8)[:12]
+            for _ in range(10): # Intentar 10 veces generar un ID único
+                token = secrets.token_urlsafe(8)[:12]
+                if not Survey.objects.filter(public_id=token).exists():
+                    self.public_id = token
+                    break
+            else:
+                # Si falla después de 10 intentos, lanzar error (extremadamente improbable)
+                raise IntegrityError("Could not generate unique public_id for Survey after 10 attempts.")
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -246,11 +257,17 @@ class ImportJob(models.Model):
     total_rows = models.IntegerField(default=0)
     processed_rows = models.IntegerField(default=0)
     error_log = models.TextField(blank=True)
-    # Alias/compatibility field expected by older code/tests
+    # Alias/compatibility field
     error_message = models.CharField(max_length=1024, blank=True, null=True)
     
     # REFERENCIA AL USUARIO USANDO LA CONFIGURACIÓN
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    def save(self, *args, **kwargs):
+        # FIX: Sincronizar error_message con error_log para compatibilidad
+        if self.error_log and not self.error_message:
+            self.error_message = self.error_log[:1020] + '...' if len(self.error_log) > 1024 else self.error_log
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Import {self.id} ({self.get_status_display()})"

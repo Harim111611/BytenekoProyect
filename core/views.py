@@ -148,20 +148,25 @@ def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
     """
     Genera un PDF con las analíticas globales.
     """
-    filters = {
-        'periodo': request.GET.get('periodo', '30')
-    }
-    data = _get_analytics_summary(request.user, filters)
-    
-    pdf_file = PDFReportGenerator.generate_global_report(data)
-    
-    if not pdf_file:
-        return HttpResponse("Error generando el reporte PDF o WeasyPrint no está configurado.", status=500)
+    try:
+        filters = {
+            'periodo': request.GET.get('periodo', '30')
+        }
+        data = _get_analytics_summary(request.user, filters)
         
-    response = HttpResponse(pdf_file, content_type='application/pdf')
-    filename = f"Global_Analytics_{datetime.now().strftime('%Y%m%d')}.pdf"
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
+        pdf_file = PDFReportGenerator.generate_global_report(data)
+        
+        if not pdf_file:
+            logger.error("WeasyPrint retornó None en global_results_pdf_view")
+            return HttpResponse("Error generando el reporte PDF. Consulte con el administrador.", status=500)
+            
+        response = HttpResponse(pdf_file, content_type='application/pdf')
+        filename = f"Global_Analytics_{datetime.now().strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        logger.error(f"Error crítico generando PDF global: {e}", exc_info=True)
+        return HttpResponse("Error interno al generar el reporte.", status=500)
 
 # ==========================================
 # REPORTES Y EXPORTACIÓN POR ENCUESTA

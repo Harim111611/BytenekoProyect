@@ -129,12 +129,13 @@ STATIC_URL = '/static/'
 
 # --- WHITENOISE CONFIGURATION (Cache Busting) ---
 # Aseguramos que WhiteNoiseMiddleware esté justo después de SecurityMiddleware
-try:
-    security_middleware_index = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
-    MIDDLEWARE.insert(security_middleware_index + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-except ValueError:
-    # Si no está SecurityMiddleware, lo insertamos al principio
-    MIDDLEWARE.insert(0, 'whitenoise.middleware.WhiteNoiseMiddleware')
+if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+    try:
+        security_middleware_index = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
+        MIDDLEWARE.insert(security_middleware_index + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    except ValueError:
+        # Si no está SecurityMiddleware, lo insertamos al principio
+        MIDDLEWARE.insert(0, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 # Habilitar compresión y hashing (versionado automático)
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -174,4 +175,5 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@byteneko.com')
 
 # Optimizaciones extra
-MIDDLEWARE.insert(2, 'django.middleware.gzip.GZipMiddleware')
+if 'django.middleware.gzip.GZipMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE.insert(2, 'django.middleware.gzip.GZipMiddleware')

@@ -1,33 +1,3 @@
-import threading
-import time
-import psutil
-# =============================================================================
-# Utilidad para monitorear el uso máximo de RAM
-# =============================================================================
-class MaxRAMMonitor:
-    def __init__(self, interval=0.2):
-        self.interval = interval
-        self.max_rss = 0
-        self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._monitor)
-
-    def _monitor(self):
-        process = psutil.Process()
-        while not self._stop_event.is_set():
-            rss = process.memory_info().rss
-            if rss > self.max_rss:
-                self.max_rss = rss
-            time.sleep(self.interval)
-
-    def start(self):
-        self._thread.start()
-
-    def stop(self):
-        self._stop_event.set()
-        self._thread.join()
-
-    def get_max_rss_mb(self):
-        return self.max_rss / (1024 * 1024)
 import logging
 import os
 import tempfile
@@ -92,8 +62,6 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
     Maneja tanto carga individual ('csv_file') como múltiple ('csv_files').
     """
     from surveys.tasks import process_survey_import  # Import local para evitar ciclos
-    ram_monitor = MaxRAMMonitor()
-    ram_monitor.start()
 
     # 1. Caso de Múltiples Archivos (Bulk Import)
     if 'csv_files' in request.FILES:
@@ -129,8 +97,6 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                     'survey_public_id': new_survey.public_id
                 })
             
-            ram_monitor.stop()
-            logger.info(f"[IMPORT][RAM] Máximo uso de RAM durante importación: {ram_monitor.get_max_rss_mb():.2f} MB")
             return JsonResponse({
                 'success': True,
                 'message': f'{len(jobs)} importaciones iniciadas.',
@@ -167,8 +133,6 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                 user_id=request.user.id
             )
 
-            ram_monitor.stop()
-            logger.info(f"[IMPORT][RAM] Máximo uso de RAM durante importación: {ram_monitor.get_max_rss_mb():.2f} MB")
             return JsonResponse({
                 'success': True,
                 'message': 'Importación iniciada.',
@@ -177,13 +141,11 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
             })
 
         except Exception as exc:
-            ram_monitor.stop()
             logger.error(f"[IMPORT_NEW][ERROR] {exc}", exc_info=True)
             return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
     # 3. Error si no hay archivos
     else:
-        ram_monitor.stop()
         return JsonResponse({'success': False, 'error': 'No se recibió archivo CSV (csv_file o csv_files).'}, status=400)
 
 

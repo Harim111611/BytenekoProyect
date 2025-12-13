@@ -6,6 +6,9 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Plan(models.Model):
     """
@@ -91,3 +94,6 @@ def create_user_saas_defaults(sender, instance, created, **kwargs):
         default_plan = Plan.objects.filter(slug='free').first()
         if default_plan:
             Subscription.objects.create(user=instance, plan=default_plan)
+        else:
+            # FIX: Evitar crash si no existe el plan, pero loguear el error crítico
+            logger.warning(f"CRITICAL: User {instance.id} created without subscription. 'free' Plan not found in DB.")
