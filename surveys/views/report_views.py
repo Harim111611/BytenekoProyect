@@ -1,29 +1,33 @@
 """
 surveys/views/report_views.py
-Optimized report views for survey results.
+Vistas de reporte conectadas a tareas asíncronas (Celery).
 """
-import logging
-import csv
 import json
 import os
+import csv
 import mimetypes
 from datetime import datetime
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponse, JsonResponse, Http404
+from django.http import HttpResponse, JsonResponse, Http404, FileResponse
 from django.contrib import messages
 from django.template.loader import render_to_string
-from django.db.models import Q
+from django.db.models import Q, Max
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django_ratelimit.decorators import ratelimit
+from django.conf import settings
+from django.urls import reverse
 
-from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob
+from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob, Question
+from core.models_reports import ReportJob
 from core.utils.logging_utils import StructuredLogger
 from core.utils.helpers import PermissionHelper, DateFilterHelper
 from core.services.survey_analysis import SurveyAnalysisService
+from surveys.tasks import generate_report_task
+from core.reports.pdf_generator import DataNormalizer
 
 logger = StructuredLogger('surveys')
 
@@ -96,6 +100,7 @@ def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segme
             q_filter = Q(text_value__icontains=segment_val) | Q(selected_option__text__icontains=segment_val)
     
     if q_filter:
+        # Usamos prefetch o subquery optimizado gracias a los nuevos índices
         respuestas_ids = QuestionResponse.objects.filter(question=pregunta_filtro).filter(q_filter).values_list('survey_response_id', flat=True)
         respuestas_qs = respuestas_qs.filter(id__in=respuestas_ids)
     
@@ -160,6 +165,7 @@ def _process_crosstab_for_template(crosstab_raw):
 
     return crosstab_data, json.dumps(crosstab_chart, cls=DjangoJSONEncoder)
 
+
 # ============================================================
 # VISTAS PRINCIPALES
 # ============================================================
@@ -168,6 +174,7 @@ def _process_crosstab_for_template(crosstab_raw):
 def survey_results_view(request, public_id):
     """Vista principal del Dashboard de Resultados."""
     try:
+        # Optimizacion: select_related y prefetch_related
         survey = get_object_or_404(
             Survey.objects.select_related('author').prefetch_related('questions__options'),
             public_id=public_id
@@ -196,6 +203,7 @@ def survey_results_view(request, public_id):
             respuestas_qs, survey, segment_col, segment_val, segment_demo
         )
 
+    # Llamada al servicio optimizado
     analysis_result = SurveyAnalysisService.get_analysis_data(
         survey,
         respuestas_qs,
@@ -226,11 +234,14 @@ def survey_results_view(request, public_id):
         col_id = crosstab_col
         
         if not row_id:
+             # Si no se seleccionó fila, intenta tomar la primera pregunta categórica que no sea la columna
              first_q = survey.questions.exclude(id=col_id).filter(type__in=['single', 'multi', 'select']).first()
              if first_q:
                  row_id = str(first_q.id)
 
         if row_id and col_id and row_id != col_id:
+            # Nota: Esto requiere que SurveyAnalysisService.generate_crosstab esté implementado 
+            # o que conectes el servicio antiguo.
             raw_crosstab = SurveyAnalysisService.generate_crosstab(
                 survey, row_id, col_id, queryset=respuestas_qs
             )
@@ -263,6 +274,7 @@ def survey_results_view(request, public_id):
     
     return render(request, 'surveys/responses/results.html', context)
 
+
 @login_required
 def report_preview(request, public_id):
     """Vista AJAX para preview de reportes."""
@@ -277,8 +289,6 @@ def report_preview(request, public_id):
         respuestas_qs = SurveyResponse.objects.filter(survey=survey)
         
         if not start and window and window.isdigit():
-            from django.utils import timezone
-            from datetime import timedelta
             start_dt = timezone.now() - timedelta(days=int(window))
             respuestas_qs = respuestas_qs.filter(created_at__gte=start_dt)
         elif start or end:
@@ -305,6 +315,7 @@ def report_preview(request, public_id):
         logger.exception(f"Error generando preview reporte: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
+
 @login_required
 @ratelimit(key='user', rate='10/h', method='GET', block=True)
 def export_survey_csv_view(request, public_id):
@@ -317,11 +328,8 @@ def export_survey_csv_view(request, public_id):
 
     if getattr(survey, 'is_imported', False):
         import_job = ImportJob.objects.filter(survey=survey, status="completed").order_by('-created_at').first()
-        if import_job and import_job.csv_file and os.path.exists(import_job.csv_file):
-            with open(import_job.csv_file, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='text/csv')
-                response['Content-Disposition'] = f'attachment; filename="{import_job.original_filename or "data.csv"}"'
-                return response
+        if import_job and import_job.csv_file and os.path.exists(import_job.csv_file.path):
+            return FileResponse(open(import_job.csv_file.path, 'rb'), as_attachment=True, filename=import_job.original_filename or "data.csv")
 
     respuestas = SurveyResponse.objects.filter(survey=survey).order_by('created_at').prefetch_related('question_responses__question')
     
@@ -344,6 +352,7 @@ def export_survey_csv_view(request, public_id):
 
     return response
 
+
 @login_required
 def survey_analysis_ajax(request, public_id):
     """API para obtener datos JSON puros."""
@@ -357,6 +366,7 @@ def survey_analysis_ajax(request, public_id):
         return JsonResponse({'success': True, 'analysis_data': analysis['analysis_data']}, encoder=DjangoJSONEncoder)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def api_crosstab_view(request, public_id):
@@ -415,3 +425,140 @@ def change_survey_status(request, public_id):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+# ============================================================
+# 🚀 NUEVAS VISTAS ASÍNCRONAS PARA REPORTES (PDF/PPTX)
+# ============================================================
+
+@login_required
+def report_pdf_view(request):
+    """
+    Inicia la generación del PDF en segundo plano (Celery).
+    Retorna un JSON con el job_id para que el frontend haga polling.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido. Use POST.'}, status=405)
+
+    survey_id = request.POST.get('public_id') or request.POST.get('survey_id')
+    if not survey_id: return JsonResponse({'error': "Falta ID de encuesta"}, status=400)
+    
+    # Obtener Survey
+    if str(survey_id).isdigit():
+        survey = get_object_or_404(Survey, id=survey_id, author=request.user)
+    else:
+        survey = get_object_or_404(Survey, public_id=survey_id, author=request.user)
+    
+    try:
+        # 1. Recopilar filtros del request
+        filters = {
+            'start_date': request.POST.get('start_date'),
+            'end_date': request.POST.get('end_date'),
+            'include_charts': request.POST.get('include_charts', 'off'),
+            'include_table': request.POST.get('include_table', 'off'),
+            'include_kpis': request.POST.get('include_kpis', 'off'),
+            'window_days': request.POST.get('window_days')
+        }
+
+        # 2. Crear el registro del trabajo (Job)
+        job = ReportJob.objects.create(
+            user=request.user,
+            survey=survey,
+            report_type='PDF',
+            status='PENDING',
+            metadata={'filters': filters}
+        )
+
+        # 3. Lanzar la tarea a Celery
+        generate_report_task.delay(job.id)
+
+        # 4. Responder con éxito e ID
+        return JsonResponse({
+            'success': True,
+            'job_id': job.id,
+            'message': 'Generando reporte PDF en segundo plano...'
+        })
+
+    except Exception as e:
+        logger.error(f"Error iniciando reporte PDF: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def report_powerpoint_view(request):
+    """
+    Inicia la generación del PowerPoint en segundo plano (Celery).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    
+    survey_id = request.POST.get('public_id') or request.POST.get('survey_id')
+    if not survey_id: return JsonResponse({'error': "Falta ID de encuesta"}, status=400)
+
+    if str(survey_id).isdigit():
+        survey = get_object_or_404(Survey, id=survey_id, author=request.user)
+    else:
+        survey = get_object_or_404(Survey, public_id=survey_id, author=request.user)
+
+    try:
+        filters = {
+            'start_date': request.POST.get('start_date'),
+            'end_date': request.POST.get('end_date'),
+            'include_charts': request.POST.get('include_charts', 'off'),
+            'include_table': request.POST.get('include_table', 'off'),
+        }
+
+        job = ReportJob.objects.create(
+            user=request.user,
+            survey=survey,
+            report_type='PPTX',
+            status='PENDING',
+            metadata={'filters': filters}
+        )
+        
+        generate_report_task.delay(job.id)
+        
+        return JsonResponse({
+            'success': True, 
+            'job_id': job.id,
+            'message': 'Generando presentación PPTX en segundo plano...'
+        })
+
+    except Exception as e:
+        logger.error(f"Error iniciando reporte PPTX: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def check_report_status(request, job_id):
+    """
+    Endpoint de polling. El frontend llama aquí cada X segundos para ver si el reporte acabó.
+    """
+    job = get_object_or_404(ReportJob, id=job_id, user=request.user)
+    
+    data = {
+        'status': job.status,
+        'completed_at': job.completed_at,
+        'url': None
+    }
+    
+    if job.status == 'COMPLETED' and job.file_url:
+        # Generamos una URL para la vista de descarga segura
+        data['url'] = reverse('surveys:download_report', args=[job.id])
+        
+    elif job.status == 'FAILED':
+        data['error'] = job.metadata.get('error', 'Error desconocido')
+
+    return JsonResponse(data)
+
+@login_required
+def download_report_file(request, job_id):
+    """
+    Sirve el archivo final de forma segura.
+    Verifica que el usuario sea el dueño del job.
+    """
+    job = get_object_or_404(ReportJob, id=job_id, user=request.user)
+    
+    if job.status != 'COMPLETED' or not job.file_path or not os.path.exists(job.file_path):
+        raise Http404("El archivo no está disponible o el reporte falló.")
+
+    # Servir el archivo usando FileResponse (eficiente para archivos binarios)
+    filename = os.path.basename(job.file_path)
+    return FileResponse(open(job.file_path, 'rb'), as_attachment=True, filename=filename)

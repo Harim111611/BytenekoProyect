@@ -81,4 +81,10 @@ urlpatterns = [
     path("<str:public_id>/delete/", SurveyDeleteView.as_view(), name="delete"),
     path("list-count/", crud_views.survey_list_count, name="list_count"),
     path("<str:public_id>/goal-decision/", crud_views.handle_goal_decision, name="handle_goal_decision"),
+    
+        # Rutas para reportes asíncronos
+        path('reports/pdf/create/', report_views.report_pdf_view, name='report_pdf_create'),
+        path('reports/pptx/create/', report_views.report_powerpoint_view, name='report_pptx_create'),
+        path('reports/status/<int:job_id>/', report_views.check_report_status, name='check_report_status'),
+        path('reports/download/<int:job_id>/', report_views.download_report_file, name='download_report'),
 ]
