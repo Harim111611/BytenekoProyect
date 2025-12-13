@@ -1,3 +1,44 @@
+/* Preguntas en vista previa (modo día) */
+.preview-device .form-control,
+.preview-device textarea,
+.preview-device input[type="text"],
+.preview-device input[type="number"],
+.preview-device select {
+    background: #f5f7fa !important;
+    border: 1.5px solid #d1d5db !important;
+    color: #181a1b !important;
+    font-weight: 500;
+    box-shadow: none;
+    transition: border 0.2s;
+}
+.preview-device .form-control:focus,
+.preview-device textarea:focus,
+.preview-device input[type="text"]:focus,
+.preview-device input[type="number"]:focus,
+.preview-device select:focus {
+    border-color: #6366f1;
+    outline: none;
+    box-shadow: 0 0 0 2px #6366f122;
+}
+.preview-device input[type="radio"],
+.preview-device input[type="checkbox"] {
+    accent-color: #6366f1;
+    width: 1.1em;
+    height: 1.1em;
+    margin-right: 0.4em;
+    vertical-align: middle;
+}
+.preview-device label,
+.preview-device .form-check-label {
+    color: #181a1b;
+    font-weight: 500;
+}
+.preview-device .options-container {
+    background: #f5f7fa;
+    border-radius: 0.5rem;
+    border: 1.5px solid #d1d5db;
+    color: #181a1b;
+}
 /* Centrado perfecto para iconos cuadrados */
 .icon-square {
     display: flex;

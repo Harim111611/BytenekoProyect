@@ -54,11 +54,11 @@
         <strong id="pageAlertTitle"></strong><span id="pageAlertBody" class="ms-2"></span>
     </div>
     
-    {# Barra de búsqueda y filtros #}
+    {# BARRA DE BÚSQUEDA Y FILTROS (ACTUALIZADA CON CATEGORÍA) #}
     <div class="card border-0 shadow-sm mb-4 bg-body-tertiary" style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
         <div class="card-body p-2">
             <form method="get" class="row g-2 align-items-center">
-                <div class="col-md-8">
+                <div class="col-md-5">
                     <div class="input-group">
                         <input type="text" name="q" class="form-control border-0 bg-body-tertiary search-input py-2" 
                                placeholder="Buscar por título..." 
@@ -68,6 +68,18 @@
                         </button>
                     </div>
                 </div>
+                
+                <div class="col-md-3">
+                    <select name="category" class="form-select border-0 bg-body-tertiary py-2" onchange="this.form.submit()">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in unique_categories %}
+                            {% if cat %}
+                            <option value="{{ cat }}" {% if request.GET.category == cat %}selected{% endif %}>{{ cat }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <div class="col-md-4">
                     <select name="status" class="form-select border-0 bg-body-tertiary py-2" onchange="this.form.submit()">
                         <option value="">Todos los estados</option>
@@ -226,7 +238,7 @@
                 {% if page_obj.has_previous %}
                 <li class="page-item">
                     <a class="page-link border-0 rounded-pill px-3 me-1 shadow-sm bg-body-tertiary text-body" 
-                       href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                       href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
                         <i class="bi bi-chevron-left"></i> Anterior
                     </a>
                 </li>
@@ -239,7 +251,7 @@
                 {% if page_obj.has_next %}
                 <li class="page-item">
                     <a class="page-link border-0 rounded-pill px-3 ms-1 shadow-sm bg-body-tertiary text-body" 
-                       href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">
+                       href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
                         Siguiente <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -258,8 +270,8 @@
             </div>
             <h3 class="fw-bold text-body-emphasis mb-2" style="color:var(--bk-text-primary);">No tienes encuestas aún</h3>
             <p class="text-muted mb-4 col-md-6 mx-auto" style="color:var(--bk-text-secondary);">
-                {% if request.GET.q or request.GET.status %}
-                    No se encontraron resultados.
+                {% if request.GET.q or request.GET.status or request.GET.category %}
+                    No se encontraron resultados para los filtros aplicados.
                 {% else %}
                     Comienza creando una encuesta desde cero o importando datos existentes.
                 {% endif %}

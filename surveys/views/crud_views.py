@@ -215,15 +215,24 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
         qs = super().get_queryset()
         qs = qs.filter(author=self.request.user)
         try:
+            # Obtener parámetros de filtrado
             q = (self.request.GET.get('q') or '').strip()
             status = (self.request.GET.get('status') or '').strip()
+            category = (self.request.GET.get('category') or '').strip() # <--- NUEVO FILTRO
+
             if q:
                 qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+            
             if status:
                 qs = qs.filter(status=status)
+            
+            if category: # <--- APLICAR FILTRO DE CATEGORÍA
+                qs = qs.filter(category=category)
+
         except Exception as e:
             logger.warning(f"SurveyListView.get_queryset: Exception: {e}")
             pass
+        
         try:
             qs = qs.annotate(
                 total_responses=Count('responses', distinct=True),
@@ -231,11 +240,26 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
             )
         except FieldError:
             pass
+        
         try:
             qs = qs.order_by('-created_at')
         except FieldError:
             qs = qs.order_by('-id')
         return qs
+
+    def get_context_data(self, **kwargs):
+        """
+        Sobrescribimos para enviar las categorías únicas al template
+        y llenar el dropdown de filtros.
+        """
+        context = super().get_context_data(**kwargs)
+        
+        # Obtener categorías distintas usadas por este usuario para el filtro
+        context['unique_categories'] = Survey.objects.filter(
+            author=self.request.user
+        ).values_list('category', flat=True).distinct().order_by('category')
+        
+        return context
 
 
 class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
