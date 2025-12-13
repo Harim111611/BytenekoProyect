@@ -22,8 +22,9 @@ class CsvLogInline(admin.TabularInline):
     """
     model = ImportJob
     extra = 0
-    fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_message')
-    readonly_fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_message')
+    # CORREGIDO: 'error_message' -> 'error_log'
+    fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_log')
+    readonly_fields = ('original_filename', 'status_pill_inline', 'created_at', 'processed_rows', 'error_log')
     can_delete = False
     show_change_link = True
     classes = ('collapse',)
@@ -51,7 +52,6 @@ class AnswerOptionInline(admin.TabularInline):
     classes = ('collapse',)
 
     def preview_usage(self, obj):
-        # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
         manager = getattr(obj, 'questionresponse', None) or getattr(obj, 'questionresponse_set', None)
         count = manager.count() if manager else 0
         return f"{count} selecciones"
@@ -59,7 +59,8 @@ class AnswerOptionInline(admin.TabularInline):
 class QuestionInline(admin.StackedInline):
     model = Question
     extra = 0
-    fields = ('text', 'type', 'is_required', 'order', 'is_demographic')
+    # CORREGIDO: 'is_required' -> 'required'
+    fields = ('text', 'type', 'required', 'order', 'is_demographic')
     ordering = ['order']
     show_change_link = True
     classes = ('collapse',)
@@ -193,7 +194,6 @@ class SurveyAdmin(admin.ModelAdmin):
             preview_data = "Texto libre / Numérico"
             if q.type in ['single', 'multi']:
                 # Calcular top opción
-                # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
                 top_opt = AnswerOption.objects.filter(question=q)\
                     .annotate(num_answers=Count('questionresponse'))\
                     .order_by('-num_answers').first()
@@ -241,7 +241,8 @@ class SurveyAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('text_short', 'survey_link', 'type_visual', 'is_required', 'stats_usage')
+    # CORREGIDO: 'is_required' -> 'required'
+    list_display = ('text_short', 'survey_link', 'type_visual', 'required', 'stats_usage')
     list_filter = ('type', 'survey', 'is_analyzable')
     search_fields = ('text',)
     list_select_related = ('survey',)
@@ -306,7 +307,8 @@ class SurveyResponseAdmin(admin.ModelAdmin):
 class ImportJobAdmin(admin.ModelAdmin):
     list_display = ('file_info', 'status_pill', 'survey_created', 'created_at')
     list_filter = ('status', 'created_at')
-    readonly_fields = ('processed_rows', 'error_message', 'csv_file')
+    # CORREGIDO: 'error_message' -> 'error_log'
+    readonly_fields = ('processed_rows', 'error_log', 'csv_file')
     show_facets = admin.ShowFacets.ALWAYS
 
     @admin.display(description='Archivo')

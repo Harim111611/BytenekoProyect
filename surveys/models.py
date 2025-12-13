@@ -4,54 +4,15 @@ Modelos principales para encuestas y respuestas.
 """
 import uuid
 import secrets
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
-from django.conf import settings  # USAMOS SETTINGS EN LUGAR DE IMPORTAR USER DIRECTAMENTE
-
-class Survey(models.Model):
-    STATUS_CHOICES = [
-        ('draft', 'Borrador'),
-        ('active', 'Activa'),
-        ('closed', 'Cerrada'),
-        ('paused', 'Pausada'),
-    ]
-
-    title = models.CharField(max_length=200, verbose_name="Título")
-    description = models.TextField(blank=True, verbose_name="Descripción")
-    
-    # REFERENCIA AL USUARIO USANDO LA CONFIGURACIÓN (Evita Circular Import)
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='surveys')
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
-    
-    # Identificador público seguro (para compartir links sin exponer ID secuencial)
-    public_id = models.CharField(max_length=12, unique=True, editable=False, null=True)
-    
-    # Metadatos para análisis
-    category = models.CharField(max_length=50, blank=True, null=True, verbose_name="Categoría (Ej. HR, CX)")
-    sample_goal = models.IntegerField(default=0, verbose_name="Meta de Respuestas", help_text="0 = Sin límite")
-    
-    # Flag para distinguir encuestas importadas
-    is_imported = models.BooleanField(default=False, verbose_name="Es Importada")
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['author', 'status']),  # Para dashboard principal
-            models.Index(fields=['public_id']),         # Para acceso público rápido
-        ]
-
-    def save(self, *args, **kwargs):
-        if not self.public_id:
-            self.public_id = secrets.token_urlsafe(8)[:12]
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return self.title
+from django.conf import settings
+from django.core.exceptions import ValidationError
 
 class Question(models.Model):
+    """
+    Modelo de Pregunta. Definido antes para ser usado en SurveyTemplate.
+    """
     TYPE_CHOICES = [
         ('text', 'Texto Corto'),
         ('textarea', 'Texto Largo'),
@@ -64,7 +25,8 @@ class Question(models.Model):
         ('section', 'Sección / Encabezado'),
     ]
 
-    survey = models.ForeignKey(Survey, on_delete=models.CASCADE, related_name='questions')
+    # ForeignKey 'Survey' se define como string para evitar error de definición circular
+    survey = models.ForeignKey('Survey', on_delete=models.CASCADE, related_name='questions')
     text = models.TextField(verbose_name="Pregunta")
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='text')
     required = models.BooleanField(default=False, verbose_name="Obligatoria")
@@ -86,7 +48,7 @@ class Question(models.Model):
     def __str__(self):
         return f"{self.text[:50]} ({self.get_type_display()})"
 
-class Option(models.Model):
+class AnswerOption(models.Model):
     """Opciones para preguntas de selección (single, multi, select)."""
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='options')
     text = models.CharField(max_length=200)
@@ -98,6 +60,126 @@ class Option(models.Model):
 
     def __str__(self):
         return self.text
+
+class Survey(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Borrador'),
+        ('active', 'Activa'),
+        ('closed', 'Cerrada'),
+        ('paused', 'Pausada'),
+    ]
+    
+    # Constantes para uso en código
+    STATUS_DRAFT = 'draft'
+    STATUS_ACTIVE = 'active'
+    STATUS_PAUSED = 'paused'
+    STATUS_CLOSED = 'closed'
+
+    title = models.CharField(max_length=200, verbose_name="Título")
+    description = models.TextField(blank=True, verbose_name="Descripción")
+    
+    # REFERENCIA AL USUARIO USANDO LA CONFIGURACIÓN (Evita Circular Import)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='surveys')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    
+    # Identificador público seguro
+    public_id = models.CharField(max_length=12, unique=True, editable=False, null=True)
+    
+    # Metadatos para análisis
+    category = models.CharField(max_length=50, blank=True, null=True, verbose_name="Categoría (Ej. HR, CX)")
+    sample_goal = models.IntegerField(default=0, verbose_name="Meta de Respuestas", help_text="0 = Sin límite")
+    
+    # Flag para distinguir encuestas importadas
+    is_imported = models.BooleanField(default=False, verbose_name="Es Importada")
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['author', 'status']),
+            models.Index(fields=['public_id']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.public_id:
+            self.public_id = secrets.token_urlsafe(8)[:12]
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.title
+
+class SurveyTemplate(models.Model):
+    """
+    Sistema de plantillas reutilizables.
+    Define la estructura base para instanciar encuestas repetitivas.
+    """
+    title = models.CharField(max_length=255, verbose_name="Nombre de la Plantilla")
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=100, default='General')
+    structure = models.JSONField(verbose_name="Estructura JSON", help_text="Definición de preguntas y lógica")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    def clean(self):
+        """Valida la integridad de la estructura JSON."""
+        super().clean()
+        if not isinstance(self.structure, list):
+            raise ValidationError({'structure': 'La estructura debe ser una lista de objetos de pregunta.'})
+        
+        valid_types = [choice[0] for choice in Question.TYPE_CHOICES]
+        
+        for index, q in enumerate(self.structure):
+            if 'text' not in q or 'type' not in q:
+                raise ValidationError({'structure': f'La pregunta en índice {index} debe tener "text" y "type".'})
+            
+            if q['type'] not in valid_types:
+                raise ValidationError({'structure': f'Tipo de pregunta inválido "{q["type"]}" en índice {index}.'})
+            
+            # Validar opciones para tipos que las requieren
+            if q['type'] in ['single', 'multi']:
+                options = q.get('options', [])
+                if not options or not isinstance(options, list) or len(options) < 1:
+                    raise ValidationError({'structure': f'La pregunta "{q["text"]}" de tipo {q["type"]} debe tener una lista de "options".'})
+
+    def create_survey_instance(self, author):
+        """
+        Crea una nueva Survey funcional basada en esta plantilla de forma atómica.
+        """
+        with transaction.atomic():
+            new_survey = Survey.objects.create(
+                title=f"Copia de {self.title}",
+                description=self.description,
+                category=self.category,
+                status=Survey.STATUS_DRAFT,
+                author=author
+            )
+
+            if not self.structure:
+                return new_survey
+
+            for i, q_data in enumerate(self.structure):
+                question = Question.objects.create(
+                    survey=new_survey,
+                    text=q_data.get('text', 'Pregunta sin título'),
+                    type=q_data.get('type', 'text'),
+                    order=i + 1,
+                    required=q_data.get('required', False)
+                )
+                
+                options_list = q_data.get('options', [])
+                if options_list and isinstance(options_list, list):
+                    option_objs = [
+                        AnswerOption(question=question, text=opt_text.strip(), order=j)
+                        for j, opt_text in enumerate(options_list)
+                        if opt_text.strip()
+                    ]
+                    AnswerOption.objects.bulk_create(option_objs)
+            
+            return new_survey
 
 class SurveyResponse(models.Model):
     """Una respuesta completa de un usuario a una encuesta."""
@@ -114,6 +196,7 @@ class SurveyResponse(models.Model):
     # Estado de la respuesta
     is_complete = models.BooleanField(default=True)
     completion_time_seconds = models.PositiveIntegerField(null=True, blank=True)
+    is_anonymous = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
@@ -130,14 +213,15 @@ class QuestionResponse(models.Model):
     
     # Almacenamiento polimórfico simple
     text_value = models.TextField(blank=True, null=True)
-    numeric_value = models.FloatField(blank=True, null=True) # Para escalas y números
-    selected_option = models.ForeignKey(Option, on_delete=models.SET_NULL, null=True, blank=True)
+    numeric_value = models.FloatField(blank=True, null=True)
+    
+    selected_option = models.ForeignKey(AnswerOption, on_delete=models.SET_NULL, null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
-            # Índice compuesto vital para el analysis_service
+            # Indices optimizados para análisis
             models.Index(fields=['question', 'numeric_value']), 
             models.Index(fields=['question', 'selected_option']),
             models.Index(fields=['survey_response', 'question']),
