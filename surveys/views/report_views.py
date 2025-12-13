@@ -21,15 +21,13 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob
-from core.utils.logging_utils import StructuredLogger, log_data_change
+from core.utils.logging_utils import StructuredLogger
 from core.utils.helpers import PermissionHelper, DateFilterHelper
 from core.services.survey_analysis import SurveyAnalysisService
 
 logger = StructuredLogger('surveys')
 
-# Cache timeout constants
 CACHE_TIMEOUT_STATS = 300
-CACHE_TIMEOUT_ANALYSIS = 1800
 
 def _has_date_fields(survey_id):
     """Check if survey has date fields from the CSV import."""
@@ -104,35 +102,26 @@ def _apply_segment_filter(respuestas_qs, survey, segment_col, segment_val, segme
     return respuestas_qs
 
 def _process_crosstab_for_template(crosstab_raw):
-    """
-    Transforma el diccionario 'split' de Pandas (del servicio) 
-    a la estructura amigable que espera el Template HTML.
-    """
+    """Transforma el diccionario 'split' de Pandas a estructura para Template."""
     if not crosstab_raw or 'error' in crosstab_raw:
         return None, None
 
     data = crosstab_raw.get('data', {})
-    columns = data.get('columns', []) # Headers (Columna B) + "Total"
-    index = data.get('index', [])     # Labels (Columna A) + "Total"
-    values = data.get('data', [])     # Matriz de valores
+    columns = data.get('columns', [])
+    index = data.get('index', [])
+    values = data.get('data', [])
 
-    # Validación básica
     if not columns or not index or not values:
         return None, None
 
-    # 1. Preparar Headers (Quitamos 'Total' para iterarlo aparte si queremos, o lo dejamos)
-    # El template espera headers sin el "Total" final en la iteración principal
     headers = columns[:-1] 
-
     formatted_rows = []
     
-    # 2. Iterar filas (excepto la última que es Total General)
     for i, row_label in enumerate(index[:-1]):
         row_values = values[i]
-        row_total = row_values[-1] # El último valor es el total de la fila
+        row_total = row_values[-1]
         
         cells = []
-        # Iterar celdas (excepto la última que es el total)
         for val in row_values[:-1]:
             percentage = 0
             if row_total > 0:
@@ -149,7 +138,6 @@ def _process_crosstab_for_template(crosstab_raw):
             'total': row_total
         })
 
-    # 3. Estructura final para HTML
     crosstab_data = {
         'row_label': crosstab_raw.get('row_label', 'Fila'),
         'col_label': crosstab_raw.get('col_label', 'Columna'),
@@ -157,11 +145,8 @@ def _process_crosstab_for_template(crosstab_raw):
         'rows': formatted_rows
     }
 
-    # 4. Estructura para Chart.js (Barras Apiladas)
-    # Datasets: Una serie por cada COLUMNA (excepto total)
     datasets = []
     for col_idx, col_name in enumerate(headers):
-        # Extraemos los datos de esta columna para todas las filas (menos la fila total)
         col_data = [row[col_idx] for row in values[:-1]]
         datasets.append({
             'label': str(col_name),
@@ -169,7 +154,7 @@ def _process_crosstab_for_template(crosstab_raw):
         })
 
     crosstab_chart = {
-        'labels': [str(l) for l in index[:-1]], # Etiquetas del eje X (Filas)
+        'labels': [str(l) for l in index[:-1]],
         'datasets': datasets
     }
 
@@ -181,10 +166,7 @@ def _process_crosstab_for_template(crosstab_raw):
 
 @login_required
 def survey_results_view(request, public_id):
-    """
-    Vista principal del Dashboard de Resultados.
-    Orquesta los datos del Service y los pasa al Template.
-    """
+    """Vista principal del Dashboard de Resultados."""
     try:
         survey = get_object_or_404(
             Survey.objects.select_related('author').prefetch_related('questions__options'),
@@ -195,13 +177,12 @@ def survey_results_view(request, public_id):
     
     PermissionHelper.verify_survey_access(survey, request.user)
     
-    # --- 1. Filtros ---
     start = request.GET.get('start')
     end = request.GET.get('end')
     segment_col = request.GET.get('segment_col', '').strip()
     segment_val = request.GET.get('segment_val', '').strip()
     segment_demo = request.GET.get('segment_demo', '').strip()
-    crosstab_col = request.GET.get('crosstab_col', '').strip() # Nuevo Filtro
+    crosstab_col = request.GET.get('crosstab_col', '').strip()
     
     has_filters = bool(start or end or segment_col)
     
@@ -215,60 +196,36 @@ def survey_results_view(request, public_id):
             respuestas_qs, survey, segment_col, segment_val, segment_demo
         )
 
-    # --- 2. Obtener Análisis General ---
-    cache_key = f"analysis_view_v17_{survey.id}_{start}_{end}_{segment_col}_{segment_val}"
-    
-    # Puedes personalizar el tono y si quieres citas aquí:
     analysis_result = SurveyAnalysisService.get_analysis_data(
         survey,
         respuestas_qs,
         config={'tone': 'FORMAL', 'include_quotes': True}
     )
 
-    # Serializar Charts para el Template (asegura chart_json como string JSON)
     insights_list = analysis_result.get('analysis_data', [])
     for item in insights_list:
         if 'chart' in item and item['chart']:
-            # Si ya es string, úsalo directo; si es dict, serializa
             if isinstance(item['chart'], str):
                 item['chart_json'] = item['chart']
             else:
                 item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
 
-    # Mapear correctamente el KPI de satisfacción
     kpi_score = analysis_result.get('kpi_prom_satisfaccion', 0)
     evolution = analysis_result.get('evolution', {})
     
-    # Top Insights (Mood crítico o excelente)
     top_insights = [
         item for item in insights_list 
         if item.get('insight_data', {}).get('mood') in ['CRITICO', 'EXCELENTE']
     ][:3]
 
-    # --- 3. Lógica de Tabla Cruzada (Crosstab) ---
     crosstab_data = None
     crosstab_chart_json = None
     
     if crosstab_col:
-        # Si hay una columna seleccionada para cruce, usamos el servicio
-        # Nota: Asumimos que la fila principal es la segmentación o una por defecto si se desea
-        # Pero normalmente el crosstab es: FILA (segment_col) vs COLUMNA (crosstab_col)
-        # Si segment_col es filtro (WHERE), necesitamos definir qué es la "Fila" del cuadro.
-        # Por defecto, si el usuario solo selecciona "Vs Variable", usaremos segment_col como fila
-        # O si no hay segment_col, el usuario debería seleccionar ambas.
-        # En tu UI actual: "Segmentar" filtra todo el dashboard. "Tabla Cruzada" es adicional.
-        # Vamos a asumir que si el usuario selecciona crosstab_col, quiere ver esa variable 
-        # cruzada contra la variable de segmentación (si existe) o permitimos seleccionar fila.
-        # Para simplificar con tu UI actual que tiene "Vs: ...", asumiremos que:
-        # Fila = segment_col (si es válida) O la primera pregunta categórica de la encuesta.
-        
         row_id = segment_col
         col_id = crosstab_col
         
-        # Si no hay fila explícita (porque segment_col se usó para filtrar un valor específico),
-        # buscamos una pregunta default interesante (ej. NPS o la primera categórica).
         if not row_id:
-             # Fallback: Primera pregunta que NO sea la columna
              first_q = survey.questions.exclude(id=col_id).filter(type__in=['single', 'multi', 'select']).first()
              if first_q:
                  row_id = str(first_q.id)
@@ -279,7 +236,6 @@ def survey_results_view(request, public_id):
             )
             crosstab_data, crosstab_chart_json = _process_crosstab_for_template(raw_crosstab)
 
-    # Preguntas disponibles para filtros
     preguntas_filtro = list(
         survey.questions.values('id', 'text', 'type', 'is_demographic')
         .order_by('order')
@@ -288,16 +244,11 @@ def survey_results_view(request, public_id):
     context = {
         'survey': survey,
         'total_respuestas': respuestas_qs.count(),
-        
-        'analysis_data': insights_list, # Ahora items tienen 'chart_json'
+        'analysis_data': insights_list,
         'evolution_chart': json.dumps(evolution, cls=DjangoJSONEncoder),
         'kpi_score': round(float(kpi_score), 1),
-        
-        # Datos Crosstab (Nuevos)
         'crosstab_data': crosstab_data,
         'crosstab_chart_json': crosstab_chart_json,
-        
-        # Filtros UI
         'has_filters': has_filters,
         'filter_start': start,
         'filter_end': end,
@@ -305,14 +256,12 @@ def survey_results_view(request, public_id):
         'filter_val': segment_val,
         'filter_demo': segment_demo,
         'preguntas_filtro': preguntas_filtro,
-        
         'has_date_fields': _has_date_fields(survey.id),
         'top_insights': top_insights,
         'ignored_questions': analysis_result.get('ignored_questions', [])
     }
     
     return render(request, 'surveys/responses/results.html', context)
-
 
 @login_required
 def report_preview(request, public_id):
@@ -339,7 +288,6 @@ def report_preview(request, public_id):
             survey, respuestas_qs, include_charts=True
         )
         
-        # Serialización para preview
         for item in analysis.get('analysis_data', []):
             if 'chart' in item:
                 item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
@@ -357,7 +305,6 @@ def report_preview(request, public_id):
         logger.exception(f"Error generando preview reporte: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-
 @login_required
 @ratelimit(key='user', rate='10/h', method='GET', block=True)
 def export_survey_csv_view(request, public_id):
@@ -368,7 +315,6 @@ def export_survey_csv_view(request, public_id):
         messages.error(request, "Encuesta no encontrada.")
         return redirect('dashboard')
 
-    # Caso 1: Importada (Archivo original)
     if getattr(survey, 'is_imported', False):
         import_job = ImportJob.objects.filter(survey=survey, status="completed").order_by('-created_at').first()
         if import_job and import_job.csv_file and os.path.exists(import_job.csv_file):
@@ -377,7 +323,6 @@ def export_survey_csv_view(request, public_id):
                 response['Content-Disposition'] = f'attachment; filename="{import_job.original_filename or "data.csv"}"'
                 return response
 
-    # Caso 2: Nativa (Generar)
     respuestas = SurveyResponse.objects.filter(survey=survey).order_by('created_at').prefetch_related('question_responses__question')
     
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -392,7 +337,6 @@ def export_survey_csv_view(request, public_id):
 
     for r in respuestas:
         row = [r.id, r.created_at, r.user.username if r.user else 'Anon']
-        # Mapeo simple
         q_map = {qr.question_id: (qr.text_value or str(qr.numeric_value or '')) for qr in r.question_responses.all()}
         for p in preguntas:
             row.append(q_map.get(p.id, ''))
@@ -400,13 +344,9 @@ def export_survey_csv_view(request, public_id):
 
     return response
 
-# ============================================================
-# API ENDPOINTS
-# ============================================================
-
 @login_required
 def survey_analysis_ajax(request, public_id):
-    """API para obtener datos JSON puros (útil para recargar gráficas)."""
+    """API para obtener datos JSON puros."""
     try:
         survey = get_object_or_404(Survey, public_id=public_id)
         PermissionHelper.verify_survey_access(survey, request.user)
@@ -449,7 +389,7 @@ def api_crosstab_view(request, public_id):
 
 @login_required
 def debug_analysis_view(request, public_id):
-    """Vista de depuración para verificar qué está viendo el sistema."""
+    """Vista de depuración."""
     survey = get_object_or_404(Survey, public_id=public_id)
     PermissionHelper.verify_survey_access(survey, request.user)
     
