@@ -17,7 +17,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btnPrev2: document.getElementById('btn-to-step-1-from-2'),
         btnNext2: document.getElementById('btn-next-2'),
         btnPrev3: document.getElementById('btn-to-step-2-from-3'),
-        btnPublish: document.getElementById('btn-publish'), // Botón Publicar
+        
+        // MODIFICACIÓN: Cambiado de btnPublish a btnPrePublish
+        btnPrePublish: document.getElementById('btn-pre-publish'),
+        
+        // MODIFICACIÓN: Nuevos botones del modal de decisión
+        publishModalElement: document.getElementById('publishOptionsModal'),
+        btnConfirmDraft: document.getElementById('btn-confirm-draft'),
+        btnConfirmActive: document.getElementById('btn-confirm-active'),
         
         // Progress
         progressBar: document.getElementById('progressBar'),
@@ -705,72 +712,101 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // =====================================================
-    // 6. LÓGICA DE PUBLICACIÓN (PUBLISH)
+    // 6. LÓGICA DE PUBLICACIÓN (MODIFICADA)
     // =====================================================
-    if(dom.btnPublish) {
-        dom.btnPublish.addEventListener('click', async function() {
-            // 1. Validar si el paso 2 (preguntas) es válido
+    
+    // 6.1. Abrir modal de decisión
+    if (dom.btnPrePublish) {
+        dom.btnPrePublish.addEventListener('click', () => {
+            // Validar paso actual (preguntas) antes de abrir modal
             if (!validateStep(2)) {
                 // Si la validación falla, nos aseguramos de que el usuario regrese a ese paso
                 goToStep(2); 
                 return;
             }
+            // Abrir el modal de opciones
+            const modal = new bootstrap.Modal(dom.publishModalElement);
+            modal.show();
+        });
+    }
 
-            // 2. Recolectar todos los datos (título, descripción, y la estructura de preguntas)
-            const title = dom.surveyTitle.value.trim();
-            const description = dom.surveyDesc.value.trim();
+    // 6.2. Función unificada de envío
+    async function submitSurvey(targetStatus, btnElement) {
+        // Recolectar datos
+        const title = dom.surveyTitle.value.trim();
+        const description = dom.surveyDesc.value.trim();
+        const structure = [];
+        
+        dom.questionsList.querySelectorAll('.question-item').forEach((el, i) => {
+            const qTitle = el.querySelector('.question-title').value.trim();
+            const qType = el.querySelector('.question-type').value;
+            const qReq = el.querySelector('.question-required').checked;
+            let qOpts = [];
+            if(['single','multi', 'select'].includes(qType)){
+                qOpts = el.querySelector('.question-options').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+            }
+            structure.push({ text: qTitle, type: qType, required: qReq, options: qOpts, order: i+1 });
+        });
+        
+        const payload = {
+            title: title,
+            description: description,
+            structure: structure, 
+            status: targetStatus // 'draft' o 'active'
+        };
 
-            const structure = [];
-            dom.questionsList.querySelectorAll('.question-item').forEach((el, i) => {
-                const qTitle = el.querySelector('.question-title').value.trim();
-                const qType = el.querySelector('.question-type').value;
-                const qReq = el.querySelector('.question-required').checked;
-                let qOpts = [];
-                if(['single','multi', 'select'].includes(qType)){
-                    qOpts = el.querySelector('.question-options').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
-                }
-                structure.push({ text: qTitle, type: qType, required: qReq, options: qOpts, order: i+1 });
+        // UI Loading
+        const originalHtml = btnElement.innerHTML;
+        btnElement.disabled = true;
+        btnElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+
+        try {
+            const token = getCSRFToken();
+            if (!token) throw new Error('No CSRF token found');
+
+            const publishUrl = '/surveys/create_survey/'; // Mismo endpoint, diferente status en payload
+            
+            const resp = await fetch(publishUrl, {
+                method: 'POST',
+                headers: { 'Content-Type':'application/json', 'X-CSRFToken': token },
+                body: JSON.stringify(payload)
             });
             
-            const payload = {
-                title: title,
-                description: description,
-                structure: structure, 
-                status: 'active' 
-            };
-
-            const originalBtnText = this.innerHTML;
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Publicando...';
-
-            try {
-                const token = getCSRFToken();
-                if (!token) throw new Error('No CSRF token found');
-
-                const publishUrl = '/surveys/create_survey/'; 
+            const data = await resp.json();
+            
+            if(data.success) {
+                const msg = targetStatus === 'active' 
+                    ? '¡Encuesta publicada y activa!' 
+                    : 'Encuesta guardada como borrador.';
+                showToast(msg, 'success');
                 
-                const resp = await fetch(publishUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type':'application/json', 'X-CSRFToken': token },
-                    body: JSON.stringify(payload)
-                });
-                
-                const data = await resp.json();
-                
-                if(data.success) {
-                    showToast('¡Encuesta publicada exitosamente!', 'success');
-                    window.location.href = data.redirect_url || '/surveys/list/'; 
-                } else {
-                    showToast(data.error || 'Error al publicar la encuesta.', 'danger');
-                }
-
-            } catch (err) {
-                console.error('Error de red al publicar:', err);
-                showToast('Error de conexión o permisos al intentar publicar.', 'danger');
-            } finally {
-                this.disabled = false;
-                this.innerHTML = originalBtnText;
+                // Redirigir
+                window.location.href = data.redirect_url || '/surveys/list/'; 
+            } else {
+                showToast(data.error || 'Error al procesar la encuesta.', 'danger');
+                // Restaurar botón si hubo error lógico
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalHtml;
             }
+
+        } catch (err) {
+            console.error('Error de red al publicar:', err);
+            showToast('Error de conexión.', 'danger');
+            btnElement.disabled = false;
+            btnElement.innerHTML = originalHtml;
+        }
+    }
+
+    // 6.3. Listeners de los botones del modal
+    if (dom.btnConfirmDraft) {
+        dom.btnConfirmDraft.addEventListener('click', function() {
+            submitSurvey('draft', this);
+        });
+    }
+
+    if (dom.btnConfirmActive) {
+        dom.btnConfirmActive.addEventListener('click', function() {
+            submitSurvey('active', this);
         });
     }
 

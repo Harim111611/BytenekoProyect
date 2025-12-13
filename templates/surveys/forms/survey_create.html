@@ -150,7 +150,7 @@
                                 </div>
                                 <hr class="border-secondary-subtle">
                                 <div class="small text-muted">
-                                    <i class="bi bi-info-circle me-1"></i> Al publicar, la survey quedará activa inmediatamente.
+                                    <i class="bi bi-info-circle me-1"></i> Configura el estado al finalizar.
                                 </div>
                             </div>
                         </div>
@@ -179,8 +179,8 @@
                     <button class="btn btn-outline-secondary" id="btn-to-step-2-from-3">
                         <i class="bi bi-arrow-left me-1"></i> Volver a editar
                     </button>
-                    <button class="btn btn-success px-4 fw-bold shadow-sm" id="btn-publish">
-                        <i class="bi bi-rocket-takeoff me-2"></i> Publicar survey
+                    <button class="btn btn-primary px-4 fw-bold shadow-sm" id="btn-pre-publish">
+                        <i class="bi bi-check-lg me-2"></i> Finalizar Encuesta
                     </button>
                 </div>
             </div>
@@ -366,6 +366,39 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-danger" id="btn-confirm-delete-template">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="publishOptionsModal" tabindex="-1" aria-labelledby="publishOptionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="publishOptionsModalLabel">¿Cómo deseas guardar la encuesta?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <button type="button" class="btn btn-outline-secondary w-100 h-100 p-3 text-start border-2" id="btn-confirm-draft">
+                            <div class="mb-2"><i class="bi bi-pencil-square fs-3"></i></div>
+                            <div class="fw-bold">Guardar como Borrador</div>
+                            <small class="text-muted lh-1" style="font-size: 0.8rem;">
+                                Guarda el progreso. La encuesta no será pública y podrás editarla después.
+                            </small>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button type="button" class="btn btn-outline-success w-100 h-100 p-3 text-start border-2" id="btn-confirm-active">
+                            <div class="mb-2"><i class="bi bi-rocket-takeoff-fill fs-3"></i></div>
+                            <div class="fw-bold">Publicar Ahora</div>
+                            <small class="text-muted lh-1" style="font-size: 0.8rem;">
+                                La encuesta estará activa inmediatamente y lista para recibir respuestas.
+                            </small>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
