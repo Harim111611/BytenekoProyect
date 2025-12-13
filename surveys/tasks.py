@@ -3,10 +3,12 @@ surveys/tasks.py
 Tareas asíncronas para reportes, importaciones y mantenimiento.
 """
 import logging
+import re
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction, connection
 from django.utils import timezone
+from django.apps import apps
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -65,54 +67,128 @@ def process_survey_import(self, job_id: int):
         
         return {'status': 'FAILURE', 'error': str(e)}
 
+def _normalize_ids(ids) -> list[int]:
+    """
+    Asegura que ids sea list[int].
+    Soporta: int, list/set/tuple, string tipo "(15)" "{15}" "[15,16]".
+    """
+    if ids is None:
+        return []
+
+    if isinstance(ids, int):
+        return [ids]
+
+    if isinstance(ids, (list, set, tuple)):
+        out: list[int] = []
+        for x in ids:
+            if x is None:
+                continue
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    if isinstance(ids, str):
+        found = re.findall(r"\d+", ids)
+        return [int(x) for x in found]
+
+    # fallback
+    try:
+        return [int(ids)]
+    except (TypeError, ValueError):
+        return []
+
+
+def _existing_tables() -> set[str]:
+    return set(connection.introspection.table_names())
+
+
+def _reportjob_table_name() -> str | None:
+    """
+    Devuelve el nombre real de la tabla de ReportJob (según Django),
+    o None si el modelo no existe/está registrado.
+    """
+    try:
+        Model = apps.get_model("core", "ReportJob")
+    except LookupError:
+        return None
+    return Model._meta.db_table
+
+
 @shared_task(bind=True)
 def bulk_delete_surveys(self, ids):
     """
     Elimina encuestas masivamente usando SQL optimizado (JOIN DELETE).
-    Mucho más rápido que IN (SUBQUERY) para grandes volúmenes de datos.
     """
     try:
+        ids_list = _normalize_ids(ids)
+        if not ids_list:
+            return {"status": "SUCCESS", "deleted": 0}
+
+        tables = _existing_tables()
+
         with transaction.atomic():
             with connection.cursor() as cursor:
-                logger.info(f"[TASK][DELETE] Iniciando borrado optimizado para {len(ids)} encuestas.")
+                logger.info(f"[TASK][DELETE] Iniciando borrado optimizado para {len(ids_list)} encuestas: {ids_list}")
 
-                # 1. Respuestas a preguntas (Optimizado con USING)
-                # Esto evita scanear toda la tabla questionresponse
                 cursor.execute("""
                     DELETE FROM surveys_questionresponse qr
                     USING surveys_surveyresponse sr
                     WHERE qr.survey_response_id = sr.id
-                    AND sr.survey_id = ANY(%s::int[])
-                """, (ids,))
-                
-                # 2. Respuestas de encuesta
-                cursor.execute("DELETE FROM surveys_surveyresponse WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 3. Opciones de respuesta (Optimizado con USING)
+                      AND sr.survey_id = ANY(%s::int[])
+                """, (ids_list,))
+
+                cursor.execute("""
+                    DELETE FROM surveys_surveyresponse
+                    WHERE survey_id = ANY(%s::int[])
+                """, (ids_list,))
+
                 cursor.execute("""
                     DELETE FROM surveys_answeroption ao
                     USING surveys_question q
                     WHERE ao.question_id = q.id
-                    AND q.survey_id = ANY(%s::int[])
-                """, (ids,))
-                
-                # 4. Preguntas
-                cursor.execute("DELETE FROM surveys_question WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 5. Jobs asociados (Importación y Reportes)
-                cursor.execute("DELETE FROM surveys_importjob WHERE survey_id = ANY(%s::int[])", (ids,))
-                cursor.execute("DELETE FROM core_reportjob WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 6. La encuesta en sí
-                cursor.execute("DELETE FROM surveys_survey WHERE id = ANY(%s::int[])", (ids,))
-                
-                logger.info(f"[TASK][DELETE] Borrado completado para IDs: {ids}")
-                
-        return {'status': 'SUCCESS', 'deleted': len(ids)}
+                      AND q.survey_id = ANY(%s::int[])
+                """, (ids_list,))
+
+                cursor.execute("""
+                    DELETE FROM surveys_question
+                    WHERE survey_id = ANY(%s::int[])
+                """, (ids_list,))
+
+                # Jobs asociados (Import)
+                if "surveys_importjob" in tables:
+                    cursor.execute("""
+                        DELETE FROM surveys_importjob
+                        WHERE survey_id = ANY(%s::int[])
+                    """, (ids_list,))
+                else:
+                    logger.warning("[TASK][DELETE] Tabla surveys_importjob no existe. Se omite.")
+
+                # Jobs asociados (Report) -> NO hardcodear core_reportjob
+                report_table = _reportjob_table_name()
+                if report_table and report_table in tables:
+                    qt = connection.ops.quote_name(report_table)
+                    cursor.execute(f"""
+                        DELETE FROM {qt}
+                        WHERE survey_id = ANY(%s::int[])
+                    """, (ids_list,))
+                else:
+                    logger.warning(f"[TASK][DELETE] Tabla ReportJob no encontrada (db_table={report_table}). Se omite.")
+
+                # La encuesta en sí
+                cursor.execute("""
+                    DELETE FROM surveys_survey
+                    WHERE id = ANY(%s::int[])
+                """, (ids_list,))
+
+                logger.info(f"[TASK][DELETE] Borrado completado para IDs: {ids_list}")
+
+        return {"status": "SUCCESS", "deleted": len(ids_list)}
 
     except Exception as e:
         logger.error(f"[TASK][DELETE] Error: {e}", exc_info=True)
-        return {'status': 'FAILURE', 'error': str(e)}
+        return {"status": "FAILURE", "error": str(e)}
 
 @shared_task(bind=True, max_retries=3)
 def generate_report_task(self, job_id):

@@ -298,7 +298,7 @@
         "importAsync": "{% url 'surveys:import_survey_csv_async' %}",
         "importPreview": "{% url 'surveys:import_preview' %}",
         "bulkDelete": "{% url 'surveys:bulk_delete' %}",
-        "taskStatus": "{% url 'surveys:task_status' '0000' %}" 
+        "taskStatus": "{% url 'surveys:task_status' '00000000-0000-0000-0000-000000000000' %}"
     }
 </script>
 
@@ -353,7 +353,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Task Polling
     const pollTask = async (taskId, onComplete, onError) => {
-        const statusUrl = urls.taskStatus.replace('0000', taskId);
+        const TASK_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+        const statusUrl = urls.taskStatus.replace(TASK_PLACEHOLDER, taskId);
         const startTime = Date.now();
         const timeout = 300000; // 5 mins
 

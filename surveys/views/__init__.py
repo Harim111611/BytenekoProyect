@@ -12,6 +12,7 @@ from . import import_views
 from . import report_views
 from . import respond_views
 from . import question_views
+from . import task_status
 
 # Re-export class-based views from crud_views
 from .crud_views import (
@@ -31,6 +32,9 @@ from .import_views import (
     csv_preview_view,         
     import_responses_view,    
 )
+
+# Task status view (Celery UUID polling)
+from .task_status import task_status_view
 
 # Re-export function-based views from report_views
 from .report_views import (
@@ -67,6 +71,7 @@ __all__ = [
     'get_task_status_view',
     'csv_preview_view',
     'import_responses_view',
+    'task_status_view',
     
     # Report views
     'survey_results_view',

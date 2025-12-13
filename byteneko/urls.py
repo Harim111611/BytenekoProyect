@@ -53,7 +53,7 @@ urlpatterns = [
     path("webhooks/stripe/", stripe_webhook, name="stripe_webhook"),
 
     # Surveys App
-    path("surveys/", include("surveys.urls")),
+    path("surveys/", include(("surveys.urls", "surveys"), namespace="surveys")),
 
     # Inicio (Redirección)
     path("", RedirectView.as_view(pattern_name="login", permanent=False), name="index"),

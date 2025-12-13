@@ -1,6 +1,7 @@
 from django.urls import path
 
 # Importamos las vistas
+from . import views
 from .views import import_views, report_views, respond_views, question_views
 from .views import crud_views, template_views
 from .views import checkout_views
@@ -30,8 +31,9 @@ urlpatterns = [
     
     # 3. Polling de Estado para IMPORTACIONES (IDs Numéricos de Base de Datos)
     # FIX: Cambiado str -> int para evitar colisiones con UUIDs de Celery
-    path('task_status/<int:task_id>/', import_views.get_task_status_view, name='task_status'),
     path('import-job/<int:task_id>/status/', import_views.get_task_status_view, name='import_job_status'),
+    # Polling genérico por UUID para tareas de Celery
+    path('task_status/<uuid:task_id>/', views.task_status_view, name='task_status'),
 
     # =================================================
     # RUTAS CRUD
