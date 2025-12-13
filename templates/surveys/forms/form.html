@@ -1,216 +1,282 @@
 {% extends 'app_base.html' %}
 {% load static %}
 
-{% block page_styles %}
-{% endblock %}
+{% block title %}Editar Encuesta | ByteNeko{% endblock %}
 
 {% block app_content %}
-<div class="container-xl p-4 p-md-5">
+<div class="container-fluid py-4 px-md-5">
     
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}">Mis Encuestas</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'surveys:detail' object.public_id %}">{{ object.title|truncatechars:30 }}</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Editar</li>
-        </ol>
-    </nav>
-
-    <div class="mb-4">
-        <h1 class="h2 fw-bold mb-1">Editar Encuesta</h1>
-        <p class="text-muted mb-0">Actualiza la información básica de tu survey</p>
+    <div class="d-flex justify-content-between align-items-center mb-4 animate__animated animate__fadeInDown">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="{% url 'surveys:list' %}" class="text-decoration-none text-muted">Mis Encuestas</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'surveys:detail' survey.public_id %}" class="text-decoration-none text-muted">{{ survey.title|truncatechars:20 }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Configuración</li>
+                </ol>
+            </nav>
+            <h1 class="h3 fw-bold text-body-emphasis mb-0">
+                <i class="bi bi-sliders2 me-2 text-primary"></i>Configuración General
+            </h1>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'surveys:detail' survey.public_id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+            <button type="submit" form="survey-edit-form" class="btn btn-primary fw-semibold shadow-sm">
+                <i class="bi bi-save me-2"></i>Guardar Cambios
+            </button>
+        </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body p-4 p-lg-5">
-                    <form method="post">
-                        {% csrf_token %}
+    <form method="post" novalidate id="survey-edit-form" class="animate__animated animate__fadeInUp">
+        {% csrf_token %}
+        
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger shadow-sm d-flex align-items-center mb-4">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+            <div>{{ form.non_field_errors.0 }}</div>
+        </div>
+        {% endif %}
 
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-transparent border-bottom py-3">
+                        <h5 class="card-title mb-0 fw-bold text-body-secondary">
+                            <i class="bi bi-card-text me-2"></i>Contenido de la Encuesta
+                        </h5>
+                    </div>
+                    <div class="card-body p-4">
                         <div class="mb-4">
-                            <label for="id_title" class="form-label fw-semibold text-body">
-                                Título de la survey <span class="text-danger">*</span>
-                                <a tabindex="0" class="ms-2 text-primary small" role="button" data-bs-toggle="popover" data-bs-trigger="focus" title="Ayuda" data-bs-content="Incluye objetivo y periodo (ej. 'Satisfacción Q1 2025').">
-                                    <i class="bi bi-question-circle"></i>
-                                </a>
-                            </label>
-                            <input type="text" 
-                                   class="form-control form-control-lg form-input-custom" 
-                                   id="id_title" 
-                                   name="title" 
-                                   value="{{ form.title.value|default_if_none:object.title }}" 
-                                   placeholder="ej. Satisfacción del Cliente Q1 2025" 
-                                   required>
+                            <label for="{{ form.title.id_for_label }}" class="form-label fw-bold text-muted small text-uppercase">Título del Proyecto</label>
+                            {{ form.title }}
                             {% if form.title.errors %}
-                                <div class="text-danger small mt-1">{{ form.title.errors.0 }}</div>
+                                <div class="invalid-feedback d-block">{{ form.title.errors.0 }}</div>
                             {% endif %}
+                            <div class="form-text">Este título será visible para tus encuestados.</div>
                         </div>
 
-                        <div class="mb-4">
-                            <label for="id_description" class="form-label fw-semibold text-body">Descripción</label>
-                            <textarea class="form-control form-input-custom" 
-                                      id="id_description" 
-                                      name="description" 
-                                      rows="4" 
-                                      placeholder="Describe el objetivo...">{{ form.description.value|default_if_none:object.description }}</textarea>
-                            <div class="form-text small text-muted">Ayuda a los participantes a entender el propósito.</div>
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-bold text-muted small text-uppercase">Descripción / Introducción</label>
+                            {{ form.description }}
                             {% if form.description.errors %}
-                                <div class="text-danger small mt-1">{{ form.description.errors.0 }}</div>
+                                <div class="invalid-feedback d-block">{{ form.description.errors.0 }}</div>
                             {% endif %}
+                            <div class="form-text">Explica brevemente el propósito de la encuesta.</div>
                         </div>
+                    </div>
+                </div>
+            </div>
 
-                        {% if not object.is_imported %}
-                            <div class="mb-4">
-                                <label for="id_status" class="form-label fw-semibold text-body">
-                                    Estado <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select form-select-lg form-input-custom" id="id_status" name="status" required>
-                                    <option value="draft" {% if object.status == 'draft' %}selected{% endif %} {% if object.status != 'draft' %}disabled{% endif %}>
-                                        📝 Borrador - editable
-                                    </option>
-                                    <option value="active" {% if object.status == 'active' %}selected{% endif %}>
-                                        ✅ Activa - aceptando respuestas
-                                    </option>
-                                    <option value="paused" {% if object.status == 'paused' %}selected{% endif %} {% if object.status == 'draft' %}disabled{% endif %}>
-                                        ⏸️ En pausa - detiene respuestas
-                                    </option>
-                                    <option value="closed" {% if object.status == 'closed' %}selected{% endif %}>
-                                        🔒 Cerrada - histórico final
-                                    </option>
-                                </select>
-                                <div class="form-text small text-muted">Una vez activada, no puede volver a borrador.</div>
+            <div class="col-lg-4">
+                <div class="vstack gap-4">
+                    
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-1">
+                            <div class="p-3 rounded-top bg-gradient-subtle" id="status-header-bg">
+                                <label for="{{ form.status.id_for_label }}" class="fw-bold small text-uppercase mb-2 d-block text-body-secondary">Estado Actual</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-broadcast"></i></span>
+                                    {{ form.status }}
+                                </div>
                                 {% if form.status.errors %}
-                                    <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+                                    <div class="invalid-feedback d-block mt-1">{{ form.status.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="p-3 bg-body-tertiary rounded-bottom small text-muted border-top">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <span id="status-help-text">Cambiar el estado puede afectar la visibilidad pública.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-transparent border-bottom py-3">
+                            <h6 class="card-title mb-0 fw-bold text-body-secondary">
+                                <i class="bi bi-gear me-2"></i>Parámetros
+                            </h6>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="mb-4">
+                                <label for="{{ form.category.id_for_label }}" class="form-label fw-bold small text-muted">Categoría</label>
+                                {{ form.category }}
+                                {% if form.category.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.category.errors.0 }}</div>
                                 {% endif %}
                             </div>
 
-                            <div class="mb-4">
-                                <label for="id_sample_goal" class="form-label fw-semibold text-body">
-                                    Meta de respuestas
-                                    <i class="bi bi-question-circle ms-2 text-muted small" data-bs-toggle="tooltip" title="0 para ilimitado"></i>
+                            <div class="mb-2">
+                                <label for="{{ form.sample_goal.id_for_label }}" class="form-label fw-bold small text-muted">
+                                    Meta de Respuestas
+                                    <span class="badge bg-secondary-subtle text-secondary ms-1">Opcional</span>
                                 </label>
                                 <div class="input-group">
-                                    <input type="number" 
-                                           min="0" 
-                                           class="form-control form-input-custom" 
-                                           id="id_sample_goal" 
-                                           name="sample_goal" 
-                                           value="{{ form.sample_goal.value|default_if_none:object.sample_goal|default:'' }}" 
-                                           placeholder="0 = Sin límite">
-                                    <span class="input-group-text form-input-custom">respuestas</span>
+                                    {{ form.sample_goal }}
+                                    <span class="input-group-text text-muted">respuestas</span>
                                 </div>
-                                <div class="form-text small text-muted">Pausa automática al alcanzar la meta.</div>
                                 {% if form.sample_goal.errors %}
-                                    <div class="text-danger small mt-1">{{ form.sample_goal.errors.0 }}</div>
+                                    <div class="invalid-feedback d-block">{{ form.sample_goal.errors.0 }}</div>
                                 {% endif %}
-                            </div>
-
-                            <div class="p-3 bg-body-tertiary rounded-3 mb-4">
-                                <h6 class="fw-bold mb-3"><i class="bi bi-diagram-3 me-2"></i>Lógica Condicional</h6>
-                                
-                                <div class="mb-3">
-                                    <label for="id_depends_on" class="form-label small fw-bold text-muted text-uppercase">Depende de la pregunta</label>
-                                    <select id="id_depends_on" name="depends_on" class="form-select form-select-sm">
-                                        <option value="">-- Ninguna --</option>
-                                        {% for q in survey_questions %}
-                                            <option value="{{ q.id }}">{{ q.text|truncatechars:60 }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="mb-0">
-                                    <label for="id_visible_if_option" class="form-label small fw-bold text-muted text-uppercase">Visible si selecciona</label>
-                                    <select id="id_visible_if_option" name="visible_if_option" class="form-select form-select-sm">
-                                        <option value="">-- Ninguna --</option>
-                                        {% for opt in answer_options %}
-                                            <option value="{{ opt.id }}">{{ opt.text|truncatechars:60 }}</option>
-                                        {% endfor %}
-                                    </select>
+                                <div class="form-text small mt-2">
+                                    Si estableces un número mayor a 0, la encuesta se pausará automáticamente al alcanzarlo.
                                 </div>
                             </div>
-
-                        {% else %}
-                            <div class="alert alert-warning d-flex align-items-start gap-3 mb-4">
-                                <i class="bi bi-file-earmark-lock2 text-warning fs-4"></i>
-                                <div>
-                                    <p class="mb-1 fw-semibold text-body">Encuesta importada</p>
-                                    <p class="mb-0 small text-muted">Este proyecto proviene de un CSV y permanece cerrado automáticamente.</p>
-                                </div>
-                            </div>
-                        {% endif %}
-
-                        <div class="d-flex justify-content-between align-items-center pt-4 mt-4 border-top">
-                            <a href="{% url 'surveys:detail' object.public_id %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-x-lg me-2"></i>Cancelar
-                            </a>
-                            <button type="submit" class="btn btn-primary btn-lg px-4 shadow-sm">
-                                <i class="bi bi-check-lg me-2"></i>Guardar Cambios
-                            </button>
                         </div>
-                    </form>
+                    </div>
+
+                    <div class="card border border-warning-subtle bg-warning-subtle text-warning-emphasis">
+                        <div class="card-body small">
+                            <div class="d-flex gap-2">
+                                <i class="bi bi-lightbulb-fill fs-5"></i>
+                                <div>
+                                    <strong>¿Necesitas editar preguntas?</strong><br>
+                                    La estructura de preguntas no se puede modificar aquí. Debes ir al <a href="#" class="text-decoration-underline text-warning-emphasis fw-bold">Editor de Estructura</a>.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
+    </form>
+</div>
 
-        <div class="col-lg-4">
-            
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
-                        <i class="bi bi-bar-chart-fill me-2"></i>Estadísticas
-                    </h6>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="small text-muted">Respuestas</span>
-                        <span class="h4 mb-0 fw-bold text-primary">{{ object.responses.count }}</span>
-                    </div>
-                    
-                    <p class="small text-muted mb-3 border-bottom pb-3">
-                        {% if object.sample_goal %}
-                            Meta actual: <strong>{{ object.sample_goal }}</strong>
-                        {% else %}
-                            Sin límite de respuestas.
-                        {% endif %}
-                    </p>
-
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small text-muted">Preguntas</span>
-                        <span class="h5 mb-0 fw-bold">{{ object.questions.count }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="small text-muted">Creada</span>
-                        <span class="small fw-medium">{{ object.created_at|date:"d M Y" }}</span>
-                    </div>
+<div class="modal fade" id="statusChangeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg text-center overflow-hidden">
+            <div class="modal-body p-4">
+                <div class="mb-3 position-relative">
+                    <div class="position-absolute top-50 start-50 translate-middle" style="width: 60px; height: 60px; background: currentColor; opacity: 0.1; border-radius: 50%;"></div>
+                    <i id="modal-status-icon" class="bi display-3 position-relative z-1"></i>
+                </div>
+                
+                <h5 class="fw-bold mb-2" id="modal-status-title">Confirmar</h5>
+                <p id="modal-status-msg" class="text-secondary small mb-4 lh-sm">¿Estás seguro?</p>
+                
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn fw-bold text-white shadow-sm" id="btn-confirm-status">Sí, cambiar estado</button>
+                    <button type="button" class="btn btn-light btn-sm text-muted" data-bs-dismiss="modal" id="btn-cancel-status">Cancelar</button>
                 </div>
             </div>
-
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h6 class="text-uppercase text-muted small fw-bold mb-3">
-                        <i class="bi bi-lightning-fill me-2"></i>Acciones Rápidas
-                    </h6>
-                    <div class="d-grid gap-2">
-                        <a href="{% url 'surveys:results' object.public_id %}" class="btn btn-outline-primary btn-sm show-results-loader">
-                            <i class="bi bi-graph-up me-2"></i>Ver Resultados
-                        </a>
-                        <a href="{% url 'surveys:respond' object.public_id %}" class="btn btn-outline-secondary btn-sm" target="_blank">
-                            <i class="bi bi-box-arrow-up-right me-2"></i>Vista Previa
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card info-card border-0 shadow-sm">
-                <div class="card-body p-4">
-                    <h6 class="fw-bold mb-2">
-                        <i class="bi bi-info-circle-fill me-2"></i>Nota Importante
-                    </h6>
-                    <p class="small mb-0 text-body-secondary">
-                        Desde aquí editas la info básica. Para modificar preguntas, usa el editor de estructura o contacta a soporte.
-                    </p>
-                </div>
-            </div>
-
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
+    const headerBg = document.getElementById('status-header-bg');
+    
+    // Configuración visual por estado
+    const statusConfig = {
+        'closed': {
+            icon: 'bi-lock-fill',
+            color: 'danger', // bootstrap color name
+            bgClass: 'bg-danger-subtle',
+            title: 'Cerrar Encuesta',
+            msg: 'Ya no se recibirán nuevas respuestas. ¿Confirmas el cierre?'
+        },
+        'paused': {
+            icon: 'bi-pause-circle-fill',
+            color: 'warning',
+            bgClass: 'bg-warning-subtle',
+            title: 'Pausar Encuesta',
+            msg: 'La encuesta dejará de estar visible temporalmente.'
+        },
+        'active': {
+            icon: 'bi-check-circle-fill',
+            color: 'success',
+            bgClass: 'bg-success-subtle',
+            title: 'Activar Encuesta',
+            msg: 'La encuesta será pública y visible para todos.'
+        },
+        'draft': {
+            icon: 'bi-pencil-square',
+            color: 'secondary',
+            bgClass: 'bg-secondary-subtle',
+            title: 'Volver a Borrador',
+            msg: 'La encuesta se ocultará mientras realizas cambios.'
+        }
+    };
+
+    // Función para actualizar el estilo del header de la tarjeta de estado
+    function updateHeaderStyle(status) {
+        // Limpiar clases de fondo previas
+        headerBg.classList.remove('bg-danger-subtle', 'bg-warning-subtle', 'bg-success-subtle', 'bg-secondary-subtle', 'bg-gradient-subtle');
+        
+        const config = statusConfig[status];
+        if (config) {
+            headerBg.classList.add(config.bgClass);
+        } else {
+            headerBg.classList.add('bg-light');
+        }
+    }
+
+    // Inicializar estilo
+    if(statusSelect) updateHeaderStyle(statusSelect.value);
+
+    // Lógica del Modal
+    const statusModalEl = document.getElementById('statusChangeModal');
+    let statusModal;
+    if (statusModalEl) statusModal = new bootstrap.Modal(statusModalEl);
+
+    let previousValue = statusSelect ? statusSelect.value : '';
+    let pendingValue = null;
+
+    if (statusSelect) {
+        statusSelect.addEventListener('change', function(e) {
+            const newValue = this.value;
+            
+            if (newValue === previousValue || !statusConfig[newValue]) {
+                updateHeaderStyle(newValue); // Actualizar visualmente si no hay modal o es igual
+                previousValue = newValue;
+                return;
+            }
+
+            const config = statusConfig[newValue];
+            pendingValue = newValue;
+
+            // Configurar Modal
+            const icon = document.getElementById('modal-status-icon');
+            const title = document.getElementById('modal-status-title');
+            const msg = document.getElementById('modal-status-msg');
+            const btn = document.getElementById('btn-confirm-status');
+
+            // Resetear clases
+            icon.className = `bi display-3 position-relative z-1 text-${config.color}`;
+            icon.classList.add(config.icon);
+            
+            // Textos
+            title.textContent = config.title;
+            msg.innerHTML = config.msg;
+
+            // Botón
+            btn.className = `btn fw-bold text-white shadow-sm btn-${config.color}`;
+
+            // Mostrar
+            statusModal.show();
+        });
+
+        document.getElementById('btn-confirm-status').addEventListener('click', function() {
+            previousValue = pendingValue;
+            updateHeaderStyle(pendingValue);
+            statusModal.hide();
+        });
+
+        statusModalEl.addEventListener('hidden.bs.modal', function () {
+            if (statusSelect.value !== previousValue) {
+                statusSelect.value = previousValue;
+                updateHeaderStyle(previousValue); // Revertir estilo visual
+            }
+        });
+        
+        const btnCancel = document.getElementById('btn-cancel-status');
+        if(btnCancel) {
+            btnCancel.addEventListener('click', function(){ statusModal.hide(); });
+        }
+    }
+});
+</script>
 {% endblock %}
