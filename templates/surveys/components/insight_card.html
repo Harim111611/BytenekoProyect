@@ -1,138 +1,175 @@
 {% load humanize %}
+<style>
+    /* Efecto de elevación suave al pasar el mouse */
+    .card-hover-lift {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
 
-{# Estilos migrados a static/css/byteneko.css #}
+    /* Scrollbar invisible pero funcional para la caja de texto */
+    .custom-scroll::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+        background: #f8f9fa; 
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+        background-color: #dee2e6; 
+        border-radius: 20px;
+    }
 
-<article class="card insight-card rounded-4 border-0 w-100 h-100 shadow-sm" data-card-id="{{ data.id }}">
+    /* Limitar el título a 2 líneas */
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+
+<article class="card card-hover-lift border-0 w-100 h-100 shadow-sm rounded-4 overflow-hidden" data-card-id="{{ data.id }}">
     
     {# --- HEADER --- #}
-    <div class="card-header bg-transparent ic-header border-0 pt-3 px-4">
-        <div class="d-flex gap-3 align-items-start">
-            <div class="flex-shrink-0 mt-1">
-                 <div class="d-flex align-items-center justify-content-center rounded-circle bg-light text-primary fw-bolder shadow-sm border bk-avatar-28">
-                    {{ data.order }}
-                </div>
+    <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            {# Número de Orden Estilizado #}
+            <div class="d-flex align-items-center justify-content-center rounded-circle bg-light text-secondary fw-bold border" style="width: 32px; height: 32px; font-size: 0.8rem;">
+                {{ data.order }}
             </div>
-            
-            <div class="flex-grow-1 min-w-0">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    {% if data.type == 'numeric' or data.type == 'scale' %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-123 me-1"></i> Escala</span>
-                    {% elif data.type == 'text' %}
-                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-chat-quote me-1"></i> Abierta</span>
-                    {% else %}
-                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fw-normal px-2 py-1"><i class="bi bi-pie-chart me-1"></i> Selección</span>
-                    {% endif %}
-                    
-                    <small class="text-muted fw-bold" style="font-size: 0.75rem;">
-                        {{ data.total_responses|intcomma }} Respuestas
-                    </small>
-                </div>
-                
-                <h3 class="fw-bold mb-0 text-truncate text-dark fs-6 lh-base" title="{{ data.text }}">
-                    {{ data.text }}
-                </h3>
+
+            {# Badges modernos #}
+            <div>
+                {% if data.type == 'numeric' or data.type == 'scale' %}
+                    <span class="badge bg-primary-subtle text-primary rounded-pill border border-primary-subtle fw-medium px-3">Escala</span>
+                {% elif data.type == 'text' %}
+                    <span class="badge bg-secondary-subtle text-secondary rounded-pill border border-secondary-subtle fw-medium px-3">Abierta</span>
+                {% else %}
+                    <span class="badge bg-success-subtle text-success rounded-pill border border-success-subtle fw-medium px-3">Selección</span>
+                {% endif %}
             </div>
         </div>
+
+        {# Título con altura fija #}
+        <h5 class="fw-bold text-dark lh-sm line-clamp-2 mb-1" title="{{ data.text }}" style="min-height: 2.5rem;">
+            {{ data.text }}
+        </h5>
+        <p class="text-muted small mb-0">
+            <i class="bi bi-people me-1"></i> {{ data.total_responses|intcomma }} respuestas
+        </p>
     </div>
 
     {# --- BODY --- #}
-    <div class="card-body px-4 pb-4 pt-2 d-flex flex-column">
+    <div class="card-body px-4 py-3 d-flex flex-column">
         
-        {# ZONA VISUAL (Chart / Text / KPI) #}
-        <div class="flex-grow-1 mb-3 position-relative d-flex flex-column justify-content-center">
+        <div class="flex-grow-1 d-flex flex-column justify-content-center my-2 position-relative">
             
+            {# CASO 1: TEXTO (Comentarios) #}
             {% if data.type == 'text' %}
-                {# MODO TEXTO #}
-                <div class="pe-2 overflow-y-auto" style="max-height: 250px;">
+                <div class="custom-scroll pe-2 overflow-y-auto d-flex flex-column gap-2" style="max-height: 240px; min-height: 240px;">
                     {% if data.top_responses %}
                         {% for resp in data.top_responses %}
-                            <div class="p-2 mb-2 bg-light rounded-3 text-secondary border border-light small text-break">
-                                {{ resp }}
+                            <div class="p-3 bg-light rounded-3 border-start border-4 border-secondary position-relative">
+                                <i class="bi bi-quote position-absolute text-secondary opacity-25" style="top: 5px; right: 10px; font-size: 1.5rem;"></i>
+                                <p class="mb-0 small text-dark opacity-75 fst-italic">"{{ resp }}"</p>
                             </div>
                         {% endfor %}
                     {% else %}
-                        <div class="text-center py-5 opacity-50">
-                            <i class="bi bi-chat-square-dots fs-2"></i>
-                            <p class="small mt-2 mb-0">Sin comentarios registrados</p>
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 opacity-50">
+                            <i class="bi bi-chat-square-text fs-1 mb-2 text-muted"></i>
+                            <span class="small text-muted">Sin comentarios aún</span>
                         </div>
                     {% endif %}
                 </div>
 
+            {# CASO 2: NUMÉRICO / ESCALA #}
             {% elif data.type == 'numeric' or data.type == 'scale' %}
-                {# MODO KPI + GRÁFICA (Layout Vertical - KPI Arriba, Gráfica Abajo) #}
-                <div class="d-flex flex-column h-100 w-100">
-                    <div class="d-flex align-items-center border-bottom pb-3 mb-3">
-                        <div class="me-4 text-center">
-                            <span class="text-uppercase text-muted fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">Promedio</span>
-                            <span class="display-6 fw-bold text-primary">{{ data.insight_data.average|default:"0.0"|floatformat:1 }}</span>
+                <div class="row align-items-center h-100 g-0">
+                    {# KPI Izquierda #}
+                    <div class="col-5 text-center border-end pe-3">
+                        <div class="text-uppercase text-muted fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">Promedio</div>
+                        <div class="display-4 fw-bolder text-primary lh-1 mb-2">
+                            {{ data.insight_data.average|default:"0.0"|floatformat:1 }}
                         </div>
                         
-                        <div class="flex-grow-1">
-                            {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
-                            <div class="progress w-100 rounded-pill bg-light border" style="height: 8px;">
-                                <div class="progress-bar bg-primary rounded-pill" role="progressbar" 
-                                     style="width: {% widthratio avg max_val 100 %}%;"></div>
+                        {# Barra de progreso compacta #}
+                        {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
+                        <div class="d-flex align-items-center gap-2" style="font-size: 0.7rem;">
+                            <span class="text-muted">0</span>
+                            <div class="progress flex-grow-1" style="height: 4px;">
+                                <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio avg max_val 100 %}%;"></div>
                             </div>
-                            <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 0.7rem;">
-                                <span>0</span><span>{{ max_val }}</span>
-                            </div>
-                            {% endwith %}
+                            <span class="text-muted">{{ max_val }}</span>
                         </div>
+                        {% endwith %}
                     </div>
-                    
-                    <div class="w-100 text-center mt-auto">
+
+                    {# Gráfico Derecha - CORREGIDO WIDTH #}
+                    <div class="col-7 ps-3 d-flex align-items-center justify-content-center">
                         {% if data.chart %}
-                            <img src="data:image/png;base64,{{ data.chart|safe }}" 
-                                 class="img-fluid rounded-3" 
-                                 style="width: 100%; height: auto; object-fit: contain; min-height: 220px;"
-                                 alt="Gráfico de {{ data.text }}">
-                        {% else %}
-                            <div class="text-muted py-4 small d-flex flex-column align-items-center justify-content-center h-100" style="min-height: 200px;">
-                                <i class="bi bi-bar-chart fs-3 opacity-50 mb-2"></i>
-                                No hay datos suficientes
+                            {# Usamos w-100 en lugar de max-width para forzar responsividad #}
+                            <div class="w-100" style="min-width: 0; overflow: hidden;">
+                                <div style="width: 100%;">
+                                    {{ data.chart|safe }}
+                                </div>
                             </div>
+                        {% else %}
+                            <span class="badge bg-light text-muted fw-normal">Sin datos visuales</span>
                         {% endif %}
                     </div>
                 </div>
 
+            {# CASO 3: GRÁFICO ESTÁNDAR - CORREGIDO WIDTH #}
             {% else %}
-                {# MODO GRÁFICO ESTÁNDAR (Selección múltiple, etc) #}
-                <div class="text-center w-100 h-100 d-flex align-items-center justify-content-center">
+                <div class="w-100 h-100 d-flex align-items-center justify-content-center" style="min-height: 220px;">
                     {% if data.chart %}
-                         <img src="data:image/png;base64,{{ data.chart|safe }}" 
-                              class="img-fluid rounded-3" 
-                              style="width: 100%; height: auto; object-fit: contain; min-height: 220px;"
-                              alt="Gráfico de {{ data.text }}">
+                        {# Usamos w-100 en lugar de max-width/auto para forzar responsividad #}
+                        <div class="w-100" style="min-width: 0;">
+                            <div style="width: 100%;">
+                                {{ data.chart|safe }}
+                            </div>
+                        </div>
                     {% else %}
-                        <div class="text-muted py-5 small opacity-75">
-                             <i class="bi bi-pie-chart fs-3 opacity-50 mb-2 d-block"></i>
-                             No hay datos visuales
+                        <div class="text-center text-muted opacity-50">
+                            <i class="bi bi-pie-chart fs-1 d-block mb-2"></i>
+                            <small>Faltan datos</small>
                         </div>
                     {% endif %}
                 </div>
             {% endif %}
         </div>
+    </div>
 
-        {# FOOTER: INSIGHTS #}
-        <div class="mt-auto pt-3 border-top border-light-subtle">
-            {% if data.insight_data.key_insight %}
-                <div class="d-flex gap-3 align-items-start bg-warning-subtle p-3 rounded-3 border border-warning-subtle mb-3">
-                    <i class="bi bi-lightbulb-fill text-warning flex-shrink-0 mt-1"></i>
-                    <p class="mb-0 small text-dark lh-sm">
-                        {{ data.insight_data.key_insight }}
-                    </p>
-                </div>
-            {% endif %}
+    {# --- FOOTER --- #}
+    <div class="card-footer bg-light border-0 p-3 mt-auto">
+        {% if data.insight_data.key_insight %}
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <i class="bi bi-stars text-warning flex-shrink-0 mt-1"></i>
+                <p class="mb-0 small text-dark fw-medium lh-sm">
+                    {{ data.insight_data.key_insight }}
+                </p>
+            </div>
+        {% endif %}
 
-            {% if data.insight_data.topics %}
-                <div class="d-flex flex-wrap gap-2">
-                    {% for topic in data.insight_data.topics|slice:":4" %}
-                        <span class="badge bg-light text-secondary border fw-normal py-1 px-2">
-                            #{{ topic }}
-                        </span>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        </div>
+        {% if data.insight_data.topics %}
+            <div class="d-flex flex-wrap gap-1 mt-2 ps-4">
+                {% for topic in data.insight_data.topics|slice:":3" %}
+                    <span class="badge bg-white text-secondary border fw-normal px-2 py-1" style="font-size: 0.7rem;">
+                        #{{ topic }}
+                    </span>
+                {% endfor %}
+                {% if data.insight_data.topics|length > 3 %}
+                    <span class="badge text-muted fw-normal" style="font-size: 0.7rem;">+{{ data.insight_data.topics|length|add:"-3" }}</span>
+                {% endif %}
+            </div>
+        {% endif %}
+        
+        {% if not data.insight_data.key_insight and not data.insight_data.topics %}
+             <div class="text-center opacity-25 py-2">
+                <small class="text-uppercase fw-bold" style="font-size: 0.6rem;">Sin análisis extra</small>
+             </div>
+        {% endif %}
     </div>
 </article>

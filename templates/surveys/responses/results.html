@@ -36,6 +36,11 @@
                 <i class="bi bi-x-circle-fill"></i> Limpiar Vista
             </a>
             {% endif %}
+            <!-- Botón de ayuda para filtros y tablas cruzadas -->
+            <button type="button" class="btn btn-lg btn-outline-secondary rounded-pill d-flex align-items-center gap-2 hover-card" data-bs-toggle="modal" data-bs-target="#modalAyudaFiltros">
+                <i class="bi bi-question-circle-fill"></i>
+                <span class="d-none d-md-inline">¿Cómo funcionan?</span>
+            </button>
         </div>
     </div>
 
@@ -255,6 +260,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     
@@ -440,3 +446,58 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
+<div class="modal fade" id="modalAyudaFiltros" tabindex="-1" aria-labelledby="modalAyudaFiltrosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden" style="background: var(--bk-card-bg); color: var(--bk-text-primary);">
+            
+            <div class="modal-header border-0 p-4 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-lightbulb-fill text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold ls-tight" id="modalAyudaFiltrosLabel">Guía de Análisis</h5>
+                        <p class="mb-0 small text-muted">Aprende a interpretar tus datos</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body p-4 p-md-5">
+                <div class="row g-4">
+                    <div class="col-md-6 position-relative">
+                        <div class="p-4 rounded-4 h-100 border border-light bg-light bg-opacity-10">
+                            <h6 class="fw-bold text-primary mb-3 d-flex align-items-center">
+                                <i class="bi bi-funnel-fill me-2"></i> Segmentación (Filtros)
+                            </h6>
+                            <p class="small text-muted mb-0 lh-lg">
+                                Utiliza los filtros para aislar un subconjunto específico de respuestas. 
+                                <br><br>
+                                <strong>Ejemplo:</strong> Si quieres ver solo las respuestas del departamento de "Ventas", selecciona la pregunta correspondiente y escribe el valor. Los gráficos se recalcularán automáticamente.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="p-4 rounded-4 h-100 border border-light bg-light bg-opacity-10">
+                            <h6 class="fw-bold text-bk-primary mb-3 d-flex align-items-center" style="color: #ec4899;">
+                                <i class="bi bi-grid-3x3-gap-fill me-2"></i> Tablas Cruzadas
+                            </h6>
+                            <p class="small text-muted mb-0 lh-lg">
+                                Las tablas cruzadas te permiten comparar <strong>dos variables</strong> simultáneamente para detectar patrones ocultos.
+                                <br><br>
+                                <strong>Ejemplo:</strong> Cruza "Satisfacción" vs "Antigüedad" para ver si los empleados más nuevos están más felices que los antiguos.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 p-4 bg-light bg-opacity-10">
+                <button type="button" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm" data-bs-dismiss="modal">
+                    ¡Entendido!
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

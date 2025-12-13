@@ -640,7 +640,12 @@ class SurveyAnalysisService:
                 narrative = NumericNarrative.analyze(st['avg'], st['max'], min_val=st['min'], stats_dist=raw_dist, tone=tone, is_demographic=is_demo)
                 item['insight'] = narrative
                 item['insight_data'] = {'type': 'numeric', 'average': st['avg'], 'max': st['max'], 'min': st['min'], 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']: item['chart'] = {'labels': item['chart_labels'], 'data': item['chart_data'], 'type': 'bar'}
+                if item['chart_labels']:
+                    # Generar gráfico Plotly interactivo
+                    from core.utils.charts import ChartGenerator
+                    item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
+                        item['chart_labels'], item['chart_data'], title=None, dark_mode=False
+                    )
 
             elif q.id in text_responses:
                 texts = text_responses[q.id]
@@ -666,7 +671,16 @@ class SurveyAnalysisService:
                 narrative = DemographicNarrative.analyze(raw_dist, total_q, tone=tone)
                 item['insight'] = narrative
                 item['insight_data'] = {'type': 'categorical', 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']: item['chart'] = {'labels': item['chart_labels'], 'data': item['chart_data'], 'type': chart_type}
+                if item['chart_labels']:
+                    from core.utils.charts import ChartGenerator
+                    if chart_type == 'bar':
+                        item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
+                            item['chart_labels'], item['chart_data'], title=None, dark_mode=False
+                        )
+                    else:
+                        item['chart'] = ChartGenerator.generate_doughnut_chart_plotly(
+                            item['chart_labels'], item['chart_data'], title=None, dark_mode=False
+                        )
 
             analysis_data.append(item)
 
