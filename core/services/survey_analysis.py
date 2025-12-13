@@ -721,4 +721,105 @@ class SurveyAnalysisService:
     
     @staticmethod
     def generate_crosstab(survey, row_id, col_id, queryset=None):
-        return {'error': 'Crosstab requiere dataframe builder.'}
+        """
+        Genera una tabla cruzada optimizada sin usar Pandas Dataframes.
+        Utiliza agregación en memoria para máxima velocidad.
+        """
+        try:
+            # 1. Validar Preguntas
+            row_q = survey.questions.filter(id=row_id).first()
+            col_q = survey.questions.filter(id=col_id).first()
+            if not row_q or not col_q:
+                return {'error': 'Pregunta no encontrada'}
+
+            # 2. Filtrar Respuestas (IDs)
+            response_ids = queryset.values_list('id', flat=True) if queryset else survey.responses.values_list('id', flat=True)
+
+            # 3. Obtener datos crudos optimizados (Solo lo necesario)
+            # Traemos: (survey_response_id, valor) para ambas preguntas
+            
+            def get_values(q_obj, r_ids):
+                # Determinar qué campo leer según el tipo
+                if q_obj.type in ['scale', 'number']:
+                    return list(QuestionResponse.objects.filter(
+                        question=q_obj, survey_response_id__in=r_ids
+                    ).values_list('survey_response_id', 'numeric_value'))
+                elif q_obj.type in ['single', 'multi', 'select']:
+                    return list(QuestionResponse.objects.filter(
+                        question=q_obj, survey_response_id__in=r_ids
+                    ).values_list('survey_response_id', 'selected_option__text'))
+                else:
+                    # Texto libre (generalmente no se cruza, pero por seguridad)
+                    return list(QuestionResponse.objects.filter(
+                        question=q_obj, survey_response_id__in=r_ids
+                    ).exclude(text_value='').values_list('survey_response_id', 'text_value'))
+
+            row_data = get_values(row_q, response_ids)
+            col_data = get_values(col_q, response_ids)
+
+            # 4. Mapeo en Memoria (Hash Map)
+            # Estructura: { response_id: valor }
+            row_map = {item[0]: item[1] for item in row_data if item[1] is not None}
+            col_map = {item[0]: item[1] for item in col_data if item[1] is not None}
+
+            # 5. Calcular Intersecciones
+            # Encontrar IDs que respondieron ambas preguntas
+            common_ids = set(row_map.keys()) & set(col_map.keys())
+            
+            # Matriz de conteo: { "Valor Fila": { "Valor Columna": conteo } }
+            matrix = defaultdict(lambda: defaultdict(int))
+            all_col_headers = set()
+
+            for rid in common_ids:
+                r_val = str(row_map[rid]) # Normalizar a string para etiqueta
+                c_val = str(col_map[rid])
+                matrix[r_val][c_val] += 1
+                all_col_headers.add(c_val)
+
+            # 6. Formatear para DataTables / Chart.js
+            # Ordenar headers y filas
+            sorted_cols = sorted(list(all_col_headers))
+            sorted_rows = sorted(matrix.keys())
+
+            # Construir estructura final compatible con el template
+            # data = [[val1, val2, total], [val1, val2, total]]
+            final_data = []
+            
+            for r_label in sorted_rows:
+                row_counts = []
+                row_total = 0
+                for c_label in sorted_cols:
+                    val = matrix[r_label].get(c_label, 0)
+                    row_counts.append(val)
+                    row_total += val
+                
+                # Append total al final de la fila
+                row_counts.append(row_total)
+                final_data.append(row_counts)
+
+            # Añadir fila de totales por columna
+            if final_data:
+                col_totals = [0] * len(sorted_cols)
+                grand_total = 0
+                for row in final_data:
+                    for i, val in enumerate(row[:-1]): # Excluir el total de fila
+                        col_totals[i] += val
+                        grand_total += val
+                
+                # Agregar totales a la estructura
+                # El template espera: columns (headers + 'Total'), index (labels + 'Total'), data (valores)
+                
+                return {
+                    'data': {
+                        'columns': sorted_cols + ['Total'],
+                        'index': sorted_rows + ['Total'],
+                        'data': final_data + [col_totals + [grand_total]]
+                    },
+                    'row_label': row_q.text[:30],
+                    'col_label': col_q.text[:30]
+                }
+            
+            return {'error': 'No hay datos coincidentes para cruzar.'}
+
+        except Exception as e:
+            return {'error': f'Error cálculo cruce: {str(e)}'}
