@@ -432,7 +432,7 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
         
         weekly_trend_data.append(count_for_week)
 
-    # Tops
+    # Tops - CORRECCIÓN DE LOOKUP (question_responses en lugar de questionresponse)
     top_surveys = surveys.annotate(
         response_count=Count('responses')
     ).order_by('-response_count')[:5]
@@ -440,10 +440,10 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
     top_preguntas = Question.objects.filter(
         survey__in=surveys, 
         type='scale',
-        questionresponse__isnull=False
+        question_responses__isnull=False # FIX: Plural
     ).annotate(
-        avg_score=Avg('questionresponse__numeric_value'),
-        num_responses=Count('questionresponse')
+        avg_score=Avg('question_responses__numeric_value'), # FIX: Plural
+        num_responses=Count('question_responses') # FIX: Plural
     ).filter(
         num_responses__gte=1
     ).select_related('survey').order_by('-avg_score')[:10]
