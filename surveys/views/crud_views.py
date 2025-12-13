@@ -125,11 +125,11 @@ def delete_task_status(request, task_id):
     if result.ready():
         if result.successful():
             response_data['result'] = result.result
-            # Mapeo de resultados para compatibilidad
             if isinstance(result.result, dict):
                 response_data['deleted_count'] = result.result.get('deleted', 0)
                 response_data['deleted_surveys'] = result.result.get('deleted', 0)
         else:
+            # Si hubo una excepción
             response_data['error'] = str(result.info)
     
     return JsonResponse(response_data)
@@ -157,7 +157,6 @@ def bulk_delete_surveys_view(request):
         messages.error(request, 'IDs de encuestas inválidos.')
         return redirect('surveys:list')
 
-    # Validación de propiedad
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
     count = base_qs.count()
     if count == 0:
@@ -167,7 +166,6 @@ def bulk_delete_surveys_view(request):
         messages.error(request, msg)
         return redirect('surveys:list')
 
-    # Filtrar IDs válidos (solo los que pertenecen al usuario)
     valid_ids = list(base_qs.values_list('id', flat=True))
 
     task_result = None
@@ -177,7 +175,7 @@ def bulk_delete_surveys_view(request):
     except Exception as e:
         logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")
 
-    # Fallback síncrono si Celery falla
+    # Fallback síncrono si Celery no está disponible
     if task_result is None:
         try:
             with transaction.atomic():
@@ -351,7 +349,7 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
         
         logger.info(f"[DELETE] Iniciando borrado asíncrono survey_id={survey_id}")
         
-        # La tarea espera una lista de IDs, no acepta user_id como argumento
+        # Enviamos una lista, ya que bulk_delete espera una lista de IDs
         task_result = bulk_delete_surveys.delay([survey_id])
         
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':

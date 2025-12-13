@@ -58,13 +58,8 @@ def _save_uploaded_csv(upload) -> str:
 @csrf_exempt
 @login_required
 def csv_create_start_import(request: HttpRequest) -> JsonResponse:
-    """
-    Crea una o varias encuestas nuevas y lanza la importación.
-    Crea un registro ImportJob para seguimiento.
-    """
     from surveys.tasks import process_survey_import
 
-    # 1. Caso de Múltiples Archivos (Bulk Import)
     if 'csv_files' in request.FILES:
         files = request.FILES.getlist('csv_files')
         jobs_data = []
@@ -72,8 +67,6 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
         try:
             for uploaded_file in files:
                 survey_title = uploaded_file.name
-                
-                # Crear encuesta
                 new_survey = Survey.objects.create(
                     author=request.user,
                     title=survey_title,
@@ -81,39 +74,29 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                     status='closed',
                     is_imported=True
                 )
-
-                # Guardar archivo físico
                 file_path = _save_uploaded_csv(uploaded_file)
-                
-                # Crear Job en BD
                 job = ImportJob.objects.create(
                     survey=new_survey,
                     user=request.user,
-                    csv_file=file_path,  # Guardamos el path temporal
+                    csv_file=file_path,
                     original_filename=uploaded_file.name,
                     status='pending'
                 )
-
-                # Lanzar tarea pasando el ID del Job
                 process_survey_import.delay(job.id)
-                
                 jobs_data.append({
-                    'job_id': job.id, # ID numérico para polling de BD
+                    'job_id': job.id,
                     'filename': uploaded_file.name,
                     'survey_public_id': new_survey.public_id
                 })
-            
             return JsonResponse({
                 'success': True,
                 'message': f'{len(jobs_data)} importaciones iniciadas.',
                 'jobs': jobs_data 
             })
-
         except Exception as exc:
             logger.error(f"[IMPORT_BULK][ERROR] {exc}", exc_info=True)
             return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
-    # 2. Caso de Archivo Único (Legacy)
     elif 'csv_file' in request.FILES:
         uploaded_file = request.FILES['csv_file']
         survey_title = request.POST.get('survey_title', '').strip() or uploaded_file.name
@@ -126,10 +109,7 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                 status='active',
                 is_imported=True
             )
-
             file_path = _save_uploaded_csv(uploaded_file)
-
-            # Crear Job
             job = ImportJob.objects.create(
                 survey=new_survey,
                 user=request.user,
@@ -137,24 +117,18 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
                 original_filename=uploaded_file.name,
                 status='pending'
             )
-
-            # Lanzar Tarea
             process_survey_import.delay(job.id)
-
             return JsonResponse({
                 'success': True,
                 'message': 'Importación iniciada.',
                 'job_id': job.id, 
                 'survey_public_id': new_survey.public_id
             })
-
         except Exception as exc:
             logger.error(f"[IMPORT_NEW][ERROR] {exc}", exc_info=True)
             return JsonResponse({"success": False, "error": str(exc)}, status=500)
-
     else:
         return JsonResponse({'success': False, 'error': 'No se recibió archivo CSV.'}, status=400)
-
 
 @require_POST
 @csrf_exempt
@@ -163,7 +137,6 @@ def csv_create_preview_view(request: HttpRequest) -> JsonResponse:
     if 'csv_file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'Falta archivo.'}, status=400)
     return csv_preview_view(request, public_id=None) 
-
 
 # =============================================================================
 # Vistas de IMPORTACIÓN EN ENCUESTA EXISTENTE (Detalle)
@@ -186,8 +159,6 @@ def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonRespons
     
     try:
         file_path = _save_uploaded_csv(uploaded_file)
-        
-        # Crear Job
         job = ImportJob.objects.create(
             survey=survey,
             user=request.user,
@@ -195,13 +166,10 @@ def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonRespons
             original_filename=uploaded_file.name,
             status='pending'
         )
-
         process_survey_import.delay(job.id)
-        
-        # Devolvemos job_id (DB) no task_id (Celery) para consistencia con el polling
         return JsonResponse({
             'success': True, 
-            'task_id': job.id, # El frontend legacy puede llamarlo task_id, pero enviamos el ID del job
+            'task_id': job.id,
             'job_id': job.id,
             'survey_public_id': survey.public_id 
         })
@@ -209,21 +177,19 @@ def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonRespons
         logger.error(f"[IMPORT_EXISTING][ERROR] {exc}", exc_info=True)
         return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
-
 @require_GET
 @login_required
-def get_task_status_view(request: HttpRequest, task_id: str) -> JsonResponse:
+def get_task_status_view(request: HttpRequest, task_id: int) -> JsonResponse:
     """
     Endpoint de polling para ImportJobs (basado en BD).
-    La URL debe estar configurada para aceptar el ID del job.
+    Recibe un ID numérico (Primary Key de ImportJob).
     """
     try:
-        # Asumimos que task_id aquí es el ID del ImportJob
         job = get_object_or_404(ImportJob, id=task_id, user=request.user)
         
         response = {
             'task_id': job.id, 
-            'status': job.status, # pending, processing, completed, failed
+            'status': job.status,
             'processed_rows': job.processed_rows,
             'total_rows': job.total_rows
         }
@@ -237,13 +203,11 @@ def get_task_status_view(request: HttpRequest, task_id: str) -> JsonResponse:
     except Exception as e:
         return JsonResponse({"status": "failed", "error": str(e)}, status=500)
 
-
 @require_POST
 @csrf_exempt
 @login_required
 def csv_preview_view(request: HttpRequest, public_id: str = None) -> JsonResponse:
     uploaded_file = request.FILES.get('survey_file') or request.FILES.get('csv_file')
-    
     if not uploaded_file:
         return JsonResponse({'success': False, 'error': 'No file uploaded'}, status=400)
 

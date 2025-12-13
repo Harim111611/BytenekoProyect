@@ -3,7 +3,6 @@ surveys/tasks.py
 Tareas asíncronas para reportes, importaciones y mantenimiento.
 """
 import logging
-import os
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction, connection
@@ -19,7 +18,7 @@ def process_survey_import(self, job_id: int):
     Procesa un ImportJob en background.
     Actualiza el estado del job en la base de datos para el polling del frontend.
     """
-    from surveys.models import ImportJob, Survey
+    from surveys.models import ImportJob
     from surveys.utils.bulk_import import bulk_import_responses_postgres
 
     try:
@@ -35,12 +34,10 @@ def process_survey_import(self, job_id: int):
         
         logger.info(f"[IMPORT] Iniciando Job {job_id} para encuesta {job.survey_id}")
 
-        # 2. Ejecutar lógica de importación
-        # Si la encuesta fue borrada mientras tanto, esto fallará, lo cual es correcto
         if not job.survey:
              raise ValueError("La encuesta asociada fue eliminada.")
 
-        # Usar el path guardado en el Job
+        # 2. Ejecutar lógica de importación usando el path guardado
         total_rows, imported_rows = bulk_import_responses_postgres(job.csv_file.path, job.survey)
 
         # 3. Actualizar Job con éxito
@@ -61,52 +58,55 @@ def process_survey_import(self, job_id: int):
     except Exception as e:
         logger.exception(f"[TASK][IMPORT] Error crítico en Job {job_id}: {e}")
         
-        # 4. Actualizar Job con error
         job.status = 'failed'
         job.error_log = str(e)
-        job.error_message = str(e)[:100] # Mensaje corto para UI
+        job.error_message = str(e)[:100]
         job.save(update_fields=['status', 'error_log', 'error_message', 'updated_at'])
         
-        # Reintentar solo si es un error de conexión o bloqueo temporal, no de lógica
-        # raise self.retry(exc=e, countdown=10) # Descomentar si se desea retry
         return {'status': 'FAILURE', 'error': str(e)}
 
 @shared_task(bind=True)
 def bulk_delete_surveys(self, ids):
     """
-    Elimina encuestas masivamente usando SQL crudo para máxima velocidad.
+    Elimina encuestas masivamente usando SQL optimizado (JOIN DELETE).
+    Mucho más rápido que IN (SUBQUERY) para grandes volúmenes de datos.
     """
     try:
         with transaction.atomic():
             with connection.cursor() as cursor:
-                # 1. Respuestas a preguntas
+                logger.info(f"[TASK][DELETE] Iniciando borrado optimizado para {len(ids)} encuestas.")
+
+                # 1. Respuestas a preguntas (Optimizado con USING)
+                # Esto evita scanear toda la tabla questionresponse
                 cursor.execute("""
-                    DELETE FROM surveys_questionresponse 
-                    WHERE survey_response_id IN (
-                        SELECT id FROM surveys_surveyresponse WHERE survey_id = ANY(%s::int[])
-                    )
+                    DELETE FROM surveys_questionresponse qr
+                    USING surveys_surveyresponse sr
+                    WHERE qr.survey_response_id = sr.id
+                    AND sr.survey_id = ANY(%s::int[])
                 """, (ids,))
                 
                 # 2. Respuestas de encuesta
                 cursor.execute("DELETE FROM surveys_surveyresponse WHERE survey_id = ANY(%s::int[])", (ids,))
                 
-                # 3. Opciones de respuesta
+                # 3. Opciones de respuesta (Optimizado con USING)
                 cursor.execute("""
-                    DELETE FROM surveys_answeroption 
-                    WHERE question_id IN (
-                        SELECT id FROM surveys_question WHERE survey_id = ANY(%s::int[])
-                    )
+                    DELETE FROM surveys_answeroption ao
+                    USING surveys_question q
+                    WHERE ao.question_id = q.id
+                    AND q.survey_id = ANY(%s::int[])
                 """, (ids,))
                 
                 # 4. Preguntas
                 cursor.execute("DELETE FROM surveys_question WHERE survey_id = ANY(%s::int[])", (ids,))
                 
-                # 5. Jobs asociados
+                # 5. Jobs asociados (Importación y Reportes)
                 cursor.execute("DELETE FROM surveys_importjob WHERE survey_id = ANY(%s::int[])", (ids,))
                 cursor.execute("DELETE FROM core_reportjob WHERE survey_id = ANY(%s::int[])", (ids,))
                 
-                # 6. La encuesta
+                # 6. La encuesta en sí
                 cursor.execute("DELETE FROM surveys_survey WHERE id = ANY(%s::int[])", (ids,))
+                
+                logger.info(f"[TASK][DELETE] Borrado completado para IDs: {ids}")
                 
         return {'status': 'SUCCESS', 'deleted': len(ids)}
 
@@ -116,7 +116,9 @@ def bulk_delete_surveys(self, ids):
 
 @shared_task(bind=True, max_retries=3)
 def generate_report_task(self, job_id):
-    # ... (El resto de la tarea de reportes se mantiene igual que en tu archivo original)
+    """
+    Tarea para generar reportes PDF/PPTX.
+    """
     from core.models_reports import ReportJob
     from surveys.models import SurveyResponse
     from core.reports.pdf_generator import PDFReportGenerator 
