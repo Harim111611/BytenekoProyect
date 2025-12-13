@@ -51,6 +51,7 @@ seaborn==0.13.2
 matplotlib==3.10.7
 pillow==12.0.0
 xlsxwriter==3.2.9
+stripe==5.0.0
 
 # Testing
 pytest==9.0.1

@@ -151,15 +151,21 @@ class CSVImportValidator:
         if df is None or df.empty:
             raise ValidationError("El archivo CSV está vacío")
 
+        # Validar que no haya demasiadas filas primero (regla rápida y prioritaria)
+        if len(df) > 10000:
+            raise ValidationError(
+                f"El CSV tiene demasiadas filas ({len(df)}). Máximo permitido: 10,000"
+            )
+
         if len(df.columns) == 0:
             raise ValidationError("El archivo CSV no tiene columnas")
 
-        # 🚩 Nueva regla: mínimo 2 columnas para ser válido
-        if len(df.columns) < 2:
-            raise ValidationError("El archivo CSV debe tener al menos 2 columnas (preguntas)")
-
         if len(df) == 0:
             raise ValidationError("El archivo CSV no tiene filas de datos")
+
+        # Mantener compatibilidad: aunque idealmente cada fila es una respuesta,
+        # algunas plantillas pueden venir con una sola columna y aún así procesarse.
+        # Por lo tanto no forzamos mínimo 2 columnas aquí.
 
         # Detectar si es un CSV de resumen/agregados en lugar de respuestas individuales
         suspicious_columns = ['indicador', 'valor', 'tipo', 'formato', 'métrica', 'promedio', 'total']

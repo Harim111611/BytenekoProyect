@@ -4,8 +4,11 @@ import re
 import logging
 from typing import Optional, Tuple, List, Any, Dict
 
-# Importación del módulo C++ (Requerido)
-import cpp_csv
+# Importación opcional del módulo C++ (si está presente, se usa por performance)
+try:
+    import cpp_csv
+except Exception:  # pragma: no cover - optional native extension
+    cpp_csv = None
 
 from django.conf import settings
 from django.db import connection, transaction
@@ -190,6 +193,110 @@ def _prepare_questions_map(survey, headers: List[str], rows: List[Dict[str, str]
         
     return questions_map
 
+
+def _process_chunk(chunk_rows: List[Dict[str, str]], questions_map: Dict[str, Any], date_column: Optional[str], survey) -> int:
+    """Procesa un chunk de filas y realiza el INSERT masivo usando COPY.
+    Devuelve la cantidad de filas insertadas en QuestionResponse (aprox.).
+    """
+    final_rows = 0
+    with transaction.atomic():
+        # A. Crear SurveyResponses
+        sr_objects = []
+        for row in chunk_rows:
+            dt = timezone.now()
+            if date_column and row.get(date_column):
+                parsed = parse_date_safe(row[date_column])
+                if parsed:
+                    if timezone.is_naive(parsed):
+                        parsed = timezone.make_aware(parsed)
+                    dt = parsed
+
+            sr_objects.append(SurveyResponse(survey=survey, created_at=dt, is_anonymous=True))
+
+        created_srs = SurveyResponse.objects.bulk_create(sr_objects)
+
+        # B. Preparar buffer para COPY
+        qr_buffer = io.StringIO()
+        qr_writer = csv.writer(qr_buffer, delimiter="\t", quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        batch_qr_count = 0
+
+        for idx, row in enumerate(chunk_rows):
+            sr_id = created_srs[idx].id
+
+            for col_name, val_str in row.items():
+                # Ignorar metadatos o columnas no mapeadas
+                if col_name not in questions_map:
+                    continue
+
+                val_str = val_str.strip()
+                if not val_str:
+                    continue
+
+                q_map = questions_map[col_name]
+                q_id = q_map['question'].id
+                dtype = q_map['dtype']
+                options = q_map['options']
+
+                # Valores por defecto para COPY (\N es NULL en postgres text format)
+                so_id = "\\N"
+                text_val = "\\N"
+                num_val = "\\N"
+
+                # Lógica de mapeo según tipo
+                if dtype in ('single', 'multi'):
+                    parts = [val_str] if dtype == 'single' else val_str.replace(';', ',').split(',')
+                    for p in parts:
+                        p_clean = p.strip()
+                        if not p_clean:
+                            continue
+                        if p_clean in options:
+                            qr_writer.writerow([sr_id, q_id, options[p_clean].id, "\\N", "\\N"])
+                        else:
+                            clean_txt = p_clean.replace("\n", " ").replace("\r", "")[:2000]
+                            qr_writer.writerow([sr_id, q_id, "\\N", clean_txt, "\\N"])
+                        batch_qr_count += 1
+                    continue
+
+                elif dtype in ('number', 'scale'):
+                    try:
+                        clean_num_str = re.sub(r'[^\d\.\-]', '', val_str.replace(',', '.'))
+                        if clean_num_str:
+                            num_val = int(float(clean_num_str))
+                        else:
+                            text_val = val_str.replace("\n", " ").replace("\r", "")[:2000]
+                    except:
+                        text_val = val_str.replace("\n", " ").replace("\r", "")[:2000]
+                else:
+                    text_val = val_str.replace("\n", " ").replace("\r", "")[:5000]
+
+                qr_writer.writerow([sr_id, q_id, so_id, text_val, num_val])
+                batch_qr_count += 1
+
+        final_rows += batch_qr_count
+
+        # C. Ejecutar COPY con acceso al cursor nativo
+        qr_buffer.seek(0)
+        table_name = QuestionResponse._meta.db_table
+        sql = f"COPY {table_name} (survey_response_id, question_id, selected_option_id, text_value, numeric_value) FROM STDIN WITH (FORMAT CSV, DELIMITER '\t', QUOTE '"', NULL '\\N')"
+
+        with connection.cursor() as cursor:
+            try:
+                raw_cursor = getattr(cursor, 'cursor', cursor)
+                if hasattr(raw_cursor, 'copy_expert'):
+                    raw_cursor.copy_expert(sql, qr_buffer)
+                elif hasattr(raw_cursor, 'copy'):
+                    with raw_cursor.copy(sql) as copy:
+                        copy.write(qr_buffer.read())
+                else:
+                    logger.error("El driver de base de datos no soporta COPY masivo nativo.")
+                    raise NotImplementedError("Driver de BD no compatible con COPY (¿Usas SQLite?).")
+            except Exception as e:
+                logger.error(f"Error crítico en COPY: {e}")
+                raise
+
+    return final_rows
+
 # =============================================================================
 # Función Principal
 # =============================================================================
@@ -198,41 +305,57 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     """
     Importación optimizada usando C++ para lectura y COPY para escritura.
     """
-    # 1. Lectura Ultra-Rápida con C++
-    try:
-        # Esto devuelve una lista de diccionarios [{'Col1': 'Val1', ...}, ...]
-        rows = cpp_csv.read_csv_dicts(file_path)
-    except Exception as e:
-        logger.error(f"Error leyendo CSV con módulo C++: {e}")
-        raise
-
-    if not rows:
-        return 0, 0
-
-    headers = list(rows[0].keys())
-    
-    # 2. Detectar columna de fecha
-    date_column = None
-    for h in headers:
-        if _is_date_column(h):
-            date_column = h
-            break
-            
-    # 3. Preparar Estructura (Preguntas y Opciones)
-    #    Esta función analiza los datos y crea lo que falte en la BD
-    questions_map = _prepare_questions_map(survey, headers, rows, date_column)
-
+    # Si hay módulo C++ instalado, usarlo para lectura ultra-rápida (todo en memoria)
     chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 5000)
-    total_rows = len(rows)
     final_rows_inserted = 0
-    
-    # Iterar por chunks para no saturar memoria en el INSERT de Django
-    for i in range(0, total_rows, chunk_size):
-        chunk_rows = rows[i : i + chunk_size]
-        
-        with transaction.atomic():
-            # A. Crear SurveyResponses
-            sr_objects = []
+
+    if cpp_csv is not None:
+        try:
+            rows = cpp_csv.read_csv_dicts(file_path)
+        except Exception as e:
+            logger.error(f"Error leyendo CSV con módulo C++: {e}")
+            raise
+
+        if not rows:
+            return 0, 0
+
+        headers = list(rows[0].keys())
+        date_column = None
+        for h in headers:
+            if _is_date_column(h):
+                date_column = h
+                break
+
+        questions_map = _prepare_questions_map(survey, headers, rows, date_column)
+        total_rows = len(rows)
+
+        # Iterar por chunks para no saturar memoria en el INSERT de Django
+        for i in range(0, total_rows, chunk_size):
+            chunk_rows = rows[i : i + chunk_size]
+            final_rows_inserted += _process_chunk(chunk_rows, questions_map, date_column, survey)
+
+    else:
+        # Fallback a pandas en entornos sin la extensión nativa.
+        import pandas as pd
+        reader = pd.read_csv(file_path, chunksize=chunk_size)
+        total_rows = 0
+        questions_map = None
+        date_column = None
+
+        for chunk in reader:
+            chunk_rows = chunk.to_dict(orient='records')
+            if questions_map is None:
+                headers = list(chunk.columns)
+                # detectar columna fecha en los headers
+                for h in headers:
+                    if _is_date_column(h):
+                        date_column = h
+                        break
+                # preparar mapa de preguntas a partir de la primera muestra
+                questions_map = _prepare_questions_map(survey, headers, chunk_rows, date_column)
+
+            total_rows += len(chunk_rows)
+            final_rows_inserted += _process_chunk(chunk_rows, questions_map, date_column, survey)
             for row in chunk_rows:
                 dt = timezone.now()
                 if date_column and row.get(date_column):

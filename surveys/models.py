@@ -15,14 +15,10 @@ class Question(models.Model):
     """
     TYPE_CHOICES = [
         ('text', 'Texto Corto'),
-        ('textarea', 'Texto Largo'),
         ('number', 'Número'),
+        ('scale', 'Escala (1-10 o 1-5)'),
         ('single', 'Selección Única (Radio)'),
         ('multi', 'Selección Múltiple (Checkbox)'),
-        ('select', 'Lista Desplegable'),
-        ('scale', 'Escala (1-10 o 1-5)'),
-        ('date', 'Fecha'),
-        ('section', 'Sección / Encabezado'),
     ]
 
     # ForeignKey 'Survey' se define como string para evitar error de definición circular
@@ -89,7 +85,7 @@ class Survey(models.Model):
     public_id = models.CharField(max_length=12, unique=True, editable=False, null=True)
     
     # Metadatos para análisis
-    category = models.CharField(max_length=50, blank=True, null=True, verbose_name="Categoría (Ej. HR, CX)")
+    category = models.CharField(max_length=50, default='General', verbose_name="Categoría (Ej. HR, CX)")
     sample_goal = models.IntegerField(default=0, verbose_name="Meta de Respuestas", help_text="0 = Sin límite")
     
     # Flag para distinguir encuestas importadas
@@ -250,6 +246,8 @@ class ImportJob(models.Model):
     total_rows = models.IntegerField(default=0)
     processed_rows = models.IntegerField(default=0)
     error_log = models.TextField(blank=True)
+    # Alias/compatibility field expected by older code/tests
+    error_message = models.CharField(max_length=1024, blank=True, null=True)
     
     # REFERENCIA AL USUARIO USANDO LA CONFIGURACIÓN
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

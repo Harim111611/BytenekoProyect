@@ -13,36 +13,50 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-@shared_task(bind=True)
-def process_survey_import(self, survey_id: int, file_path: str, filename: str, user_id: int) -> dict:
+def _process_survey_import_impl(survey_id: int, file_path: str, filename: str, user_id: int) -> dict:
     """
-    Tarea Celery que orquesta la importación.
-    Delega la lectura (C++) y escritura (COPY) a utils.bulk_import.
+    Implementación interna de la importación (no task). Se puede llamar
+    desde el task o de forma síncrona en tests.
     """
-    logger.info(f"[TASK][IMPORT] Iniciando para encuesta {survey_id} desde {file_path}")
-    
+    logger.info(f"[IMPORT] Iniciando para encuesta {survey_id} desde {file_path}")
+
     # Importación local para evitar ciclos y asegurar carga de apps
     from surveys.models import Survey
     from surveys.utils.bulk_import import bulk_import_responses_postgres
-    
+
+    survey = Survey.objects.get(id=survey_id)
+    total_rows, imported_rows = bulk_import_responses_postgres(file_path, survey)
+
+    logger.info(f"[IMPORT] Éxito. Filas CSV: {total_rows}, Respuestas insertadas: {imported_rows}")
+    return {
+        'status': 'SUCCESS',
+        'imported_count': imported_rows,
+        'total_rows': total_rows,
+        'survey_id': survey_id,
+    }
+
+
+@shared_task(bind=True)
+def process_survey_import(self, job_id: int):
+    """
+    Task Celery compatible con la API histórica: recibe `ImportJob.id`,
+    recupera los datos y delega a la implementación interna.
+    """
+    from surveys.models import ImportJob
+
     try:
-        survey = Survey.objects.get(id=survey_id)
-        
-        # Llamada a la función que usa C++ internamente
-        total_rows, imported_rows = bulk_import_responses_postgres(file_path, survey)
-        
-        logger.info(f"[TASK][IMPORT] Éxito. Filas CSV: {total_rows}, Respuestas insertadas: {imported_rows}")
+        job = ImportJob.objects.get(id=job_id)
+    except ImportJob.DoesNotExist:
+        logger.error(f"ImportJob {job_id} no encontrado")
+        return {'status': 'FAILURE', 'error': 'job_not_found'}
 
-        return {
-            'status': 'SUCCESS',
-            'imported_count': imported_rows,
-            'total_rows': total_rows,
-            'survey_id': survey_id
-        }
-
+    try:
+        result = _process_survey_import_impl(job.survey_id, job.csv_file, getattr(job, 'original_filename', ''), job.user_id)
+        return result
     except Exception as e:
-        logger.error(f"[TASK][IMPORT] Error crítico: {e}", exc_info=True)
-        return {'status': 'FAILURE', 'error': str(e)}
+        logger.exception(f"[TASK][IMPORT] Error crítico: {e}")
+        # Reintentar si es un error temporal
+        raise self.retry(exc=e, countdown=10)
 
 @shared_task(bind=True)
 def bulk_delete_surveys(self, ids):

@@ -183,3 +183,37 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
     prs.save(output)
     output.seek(0)
     return output
+
+
+# Compatibility wrappers/classes expected by older code/tests
+class PPTXSlideBuilder:
+    def __init__(self, prs):
+        self.prs = prs
+
+
+class PPTXStyleConfig:
+    """Placeholder for style configuration used by legacy callers/tests."""
+    def __init__(self):
+        self.title_font = None
+        self.body_font = None
+
+
+class PPTXReportGenerator:
+    """Backward-compatible generator class wrapper around the functional API."""
+    @staticmethod
+    def _clean_title(title: str) -> str:
+        return title.strip()
+
+    @staticmethod
+    def _split_question_title(title: str):
+        if '(' in title and ')' in title:
+            idx = title.find('(')
+            return title[:idx].strip(), title[idx:].strip()
+        return title, ''
+
+    @staticmethod
+    def _is_text_like_question(item: dict) -> bool:
+        return item.get('type') in ('text', 'textarea')
+
+    def generate(self, survey, analysis_data, **kwargs):
+        return generate_full_pptx_report(survey, analysis_data, **kwargs)
