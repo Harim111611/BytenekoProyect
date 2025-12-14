@@ -1,4 +1,3 @@
-import pandas as pd
 import re
 
 df = pd.read_csv("data/samples/encuesta_hotel_huespedes.csv", encoding="utf-8-sig")

@@ -3,7 +3,6 @@ import os
 import django
 import tempfile
 import shutil
-import pandas as pd
 from django.contrib.auth.models import User
 from surveys.models import ImportJob, Survey
 from surveys.tasks import process_survey_import

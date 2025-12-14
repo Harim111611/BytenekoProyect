@@ -2,7 +2,6 @@
 Script para verificar que la lógica de detección de contextos funciona
 correctamente con todos los archivos CSV de ejemplo.
 """
-import pandas as pd
 import os
 from pathlib import Path
 

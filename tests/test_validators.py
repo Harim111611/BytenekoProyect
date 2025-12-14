@@ -194,7 +194,6 @@ class TestCSVImportValidator:
     
     def test_validate_dataframe_empty(self):
         """Debe rechazar DataFrames vacíos"""
-        import pandas as pd
         
         with pytest.raises(ValidationError, match="está vacío"):
             CSVImportValidator.validate_dataframe(None)
@@ -204,7 +203,6 @@ class TestCSVImportValidator:
     
     def test_validate_dataframe_too_many_columns(self):
         """Debe rechazar más de 100 columnas"""
-        import pandas as pd
         
         df = pd.DataFrame({f'col{i}': [1] for i in range(101)})
         with pytest.raises(ValidationError, match="demasiadas columnas"):
@@ -212,7 +210,6 @@ class TestCSVImportValidator:
     
     def test_validate_dataframe_too_many_rows(self):
         """Debe rechazar más de 10,000 filas"""
-        import pandas as pd
         
         df = pd.DataFrame({'col1': range(10001)})
         with pytest.raises(ValidationError, match="demasiadas filas"):
@@ -220,7 +217,6 @@ class TestCSVImportValidator:
     
     def test_validate_dataframe_valid(self):
         """Debe aceptar DataFrames válidos"""
-        import pandas as pd
         
         df = pd.DataFrame({'col1': [1, 2, 3], 'col2': [4, 5, 6]})
         result = CSVImportValidator.validate_dataframe(df)

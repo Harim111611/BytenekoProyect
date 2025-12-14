@@ -177,7 +177,7 @@ def service_import_to_existing_survey(user, public_id, uploaded_file):
 
 def service_generate_preview(uploaded_file):
     """
-    Genera el preview usando Pandas de forma síncrona.
+    Genera el preview usando cpp_csv de forma síncrona.
     """
     try:
         # Guardar archivo temporal para pasarlo a C++
@@ -364,13 +364,19 @@ async def get_task_status_view(request: HttpRequest, task_id: str) -> JsonRespon
     def _get_status_sync(tid):
         result = AsyncResult(tid)
         response = {'task_id': tid, 'status': result.status.lower()}
-        
+
         if result.state == 'SUCCESS':
             response['status'] = 'completed'
             response['result'] = result.result
         elif result.state == 'FAILURE':
-            response['status'] = 'failed'
-            response['error_message'] = str(result.result)
+            # Si el resultado es un dict con errores de validación, propagarlo
+            if isinstance(result.result, dict) and result.result.get('status') == 'FAILURE':
+                response['status'] = 'failed'
+                response['error_message'] = result.result.get('error', str(result.result))
+                response['validation_errors'] = result.result.get('validation_errors', [])
+            else:
+                response['status'] = 'failed'
+                response['error_message'] = str(result.result)
         else:
             response['status'] = 'processing'
             if isinstance(result.info, dict):

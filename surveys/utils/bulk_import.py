@@ -198,6 +198,23 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     """
     Importación optimizada usando C++ para lectura y COPY para escritura.
     """
+
+    # 0. Validación avanzada con C++
+    try:
+        validation_result = cpp_csv.read_and_validate_csv(file_path)
+    except Exception as e:
+        logger.error(f"Error validando CSV con módulo C++: {e}")
+        raise
+
+    if not validation_result.get('success', True):
+        logger.error(f"Errores de validación en CSV: {validation_result.get('validation_errors', [])}")
+        # Retornamos -1, -1 y los errores para distinguir error de validación
+        return {
+            'success': False,
+            'error': 'Errores de validación en el archivo CSV.',
+            'validation_errors': validation_result.get('validation_errors', [])
+        }
+
     # 1. Lectura Ultra-Rápida con C++
     try:
         # Esto devuelve una lista de diccionarios [{'Col1': 'Val1', ...}, ...]

@@ -22,10 +22,20 @@ def process_survey_import(self, survey_id: int, file_path: str, filename: str, u
     
     try:
         survey = Survey.objects.get(id=survey_id)
-        
+
         # Llamada a la función que usa C++ internamente
-        total_rows, imported_rows = bulk_import_responses_postgres(file_path, survey)
-        
+        result = bulk_import_responses_postgres(file_path, survey)
+
+        # Si retorna dict con errores de validación, propagarlo
+        if isinstance(result, dict) and not result.get('success', True):
+            logger.error(f"[TASK][IMPORT][VALIDATION] Errores: {result.get('validation_errors', [])}")
+            return {
+                'status': 'FAILURE',
+                'error': result.get('error', 'Errores de validación en el archivo CSV.'),
+                'validation_errors': result.get('validation_errors', [])
+            }
+
+        total_rows, imported_rows = result
         logger.info(f"[TASK][IMPORT] Éxito. Filas CSV: {total_rows}, Respuestas insertadas: {imported_rows}")
 
         return {

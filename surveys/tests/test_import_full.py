@@ -1,6 +1,5 @@
 import io
 import pytest
-import pandas as pd
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
