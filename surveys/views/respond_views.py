@@ -17,8 +17,10 @@ from core.utils.helpers import PermissionHelper
 logger = logging.getLogger("surveys")
 
 
+from asgiref.sync import sync_to_async
+
 @ratelimit(key="ip", rate="60/h", method="POST", block=True)
-def respond_survey_view(request, public_id):
+async def respond_survey_view(request, public_id):
     """
     Vista pública para responder una encuesta.
 
@@ -28,12 +30,13 @@ def respond_survey_view(request, public_id):
     """
     try:
         # Optimizamos la query para traer preguntas y opciones en una sola vuelta
-        survey = get_object_or_404(
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
             Survey.objects.select_related("author").prefetch_related("questions__options"),
             public_id=public_id,
         )
     except Http404:
-        return render(
+        render_async = sync_to_async(render, thread_sensitive=True)
+        return await render_async(
             request,
             "surveys/crud/not_found.html",
             {"survey_id": public_id},
@@ -41,15 +44,15 @@ def respond_survey_view(request, public_id):
         )
 
     # Encuesta no activa (cerrada, pausada, fuera de ventana, etc.)
-    if not PermissionHelper.verify_survey_is_active(survey):
-        messages.warning(request, "Esta encuesta no está activa actualmente.")
-        return redirect(
-            f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
-        )
+    if not await sync_to_async(PermissionHelper.verify_survey_is_active, thread_sensitive=True)(survey):
+        await sync_to_async(messages.warning, thread_sensitive=True)(request, "Esta encuesta no está activa actualmente.")
+        redirect_async = sync_to_async(redirect, thread_sensitive=True)
+        url = f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
+        return await redirect_async(url)
 
     # --- LÓGICA CONDICIONAL PARA EL FRONTEND (NUEVO) ---
     # Construimos un mapa JSON para que JavaScript sepa qué ocultar/mostrar
-    questions = survey.questions.all().order_by('order')  # Asegurar orden
+    questions = await sync_to_async(lambda: list(survey.questions.all().order_by('order')), thread_sensitive=True)()  # Asegurar orden
     logic_map = {}
     
     for q in questions:
@@ -68,157 +71,137 @@ def respond_survey_view(request, public_id):
 
     if request.method == "POST":
         try:
-            with transaction.atomic():
-                # Usuario autenticado o respuesta anónima
+            @sync_to_async
+            def create_survey_response():
                 user_obj = request.user if request.user.is_authenticated else None
-
-                survey_response = SurveyResponse.objects.create(
+                return SurveyResponse.objects.create(
                     survey=survey,
                     user=user_obj,
                     is_anonymous=(user_obj is None),
                 )
-
-                # Usamos la lista de preguntas ya cargada en memoria
-                questions_cached = list(questions)
-
-                # --- FASE 1: recolectar IDs de opciones seleccionadas ---
-                all_raw_option_ids = []
-                for q in questions_cached:
-                    field_name = f"pregunta_{q.id}"
-                    if q.type == "multi":
-                        all_raw_option_ids.extend(request.POST.getlist(field_name))
-                    elif q.type == "single":
-                        val = request.POST.get(field_name)
-                        if val:
-                            all_raw_option_ids.append(val)
-
-                # Traemos todas las opciones involucradas en una sola query
-                options_map = {
+            survey_response = await create_survey_response()
+            questions_cached = list(questions)
+            all_raw_option_ids = []
+            for q in questions_cached:
+                field_name = f"pregunta_{q.id}"
+                if q.type == "multi":
+                    all_raw_option_ids.extend(request.POST.getlist(field_name))
+                elif q.type == "single":
+                    val = request.POST.get(field_name)
+                    if val:
+                        all_raw_option_ids.append(val)
+            @sync_to_async
+            def get_options_map():
+                return {
                     str(op.id): op
                     for op in AnswerOption.objects.filter(id__in=all_raw_option_ids)
                 }
-
-                # --- FASE 2: crear QuestionResponse válidas ---
-                responses_to_create = []
-
-                for q in questions_cached:
-                    field = f"pregunta_{q.id}"
-
-                    # Nota: Aquí se podría validar logic_map para no guardar respuestas de preguntas ocultas.
-                    # Por robustez, procesamos lo que envía el formulario.
-
-                    # Selección múltiple
-                    if q.type == "multi":
-                        raw_ids = request.POST.getlist(field)
-                        valid_texts = []
-
-                        for rid in raw_ids:
-                            opt = options_map.get(str(rid))
-                            if opt and opt.question_id == q.id:
-                                valid_texts.append(opt.text)
-                            elif opt:
-                                logger.warning(
-                                    "Intento de inyección de opción %s ajena a pregunta %s",
-                                    rid,
-                                    q.id,
-                                )
-
-                        if valid_texts:
-                            responses_to_create.append(
-                                QuestionResponse(
-                                    survey_response=survey_response,
-                                    question=q,
-                                    text_value=",".join(valid_texts),
-                                )
+            options_map = await get_options_map()
+            responses_to_create = []
+            for q in questions_cached:
+                field = f"pregunta_{q.id}"
+                if q.type == "multi":
+                    raw_ids = request.POST.getlist(field)
+                    valid_texts = []
+                    for rid in raw_ids:
+                        opt = options_map.get(str(rid))
+                        if opt and opt.question_id == q.id:
+                            valid_texts.append(opt.text)
+                        elif opt:
+                            logger.warning(
+                                "Intento de inyección de opción %s ajena a pregunta %s",
+                                rid,
+                                q.id,
                             )
-
-                    # Selección única
-                    elif q.type == "single":
-                        raw_id = request.POST.get(field)
-                        if raw_id:
-                            opt = options_map.get(str(raw_id))
-                            if opt and opt.question_id == q.id:
-                                responses_to_create.append(
-                                    QuestionResponse(
-                                        survey_response=survey_response,
-                                        question=q,
-                                        selected_option=opt, # Guardamos la FK para facilitar análisis
-                                        text_value=opt.text,
-                                    )
-                                )
-                            elif opt:
-                                logger.warning(
-                                    "Intento de inyección de opción %s ajena a pregunta %s",
-                                    raw_id,
-                                    q.id,
-                                )
-
-                    # Numérica
-                    elif q.type == "numeric":
-                        val = request.POST.get(field)
-                        if val not in (None, ""):
-                            try:
-                                if getattr(q, "allow_decimal", False):
-                                    validated = ResponseValidator.validate_decimal_response(val)
-                                else:
-                                    validated = ResponseValidator.validate_numeric_response(val)
-
-                                responses_to_create.append(
-                                    QuestionResponse(
-                                        survey_response=survey_response,
-                                        question=q,
-                                        numeric_value=int(validated),
-                                    )
-                                )
-                            except ValidationError:
-                                pass # Ignoramos valores inválidos
-
-                    # Texto libre / otros tipos
-                    else:
-                        val = request.POST.get(field)
-                        validated = ResponseValidator.validate_text_response(val)
-                        if validated:
-                            responses_to_create.append(
-                                QuestionResponse(
-                                    survey_response=survey_response,
-                                    question=q,
-                                    text_value=validated,
-                                )
+                    if valid_texts:
+                        responses_to_create.append(
+                            QuestionResponse(
+                                survey_response=survey_response,
+                                question=q,
+                                text_value=",".join(valid_texts),
                             )
-
-                # Bulk insert de respuestas
-                QuestionResponse.objects.bulk_create(responses_to_create)
-
-                # --- Auto pausa por meta de respuestas -------------------------
-                original_status = survey.status
-                if getattr(survey, "sample_goal", 0) and survey.sample_goal > 0:
-                    total_responses = SurveyResponse.objects.filter(survey=survey).count()
-
-                    if (
-                        total_responses >= survey.sample_goal
-                        and survey.status == Survey.STATUS_ACTIVE
-                    ):
-                        survey.status = Survey.STATUS_PAUSED
-                        survey.save(update_fields=["status"])
-                        logger.info(
-                            "Encuesta %s pausada automáticamente al alcanzar la meta de %s respuestas",
-                            survey.id,
-                            survey.sample_goal,
                         )
-
-                logger.info("Respuesta registrada encuesta %s", survey.id)
-
-                # Mantenemos el status original para el mensaje de éxito
-                final_status = original_status
-                
-                return redirect(
-                    f"{reverse('surveys:thanks')}?"
-                    f"public_id={survey.public_id}&status={final_status}&success=1"
-                )
-
+                elif q.type == "single":
+                    raw_id = request.POST.get(field)
+                    if raw_id:
+                        opt = options_map.get(str(raw_id))
+                        if opt and opt.question_id == q.id:
+                            responses_to_create.append(
+                                QuestionResponse(
+                                    survey_response=survey_response,
+                                    question=q,
+                                    selected_option=opt,
+                                    text_value=opt.text,
+                                )
+                            )
+                        elif opt:
+                            logger.warning(
+                                "Intento de inyección de opción %s ajena a pregunta %s",
+                                raw_id,
+                                q.id,
+                            )
+                elif q.type == "numeric":
+                    val = request.POST.get(field)
+                    if val not in (None, ""):
+                        try:
+                            if getattr(q, "allow_decimal", False):
+                                validated = ResponseValidator.validate_decimal_response(val)
+                            else:
+                                validated = ResponseValidator.validate_numeric_response(val)
+                            responses_to_create.append(
+                                QuestionResponse(
+                                    survey_response=survey_response,
+                                    question=q,
+                                    numeric_value=int(validated),
+                                )
+                            )
+                        except ValidationError:
+                            pass
+                else:
+                    val = request.POST.get(field)
+                    validated = ResponseValidator.validate_text_response(val)
+                    if validated:
+                        responses_to_create.append(
+                            QuestionResponse(
+                                survey_response=survey_response,
+                                question=q,
+                                text_value=validated,
+                            )
+                        )
+            @sync_to_async
+            def bulk_create_responses():
+                QuestionResponse.objects.bulk_create(responses_to_create)
+            await bulk_create_responses()
+            original_status = survey.status
+            if getattr(survey, "sample_goal", 0) and survey.sample_goal > 0:
+                @sync_to_async
+                def get_total_responses():
+                    return SurveyResponse.objects.filter(survey=survey).count()
+                total_responses = await get_total_responses()
+                if (
+                    total_responses >= survey.sample_goal
+                    and survey.status == Survey.STATUS_ACTIVE
+                ):
+                    survey.status = Survey.STATUS_PAUSED
+                    @sync_to_async
+                    def save_survey():
+                        survey.save(update_fields=["status"])
+                    await save_survey()
+                    logger.info(
+                        "Encuesta %s pausada automáticamente al alcanzar la meta de %s respuestas",
+                        survey.id,
+                        survey.sample_goal,
+                    )
+            logger.info("Respuesta registrada encuesta %s", survey.id)
+            final_status = original_status
+            redirect_async = sync_to_async(redirect, thread_sensitive=True)
+            url = (
+                f"{reverse('surveys:thanks')}?"
+                f"public_id={survey.public_id}&status={final_status}&success=1"
+            )
+            return await redirect_async(url)
         except Exception as e:
             logger.exception("Error respondiendo encuesta %s: %s", public_id, e)
-            messages.error(request, "Error guardando respuesta. Intenta nuevamente.")
-
-    # GET → mostrar formulario con el contexto actualizado
-    return render(request, "surveys/responses/fill.html", context)
+            await sync_to_async(messages.error, thread_sensitive=True)(request, "Error guardando respuesta. Intenta nuevamente.")
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, "surveys/responses/fill.html", context)

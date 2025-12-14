@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 from django.shortcuts import render, get_object_or_404
+from asgiref.sync import sync_to_async
 from django.http import HttpResponse, Http404, JsonResponse, HttpRequest
 from django.utils import timezone
 from django.utils.text import slugify
@@ -64,27 +65,25 @@ def _get_filtered_responses(survey: Survey, data: Dict[str, Any]):
 # ==========================================
 
 @login_required
-def dashboard_view(request: HttpRequest) -> HttpResponse:
+async def dashboard_view(request: HttpRequest) -> HttpResponse:
     user = request.user
     cache_key = f"dashboard_data_user_{user.id}"
-    context = cache.get(cache_key)
+    context = await sync_to_async(cache.get, thread_sensitive=True)(cache_key)
 
     if not context:
         logger.info(f"Generando dashboard cache para usuario {user.id}")
-        user_surveys = Survey.objects.filter(author=user)
-        
-        survey_stats = user_surveys.aggregate(
+        user_surveys = await sync_to_async(lambda: Survey.objects.filter(author=user), thread_sensitive=True)()
+        survey_stats = await sync_to_async(lambda: user_surveys.aggregate(
             total=Count('id'),
             active=Count('id', filter=Q(status='active'))
-        )
+        ), thread_sensitive=True)()
         total_surveys = survey_stats['total']
         active_count = survey_stats['active']
 
-        responses_qs = SurveyResponse.objects.filter(survey__author=user).select_related('survey')
-        total_responses = responses_qs.count()
-        
+        responses_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey__author=user).select_related('survey'), thread_sensitive=True)()
+        total_responses = await sync_to_async(responses_qs.count, thread_sensitive=True)()
         today = timezone.now().date()
-        responses_today = responses_qs.filter(created_at__date=today).count()
+        responses_today = await sync_to_async(lambda: responses_qs.filter(created_at__date=today).count(), thread_sensitive=True)()
         interaction_rate = round((total_responses / total_surveys), 1) if total_surveys > 0 else 0
 
         kpis = [
@@ -94,10 +93,10 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
             {'label': 'Carga por Encuesta', 'value': interaction_rate, 'icon': 'bi-arrow-repeat', 'color': 'dark', 'subtext': 'Respuestas promedio'},
         ]
 
-        chart_labels, chart_data = ResponseDataBuilder.get_daily_counts(responses_qs, days=DEFAULT_CHART_DAYS)
-        pie_data = ResponseDataBuilder.get_status_distribution(user_surveys)
+        chart_labels, chart_data = await ResponseDataBuilder.get_daily_counts(responses_qs, days=DEFAULT_CHART_DAYS)
+        pie_data = await ResponseDataBuilder.get_status_distribution(user_surveys)
 
-        recent_activity_qs = user_surveys.annotate(response_count=Count('responses')).order_by('-updated_at')[:5]
+        recent_activity_qs = await sync_to_async(lambda: list(user_surveys.annotate(response_count=Count('responses')).order_by('-updated_at')[:5]), thread_sensitive=True)()
         recent_activity = []
         for s in recent_activity_qs:
             goal = s.sample_goal if s.sample_goal > 0 else 1
@@ -110,7 +109,7 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
                 'fecha': s.updated_at
             })
 
-        alerts = _generate_performance_alerts_optimized(user_surveys)
+        alerts = await sync_to_async(_generate_performance_alerts_optimized, thread_sensitive=True)(user_surveys)
 
         context = {
             'page_name': 'dashboard', 'kpis': kpis,
@@ -119,44 +118,45 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
             'alertas': alerts, 'user_name': user.username,
             'total_encuestas_count': total_surveys, 'total_respuestas_count': total_responses,
         }
-        cache.set(cache_key, context, CACHE_TIMEOUT_DASHBOARD)
+        await sync_to_async(cache.set, thread_sensitive=True)(cache_key, context, CACHE_TIMEOUT_DASHBOARD)
 
-    return render(request, 'core/dashboard/dashboard.html', context)
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, 'core/dashboard/dashboard.html', context)
 
 # ==========================================
 # DASHBOARD DE RESULTADOS (ANALÍTICAS) - RESTAURADO
 # ==========================================
 
 @login_required
-def dashboard_results_view(request: HttpRequest) -> HttpResponse:
+async def dashboard_results_view(request: HttpRequest) -> HttpResponse:
     """
     Vista para el panel de analíticas globales.
     """
     filters = {
         'periodo': request.GET.get('periodo', '30')
     }
-    summary_data = _get_analytics_summary(request.user, filters)
+    summary_data = await _get_analytics_summary(request.user, filters)
     
     # Contexto adicional para la plantilla
     summary_data['page_name'] = 'analytics'
     
-    return render(request, 'core/dashboard/results_dashboard.html', summary_data)
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, 'core/dashboard/results_dashboard.html', summary_data)
 
 @login_required
-def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
+async def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
     """
     Genera un PDF con las analíticas globales.
     """
     filters = {
         'periodo': request.GET.get('periodo', '30')
     }
-    data = _get_analytics_summary(request.user, filters)
+    data = await _get_analytics_summary(request.user, filters)
     
-    pdf_file = PDFReportGenerator.generate_global_report(data)
+    pdf_file = await sync_to_async(PDFReportGenerator.generate_global_report, thread_sensitive=True)(data)
     
     if not pdf_file:
         return HttpResponse("Error generando el reporte PDF o WeasyPrint no está configurado.", status=500)
-        
     response = HttpResponse(pdf_file, content_type='application/pdf')
     filename = f"Global_Analytics_{datetime.now().strftime('%Y%m%d')}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -167,36 +167,32 @@ def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
 # ==========================================
 
 @login_required
-def reports_page_view(request: HttpRequest) -> HttpResponse:
-    surveys = Survey.objects.filter(author=request.user).only('id', 'public_id', 'title', 'created_at', 'status').order_by('-created_at')
-    return render(request, 'core/reports/reports_page.html', {'page_name': 'reportes', 'surveys': surveys})
+async def reports_page_view(request: HttpRequest) -> HttpResponse:
+    surveys = await sync_to_async(lambda: Survey.objects.filter(author=request.user).only('id', 'public_id', 'title', 'created_at', 'status').order_by('-created_at'), thread_sensitive=True)()
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, 'core/reports/reports_page.html', {'page_name': 'reportes', 'surveys': surveys})
 
 @ratelimit(key='user', rate='60/m', block=True)
 @login_required
-def report_preview_ajax(request: HttpRequest, public_id: str) -> JsonResponse:
-    survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
+async def report_preview_ajax(request: HttpRequest, public_id: str) -> JsonResponse:
+    survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author=request.user)
     try:
-        responses_queryset = _get_filtered_responses(survey, request.GET)
-        total_respuestas = responses_queryset.count()
-        
+        responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.GET)
+        total_respuestas = await sync_to_async(responses_queryset.count, thread_sensitive=True)()
         show_charts = request.GET.get('include_charts') in ['on', 'true']
         show_kpis = request.GET.get('include_kpis') in ['on', 'true']
         show_table = request.GET.get('include_table') in ['on', 'true']
-
-        analysis_result = SurveyAnalysisService.get_analysis_data(
+        analysis_result = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
             survey=survey, responses_queryset=responses_queryset, include_charts=show_charts
         )
-
         nps_safe = analysis_result.get('nps_data', {})
         last_date = None
         if total_respuestas > 0:
-            last_date = responses_queryset.aggregate(Max('created_at'))['created_at__max']
-
+            last_date = await sync_to_async(lambda: responses_queryset.aggregate(Max('created_at'))['created_at__max'], thread_sensitive=True)()
         completion_text = "N/A"
         if survey.sample_goal > 0:
             pct = int((total_respuestas / survey.sample_goal) * 100)
             completion_text = f"{pct}%"
-
         context = {
             'survey': survey, 'total_respuestas': total_respuestas,
             'last_response_date': last_date, 'completion_rate': completion_text,
@@ -208,38 +204,36 @@ def report_preview_ajax(request: HttpRequest, public_id: str) -> JsonResponse:
             'is_pdf': False,
             'consolidated_table_rows_limited': DataNormalizer.prepare_consolidated_rows(analysis_result.get('analysis_data', []))[:20]
         }
-        
-        html = render_to_string('core/reports/_report_preview_content.html', context)
+        html = await sync_to_async(render_to_string, thread_sensitive=True)('core/reports/_report_preview_content.html', context)
         return JsonResponse({'html': html, 'success': True})
     except Exception as e:
         logger.error(f"Error preview survey {public_id}: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e), 'success': False}, status=500)
 
 @login_required
-def report_pdf_view(request: HttpRequest) -> HttpResponse:
+async def report_pdf_view(request: HttpRequest) -> HttpResponse:
     survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
-    if not survey_id: raise Http404("Survey ID required")
-    
-    if str(survey_id).isdigit(): survey = get_object_or_404(Survey, id=survey_id, author=request.user)
-    else: survey = get_object_or_404(Survey, public_id=survey_id, author=request.user)
-    
+    if not survey_id:
+        raise Http404("Survey ID required")
+    if str(survey_id).isdigit():
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author=request.user)
+    else:
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author=request.user)
     try:
-        responses_queryset = _get_filtered_responses(survey, request.POST)
+        responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
         include_charts = request.POST.get('include_charts') == 'on'
         include_table = request.POST.get('include_table') == 'on'
         include_kpis = request.POST.get('include_kpis') == 'on'
-
-        data = SurveyAnalysisService.get_analysis_data(
+        data = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
             survey=survey, responses_queryset=responses_queryset, include_charts=include_charts
         )
-        
-        pdf_file = PDFReportGenerator.generate_report(
+        pdf_file = await sync_to_async(PDFReportGenerator.generate_report, thread_sensitive=True)(
             survey=survey,
             analysis_data=data.get('analysis_data', []),
             nps_data=data.get('nps_data', {}),
             start_date=request.POST.get('start_date'),
             end_date=request.POST.get('end_date'),
-            total_responses=responses_queryset.count(),
+            total_responses=await sync_to_async(responses_queryset.count, thread_sensitive=True)(),
             kpi_satisfaction_avg=data.get('kpi_prom_satisfaccion', 0),
             heatmap_image=data.get('heatmap_image'),
             include_table=include_table,
@@ -247,7 +241,6 @@ def report_pdf_view(request: HttpRequest) -> HttpResponse:
             include_charts=include_charts,
             request=request
         )
-        
         response = HttpResponse(pdf_file, content_type='application/pdf')
         safe_title = slugify(survey.title)[:50]
         filename = f"Report_{safe_title}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -258,34 +251,32 @@ def report_pdf_view(request: HttpRequest) -> HttpResponse:
         return HttpResponse(f"Error: {str(e)}", status=500)
 
 @login_required
-def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
+async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
     survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
-    if not survey_id: raise Http404("Survey ID required")
-         
-    if str(survey_id).isdigit(): survey = get_object_or_404(Survey, id=survey_id, author=request.user)
-    else: survey = get_object_or_404(Survey, public_id=survey_id, author=request.user)
-
+    if not survey_id:
+        raise Http404("Survey ID required")
+    if str(survey_id).isdigit():
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author=request.user)
+    else:
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author=request.user)
     try:
-        responses_queryset = _get_filtered_responses(survey, request.POST)
+        responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
         include_charts = request.POST.get('include_charts') == 'on'
         include_table = request.POST.get('include_table') == 'on'
-        
-        data = SurveyAnalysisService.get_analysis_data(
+        data = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
             survey=survey, responses_queryset=responses_queryset, include_charts=include_charts
         )
-
-        pptx_file = generate_full_pptx_report(
+        pptx_file = await sync_to_async(generate_full_pptx_report, thread_sensitive=True)(
             survey=survey,
             analysis_data=data.get('analysis_data', []),
             nps_data=data.get('nps_data', {}),
             start_date=request.POST.get('start_date'),
             end_date=request.POST.get('end_date'),
-            total_responses=responses_queryset.count(),
+            total_responses=await sync_to_async(responses_queryset.count, thread_sensitive=True)(),
             kpi_satisfaction_avg=data.get('kpi_prom_satisfaccion', 0),
             heatmap_image=data.get('heatmap_image'),
             include_table=include_table
         )
-        
         response = HttpResponse(pptx_file, content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
         safe_title = slugify(survey.title)[:50]
         response['Content-Disposition'] = f'attachment; filename="Report_{safe_title}.pptx"'
@@ -295,8 +286,9 @@ def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
         return HttpResponse("Error generando PowerPoint.", status=500)
 
 @login_required
-def settings_view(request: HttpRequest) -> HttpResponse:
-    return render(request, 'core/dashboard/settings.html', {'page_name': 'configuracion', 'user': request.user})
+async def settings_view(request: HttpRequest) -> HttpResponse:
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, 'core/dashboard/settings.html', {'page_name': 'configuracion', 'user': request.user})
 
 # ==========================================
 # HELPERS PRIVADOS
@@ -318,7 +310,7 @@ def _generate_performance_alerts_optimized(user_surveys) -> List[Dict[str, Any]]
         })
     return alerts
 
-def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, Any]:
+async def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, Any]:
     """
     Calcula TODAS las métricas analíticas. Helper para dashboard_results_view y global_results_pdf_view.
     """
@@ -338,23 +330,18 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
             pass
 
     # Métricas Totales
-    total_surveys = surveys.count()
-    total_active = surveys.filter(status='active').count()
-    total_responses = responses_qs.count()
+    total_surveys = await sync_to_async(surveys.count, thread_sensitive=True)()
+    total_active = await sync_to_async(lambda: surveys.filter(status='active').count(), thread_sensitive=True)()
+    total_responses = await sync_to_async(responses_qs.count, thread_sensitive=True)()
 
     # Cambio Semanal
     now = timezone.now()
     week_start = now - timedelta(days=7)
     prev_week_start = now - timedelta(days=14)
     
-    weekly_stats = SurveyResponse.objects.filter(survey__in=surveys).aggregate(
-        this_week=Count('id', filter=Q(created_at__gte=week_start)),
-        last_week=Count('id', filter=Q(created_at__gte=prev_week_start, created_at__lt=week_start))
-    )
-    
-    this_week_c = weekly_stats['this_week']
-    last_week_c = weekly_stats['last_week']
-    
+    this_week_c = await sync_to_async(lambda: responses_qs.filter(created_at__gte=week_start).count(), thread_sensitive=True)()
+    last_week_c = await sync_to_async(lambda: responses_qs.filter(created_at__gte=prev_week_start, created_at__lt=week_start).count(), thread_sensitive=True)()
+
     weekly_change = 0
     if last_week_c > 0:
         weekly_change = ((this_week_c - last_week_c) / last_week_c) * 100
@@ -362,7 +349,7 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
         weekly_change = 100
 
     # NPS Global Simplificado
-    nps_stats = QuestionResponse.objects.filter(
+    nps_stats = await sync_to_async(lambda: QuestionResponse.objects.filter(
         survey_response__in=responses_qs,
         question__type='scale'
     ).aggregate(
@@ -371,12 +358,10 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
         passives=Count('id', filter=Q(numeric_value__in=[7, 8])),
         detractors=Count('id', filter=Q(numeric_value__lte=6)),
         avg_satisfaction=Avg('numeric_value')
-    )
-    
+    ), thread_sensitive=True)()
     total_nps = nps_stats['total'] or 0
     nps_score = 0
     prom_pct, pass_pct, det_pct = 0, 0, 0
-    
     if total_nps > 0:
         prom_pct = round((nps_stats['promoters'] / total_nps) * 100, 1)
         pass_pct = round((nps_stats['passives'] / total_nps) * 100, 1)
@@ -386,29 +371,25 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
     global_satisfaction = nps_stats['avg_satisfaction'] or 0
 
     # Gráficas
-    chart_labels, chart_data = ResponseDataBuilder.get_daily_counts(responses_qs, days=30)
-    
-    status_dist = surveys.values('status').annotate(count=Count('id'))
+    chart_labels, chart_data = await ResponseDataBuilder.get_daily_counts(responses_qs, days=30)
+
+    # Categoría
+    status_dist = await sync_to_async(lambda: list(surveys.values('status').annotate(count=Count('id'))), thread_sensitive=True)()
     status_map = dict(Survey.STATUS_CHOICES)
     cat_labels = [status_map.get(x['status'], x['status']) for x in status_dist]
     cat_data = [x['count'] for x in status_dist]
 
+    # Weekly trend
     weekly_trend_data = []
     for i in range(4):
         s_date = now - timedelta(weeks=i+1)
         e_date = now - timedelta(weeks=i)
-        c = SurveyResponse.objects.filter(
-            survey__in=surveys, 
-            created_at__range=(s_date, e_date)
-        ).count()
+        c = await sync_to_async(lambda: responses_qs.filter(created_at__range=(s_date, e_date)).count(), thread_sensitive=True)()
         weekly_trend_data.insert(0, c)
 
     # Tops
-    top_surveys = surveys.annotate(
-        response_count=Count('responses')
-    ).order_by('-response_count')[:5]
-    
-    top_preguntas = Question.objects.filter(
+    top_surveys = await sync_to_async(lambda: list(surveys.annotate(response_count=Count('responses')).order_by('-response_count')[:5]), thread_sensitive=True)()
+    top_preguntas = await sync_to_async(lambda: list(Question.objects.filter(
         survey__in=surveys, 
         type='scale',
         questionresponse__isnull=False
@@ -417,7 +398,7 @@ def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, An
         num_responses=Count('questionresponse')
     ).filter(
         num_responses__gte=1
-    ).select_related('survey').order_by('-avg_score')[:10]
+    ).select_related('survey').order_by('-avg_score')[:10]), thread_sensitive=True)()
 
     return {
         'total_surveys': total_surveys,

@@ -201,7 +201,9 @@ class ChartGenerator:
             margin=dict(l=left_margin, r=right_margin, t=30, b=20),
             height=320,
             coloraxis_showscale=False,
-            barcornerradius=4,
+            # Note: 'barcornerradius' is not a valid Plotly layout property
+            # Rounded bar corners are not supported via layout in this Plotly
+            # version; per-bar corner radius isn't available, so we omit it.
         )
         return cls._fig_to_html(fig)
 

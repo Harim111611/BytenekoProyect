@@ -1,9 +1,8 @@
 """
-Utilidades comunes para filtrado y procesamiento de datos.
 Evita duplicación de código entre vistas.
 """
 from django.utils import timezone
-from django.core.exceptions import ValidationError, PermissionDenied
+from django.core.exceptions import PermissionDenied
 from datetime import timedelta, datetime
 import logging
 
@@ -15,6 +14,9 @@ logger = logging.getLogger(__name__)
 def get_log_security_event():
     from core.utils.logging_utils import log_security_event
     return log_security_event
+
+from asgiref.sync import sync_to_async
+
 
 
 class DateFilterHelper:
@@ -104,7 +106,7 @@ class ResponseDataBuilder:
     """Helper para construir estructura de datos de respuestas."""
     
     @staticmethod
-    def get_daily_counts(survey_response_queryset, days=14):
+    async def get_daily_counts(survey_response_queryset, days=14):
         """
         Get daily counts of survey responses for charts.
         
@@ -120,14 +122,14 @@ class ResponseDataBuilder:
         today = timezone.now().date()
         start_date = today - timedelta(days=days - 1)
         
-        daily_data = (
+        daily_data = await sync_to_async(lambda: list(
             survey_response_queryset
             .filter(created_at__date__gte=start_date)
             .annotate(date=TruncDate('created_at'))
             .values('date')
             .annotate(count=Count('id'))
             .order_by('date')
-        )
+        ))()
         
         # Crear mapa de fechas a conteos
         date_map = {item['date']: item['count'] for item in daily_data}
@@ -145,7 +147,7 @@ class ResponseDataBuilder:
         return labels, data
     
     @staticmethod
-    def get_status_distribution(survey_queryset):
+    async def get_status_distribution(survey_queryset):
         """
         Get distribution of survey statuses.
         
@@ -156,7 +158,7 @@ class ResponseDataBuilder:
         """
         from django.db.models import Count
         
-        status_counts = survey_queryset.values('status').annotate(count=Count('id'))
+        status_counts = await sync_to_async(lambda: list(survey_queryset.values('status').annotate(count=Count('id'))))()
         status_map = {s['status']: s['count'] for s in status_counts}
         
         return [
@@ -171,7 +173,7 @@ class PermissionHelper:
     """Helper para validación de permisos de usuario."""
     
     @staticmethod
-    def verify_survey_access(survey, user):
+    async def verify_survey_access(survey, user):
         """
         Verify that the user has access to the survey.
         
@@ -184,14 +186,14 @@ class PermissionHelper:
         if survey.author != user:
             # Log security event
             log_security = get_log_security_event()
-            log_security(
+            await sync_to_async(log_security)(
                 'unauthorized_survey_access',
                 severity='WARNING',
                 user_id=user.id,
                 survey_id=survey.id,
                 survey_author_id=survey.author.id
             )
-            logger.warning(
+            await sync_to_async(logger.warning)(
                 f"User {user.id} tried to access survey {survey.id} without permission"
             )
             raise PermissionDenied("No tiene permiso para acceder a esta encuesta")

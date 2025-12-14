@@ -1,3 +1,13 @@
+from asgiref.sync import sync_to_async
+import asyncio
+async def log_user_action_async(action: str, success: bool = True, **extra_data):
+    await sync_to_async(log_user_action)(action, success, **extra_data)
+
+async def log_security_event_async(event_type: str, severity: str = 'WARNING', **details):
+    await sync_to_async(log_security_event)(event_type, severity, **details)
+
+async def log_data_change_async(model_name: str, operation: str, instance_id: any, user_id: any = None, **changes):
+    await sync_to_async(log_data_change)(model_name, operation, instance_id, user_id, **changes)
 """
 Utilidades de logging para el proyecto.
 Incluye decoradores de performance y helpers de logging estructurado.
@@ -106,6 +116,23 @@ def log_data_change(model_name: str, operation: str, instance_id: Any, user_id: 
 
 
 class StructuredLogger:
+    async def debug_async(self, message: str, *args, **context):
+        await sync_to_async(self.debug)(message, *args, **context)
+
+    async def info_async(self, message: str, *args, **context):
+        await sync_to_async(self.info)(message, *args, **context)
+
+    async def warning_async(self, message: str, *args, **context):
+        await sync_to_async(self.warning)(message, *args, **context)
+
+    async def error_async(self, message: str, *args, **context):
+        await sync_to_async(self.error)(message, *args, **context)
+
+    async def exception_async(self, message: str, *args, **context):
+        await sync_to_async(self.exception)(message, *args, **context)
+
+    async def critical_async(self, message: str, *args, **context):
+        await sync_to_async(self.critical)(message, *args, **context)
     """
     Helper class para logging estructurado con contexto.
     Soporta *args y kwargs estándar de logging (exc_info, extra, stack_info).

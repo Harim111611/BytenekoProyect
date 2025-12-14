@@ -5,13 +5,12 @@ Optimized with pre-caching and double bulk create for 10k+ imports in <5 seconds
 from django.core.management.base import BaseCommand
 from django.db import transaction, connection
 from surveys.signals import disable_signals, enable_signals
-from surveys.models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
+from surveys.models import Survey, Question, SurveyResponse, QuestionResponse
 from django.contrib.auth import get_user_model
 import importlib.util
 import sys
 import logging
 from datetime import datetime
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 User = get_user_model()

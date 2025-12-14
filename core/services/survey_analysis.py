@@ -4,7 +4,7 @@ import unicodedata
 import re
 from collections import defaultdict, Counter
 from django.core.cache import cache
-from django.db.models import Avg, Max, Min, Count, Q
+from django.db.models import Avg, Max, Min, Count
 from django.db.models.functions import TruncDate
 from surveys.models import QuestionResponse
 
@@ -591,25 +591,26 @@ class SurveyAnalysisService:
             return [d['option'] for d in top_8] + ["Otros"], [d['count'] for d in top_8] + [sum(d['count'] for d in others)]
 
     @staticmethod
-    def get_analysis_data(survey, responses_queryset, include_charts=None, cache_key=None, config=None):
+    @staticmethod
+    async def get_analysis_data(survey, responses_queryset, include_charts=None, cache_key=None, config=None):
         config = config or {}
         tone = config.get('tone', 'FORMAL').upper()
         include_quotes = config.get('include_quotes', True)
         
         if cache_key is None:
-            total = responses_queryset.count()
-            last_id = responses_queryset.order_by('-id').values_list('id', flat=True).first() or 0
+            total = await sync_to_async(responses_queryset.count)()
+            last_id = await sync_to_async(lambda: responses_queryset.order_by('-id').values_list('id', flat=True).first() or 0)()
             cache_key = f"analysis_v20_ultra:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}"
             
         cached = cache.get(cache_key)
         if cached: return cached
 
-        questions = list(survey.questions.prefetch_related('options').order_by('order'))
+        questions = await sync_to_async(lambda: list(survey.questions.prefetch_related('options').order_by('order')))()
         analyzable_q = [q for q in questions if q.type != 'section']
-        
-        numeric_stats, numeric_dist = SurveyAnalysisService._fetch_numeric_stats(analyzable_q, responses_queryset)
-        choice_dist = SurveyAnalysisService._fetch_choice_stats(analyzable_q, responses_queryset)
-        text_responses = SurveyAnalysisService._fetch_text_responses(analyzable_q, responses_queryset)
+
+        numeric_stats, numeric_dist = await SurveyAnalysisService._fetch_numeric_stats(analyzable_q, responses_queryset)
+        choice_dist = await SurveyAnalysisService._fetch_choice_stats(analyzable_q, responses_queryset)
+        text_responses = await SurveyAnalysisService._fetch_text_responses(analyzable_q, responses_queryset)
         
         analysis_data = []
         satisfaction_values = []
@@ -685,47 +686,49 @@ class SurveyAnalysisService:
             analysis_data.append(item)
 
         kpi = round(sum(satisfaction_values)/len(satisfaction_values), 1) if satisfaction_values else 0
-        evolution = TimelineEngine.analyze_evolution(responses_queryset)
-        
+        evolution = await sync_to_async(TimelineEngine.analyze_evolution)(responses_queryset)
         result = {
             'analysis_data': analysis_data, 'kpi_prom_satisfaccion': kpi,
-            'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': responses_queryset.count(),
+            'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': await sync_to_async(responses_queryset.count)(),
             'evolution': evolution
         }
         cache.set(cache_key, result, 3600)
         return result
 
     @staticmethod
-    def _fetch_numeric_stats(analyzable_q, qs):
+    @staticmethod
+    async def _fetch_numeric_stats(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type in ['scale', 'number']]
         if not ids: return {}, {}
         valid = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs, numeric_value__isnull=False)
-        stats_qs = valid.values('question_id').annotate(cnt=Count('id'), avg=Avg('numeric_value'), max_val=Max('numeric_value'), min_val=Min('numeric_value'))
+        stats_qs = await sync_to_async(lambda: list(valid.values('question_id').annotate(cnt=Count('id'), avg=Avg('numeric_value'), max_val=Max('numeric_value'), min_val=Min('numeric_value'))))()
         stats = {x['question_id']: {'count': x['cnt'], 'avg': float(x['avg']), 'max': x['max_val'], 'min': x['min_val']} for x in stats_qs}
         dist = defaultdict(list)
-        dist_qs = valid.values('question_id', 'numeric_value').annotate(cnt=Count('id'))
+        dist_qs = await sync_to_async(lambda: list(valid.values('question_id', 'numeric_value').annotate(cnt=Count('id'))))()
         for x in dist_qs: dist[x['question_id']].append({'value': x['numeric_value'], 'count': x['cnt']})
         return stats, dist
 
     @staticmethod
-    def _fetch_choice_stats(analyzable_q, qs):
+    @staticmethod
+    async def _fetch_choice_stats(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type in ['single', 'multi', 'radio', 'select']]
         if not ids: return {}
         dist = defaultdict(list)
-        dist_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).values('question_id', 'selected_option__text').annotate(cnt=Count('id'))
+        dist_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).values('question_id', 'selected_option__text').annotate(cnt=Count('id'))))()
         for x in dist_qs:
             if x['selected_option__text']: dist[x['question_id']].append({'option': x['selected_option__text'], 'count': x['cnt']})
         return dist
 
     @staticmethod
-    def _fetch_text_responses(analyzable_q, qs):
+    @staticmethod
+    async def _fetch_text_responses(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type == 'text']
         if not ids: return {}
         res = defaultdict(list)
         try:
-            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:200]
+            res_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:200]))()
         except Exception:
-            res_qs = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:200]
+            res_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:200]))()
         for x in res_qs: res[x['question_id']].append(x['text_value'])
         return res
     

@@ -1,11 +1,10 @@
 # surveys/signals.py
-from django.db.models.signals import post_save, post_delete, pre_delete
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.core.cache import cache
 from .models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
 import logging
 import threading
-from datetime import datetime
 
 logger = logging.getLogger('surveys')
 

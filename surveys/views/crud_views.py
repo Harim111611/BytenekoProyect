@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET
+from asgiref.sync import sync_to_async
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
 from django.urls import reverse, reverse_lazy
@@ -23,70 +24,68 @@ logger = StructuredLogger('surveys')
 @login_required
 @require_POST
 @transaction.atomic
-def api_create_survey_from_json(request):
+async def api_create_survey_from_json(request):
     content_type = request.content_type or ''
     if 'application/json' not in content_type:
         return JsonResponse({'success': False, 'error': 'Content-Type debe ser application/json.'}, status=415)
 
     try:
         data = json.loads(request.body)
-        
         title = data.get('title') or 'Encuesta Publicada'
         description = data.get('description') or ''
         category = data.get('category') or 'General'
         status = data.get('status') or Survey.STATUS_DRAFT 
         sample_goal = int(data.get('sample_goal', 0) or 0)
-        
         questions_data = data.get('structure', [])
-
         if not questions_data or not isinstance(questions_data, list):
-             return JsonResponse({'success': False, 'error': 'La encuesta debe tener al menos una pregunta válida (structure).'}, status=400)
-             
-        survey = Survey.objects.create(
-            title=title,
-            description=description,
-            status=status,
-            category=category,
-            sample_goal=sample_goal,
-            author=request.user,
-            is_imported=False
-        )
-        
+            return JsonResponse({'success': False, 'error': 'La encuesta debe tener al menos una pregunta válida (structure).'}, status=400)
+        @sync_to_async
+        def create_survey():
+            return Survey.objects.create(
+                title=title,
+                description=description,
+                status=status,
+                category=category,
+                sample_goal=sample_goal,
+                author=request.user,
+                is_imported=False
+            )
+        survey = await create_survey()
         for idx, q_data in enumerate(questions_data):
             question_text = q_data.get('text') or ''
             question_type = q_data.get('type') or 'text'
-            
             if not question_text:
                 raise ValidationError(f"La pregunta en la posición {idx + 1} no tiene texto.")
-            
-            question = Question.objects.create(
-                survey=survey,
-                text=question_text,
-                type=question_type,
-                order=idx + 1,
-                is_required=q_data.get('required', False)
-            )
-            
+            @sync_to_async
+            def create_question():
+                return Question.objects.create(
+                    survey=survey,
+                    text=question_text,
+                    type=question_type,
+                    order=idx + 1,
+                    is_required=q_data.get('required', False)
+                )
+            question = await create_question()
             options = q_data.get('options') or []
             if options and isinstance(options, list):
                 for opt_idx, opt_text in enumerate(options):
                     if opt_text:
-                        AnswerOption.objects.create(question=question, text=opt_text, order=opt_idx + 1)
-        
-        log_user_action('publish_survey', success=True, user_id=request.user.id, survey_title=survey.title)
-        
+                        @sync_to_async
+                        def create_option():
+                            return AnswerOption.objects.create(question=question, text=opt_text, order=opt_idx + 1)
+                        await create_option()
+        await sync_to_async(log_user_action)(
+            'publish_survey', success=True, user_id=request.user.id, survey_title=survey.title
+        )
         return JsonResponse({
             'success': True, 
             'survey_id': survey.id, 
             'redirect_url': reverse('surveys:detail', args=[survey.public_id])
         })
-        
     except ValidationError as e:
         return JsonResponse({'success': False, 'error': f"Error de validación: {e.message}"}, status=400)
-        
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido en el cuerpo de la petición.'}, status=400)
-        
     except Exception as e:
         logger.error(f"[CREATE_SURVEY][API_ERROR] {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': f"Error interno: {str(e)}"}, status=500)
@@ -94,8 +93,8 @@ def api_create_survey_from_json(request):
 
 @login_required
 @require_GET
-def survey_list_count(request):
-    count = Survey.objects.filter(owner=request.user).count()
+async def survey_list_count(request):
+    count = await sync_to_async(Survey.objects.filter(owner=request.user).count)()
     return JsonResponse({"count": count})
 
 
@@ -111,17 +110,14 @@ def legacy_survey_redirect_view(request, pk, legacy_path=None):
 
 @login_required
 @require_GET
-def delete_task_status(request, task_id):
+async def delete_task_status(request, task_id):
     from celery.result import AsyncResult
-    
-    result = AsyncResult(task_id)
-    
+    result = await sync_to_async(AsyncResult, thread_sensitive=True)(task_id)
     response_data = {
         'task_id': task_id,
         'status': result.state,
         'ready': result.ready(),
     }
-    
     if result.ready():
         if result.successful():
             response_data['result'] = result.result
@@ -132,14 +128,13 @@ def delete_task_status(request, task_id):
     else:
         if hasattr(result.info, 'get'):
             response_data['progress'] = result.info.get('progress', 0)
-    
     return JsonResponse(response_data)
 
 
 @login_required
 @require_POST
 @ratelimit(key="user", rate="50/h", method="POST", block=True)
-def bulk_delete_surveys_view(request):
+async def bulk_delete_surveys_view(request):
     from surveys.tasks import delete_surveys_task
     
     survey_ids = request.POST.getlist('survey_ids')
@@ -159,7 +154,7 @@ def bulk_delete_surveys_view(request):
         return redirect('surveys:list')
 
     base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
-    count = base_qs.count()
+    count = await sync_to_async(base_qs.count)()
     if count == 0:
         msg = 'No tienes permisos o las encuestas no existen.'
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -176,13 +171,15 @@ def bulk_delete_surveys_view(request):
 
     if task_result is None:
         try:
-            with transaction.atomic():
-                deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
-            
+            @sync_to_async
+            def delete_surveys():
+                with transaction.atomic():
+                    deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
+                return deleted_count
+            deleted_count = await delete_surveys()
             msg = f'Se eliminaron {len(clean_ids)} encuesta(s).'
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': True, 'deleted': deleted_count, 'message': msg})
-            
             messages.success(request, msg)
             return redirect('surveys:list')
         except Exception as e:
@@ -391,19 +388,19 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
 
 @login_required
 @require_POST
-def handle_goal_decision(request, public_id):
-    survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
+async def handle_goal_decision(request, public_id):
+    @sync_to_async
+    def get_survey():
+        return get_object_or_404(Survey, public_id=public_id, author=request.user)
+    survey = await get_survey()
     decision = request.POST.get('decision')
-    
     if decision == 'continue':
         survey.sample_goal = 0
         survey.status = Survey.STATUS_ACTIVE
-        survey.save()
+        await sync_to_async(survey.save)()
         messages.success(request, "¡Meta removida! La encuesta está activa nuevamente sin límites.")
-        
     elif decision == 'stop':
         survey.status = Survey.STATUS_CLOSED
-        survey.save()
+        await sync_to_async(survey.save)()
         messages.info(request, "Encuesta cerrada oficialmente. Meta cumplida.")
-        
     return redirect('surveys:detail', public_id=public_id)

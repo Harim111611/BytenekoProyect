@@ -55,9 +55,3 @@ app.conf.task_routes = {
     # 'surveys.tasks.generate_chart_*': {'queue': 'charts'},
     # 'surveys.tasks.process_survey_import': {'queue': 'imports'},
 }
-
-@app.task(bind=True, ignore_result=True)
-def debug_task(self):
-    """Debug task to test Celery configuration."""
-    import logging
-    logging.getLogger(__name__).info(f'Request: {self.request!r}')

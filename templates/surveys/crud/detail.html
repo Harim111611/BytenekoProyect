@@ -122,6 +122,60 @@ function publicarEncuesta(modo) {
 {% csrf_token %}
 <div class="container-xl p-4 p-md-5">
 
+    <!-- Modal para agregar nueva pregunta (moved arriba para evitar race conditions) -->
+    <div class="modal fade" id="addQuestionModal" tabindex="-1" aria-labelledby="addQuestionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary-subtle border-bottom-0">
+                    <h5 class="modal-title fw-bold" id="addQuestionModalLabel">
+                        <i class="bi bi-plus-square me-2"></i> Agregar Nueva Pregunta
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label">Texto de la pregunta</label>
+                        <textarea id="new-question-text" class="form-control" rows="3"></textarea>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de pregunta</label>
+                            <select id="new-question-type" class="form-select">
+                                <option value="text">Texto libre</option>
+                                <option value="number">Número</option>
+                                <option value="single">Selección simple</option>
+                                <option value="multi">Selección múltiple</option>
+                                <option value="scale">Escala</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check form-switch mt-3">
+                                <input class="form-check-input" type="checkbox" id="new-question-required">
+                                <label class="form-check-label small text-muted" for="new-question-required">Requerida</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 d-none" id="new-question-options-block">
+                        <label class="form-label small">Opciones (una por línea)</label>
+                        <textarea id="new-question-options" class="form-control" rows="4" placeholder="Opción 1\nOpción 2\nOpción 3"></textarea>
+                        <div class="form-text">Solo se usan para preguntas de selección simple o múltiple.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 bg-body-tertiary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="saveNewQuestionBtn" onclick="saveNewQuestionFromModal()">
+                        <i class="bi bi-save me-2"></i>Crear Pregunta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botón invisible para reutilizar comportamiento onclick existente -->
+    <button id="openAddQuestionModalBtn" type="button" class="d-none" data-bs-toggle="modal" data-bs-target="#addQuestionModal"></button>
+
     {% if show_goal_modal %}
     <div class="modal fade" id="goalReachedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered">
@@ -526,18 +580,19 @@ function publicarEncuesta(modo) {
             <div class="modal-header bg-secondary-subtle border-bottom-0">
                 <h5 class="modal-title fw-bold d-flex align-items-center" id="questionChangesModalLabel">
                     <i class="bi bi-pencil-square me-2 fs-4"></i>
-                    Cambios de la Pregunta
+                    Editar Pregunta
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4" id="questionChangesModalBody">
+                <!-- El contenido se rellena dinámicamente con campos editables -->
             </div>
             <div class="modal-footer border-top-0 bg-body-tertiary">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-lg me-2"></i>Cerrar
+                    <i class="bi bi-x-lg me-2"></i>Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" id="questionChangesProceedBtn" onclick="(function(){ const id = this.dataset.questionId; if(id) proceedToEdit(id); }).call(this);">
-                    <i class="bi bi-pencil-square me-2"></i>Editar
+                <button type="button" class="btn btn-primary" id="questionChangesProceedBtn" onclick="(function(){ const id = this.dataset.questionId; if(id) saveQuestionFromModal(id); }).call(this);">
+                    <i class="bi bi-save me-2"></i>Guardar
                 </button>
             </div>
         </div>
@@ -576,6 +631,19 @@ function publicarEncuesta(modo) {
                     <i class="bi bi-trash me-2"></i>Sí, Eliminar Permanentemente
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast de guardado exitoso -->
+<div aria-live="polite" aria-atomic="true" class="position-fixed" style="z-index: 1080; right: 1rem; bottom: 1rem;">
+    <div id="saveSuccessToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                <strong class="toast-title">Guardado</strong>
+                <div class="toast-body-text small">Cambios guardados correctamente.</div>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
         </div>
     </div>
 </div>
@@ -685,7 +753,7 @@ function publicarEncuesta(modo) {
     function showQuestionChangesModal(questionId) {
         const container = document.getElementById('question-' + questionId);
         if (!container) {
-            // fallback: open edit directly
+            // fallback: abrir modo de edición in-place
             document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
             document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
             return;
@@ -697,15 +765,23 @@ function publicarEncuesta(modo) {
         const options = container.dataset.options ? container.dataset.options.split('\n').filter(o => o.trim()) : [];
 
         const modalBody = document.getElementById('questionChangesModalBody');
-        if (!modalBody) return; // safety
+        if (!modalBody) return; // seguridad
+
+        // Rellenar modal con campos editables y vista de tipo/opciones (no editables)
         modalBody.innerHTML = `
-            <p class="mb-2"><strong>Texto actual:</strong> ${escapeHtml(text)}</p>
-            <p class="mb-2"><strong>Tipo:</strong> ${escapeHtml(type)}</p>
-            <p class="mb-2"><strong>Requerida:</strong> ${required ? 'Sí' : 'No'}</p>
-            ${options.length ? '<div class="mt-2"><strong>Opciones:</strong><div class="mt-2">' + options.map(o => `<span class="badge bg-body-tertiary text-secondary border border-dashed me-1 mb-1">${escapeHtml(o)}</span>`).join('') + '</div></div>' : ''}
-            <p class="text-info mt-3 mb-0">
-                Solo el texto de la pregunta y el estado de "Requerida" son editables. El tipo y las opciones de la pregunta están bloqueados.
-            </p>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Texto de la pregunta</label>
+                <textarea class="form-control" id="modal-text-${questionId}" rows="3">${escapeHtml(text)}</textarea>
+            </div>
+            <div class="mb-3 d-flex align-items-center gap-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="modal-required-${questionId}" ${required ? 'checked' : ''}>
+                    <label class="form-check-label small text-muted" for="modal-required-${questionId}">Requerida</label>
+                </div>
+                <div class="ms-auto small text-muted">Tipo: <span class="badge bg-body-tertiary text-secondary ms-1">${escapeHtml(type)}</span></div>
+            </div>
+            ${options.length ? '<div class="mb-3"><label class="form-label small text-muted">Opciones (no editables)</label><div>' + options.map(o => `<span class="badge bg-body-tertiary text-secondary border border-dashed me-1 mb-1">${escapeHtml(o)}</span>`).join('') + '</div></div>' : ''}
+            <div class="alert alert-info small">Solo el texto y el indicador "Requerida" se pueden editar; el tipo y las opciones están bloqueados en este estado.</div>
         `;
 
         const proceedBtn = document.getElementById('questionChangesProceedBtn');
@@ -716,16 +792,81 @@ function publicarEncuesta(modo) {
         modal.show();
     }
 
-    function proceedToEdit(questionId) {
-        const modalEl = document.getElementById('questionChangesModal');
-        const modalInstance = bootstrap.Modal.getInstance(modalEl);
-        if (modalInstance) modalInstance.hide();
+    // Guardar los cambios desde el modal mediante AJAX
+    function saveQuestionFromModal(questionId) {
+        const textEl = document.getElementById('modal-text-' + questionId);
+        const requiredEl = document.getElementById('modal-required-' + questionId);
+        if (!textEl || !requiredEl) return;
 
-        // Ocultar solo los modos de vista originales
-        document.querySelectorAll('.view-mode-' + questionId).forEach(el => el.classList.add('d-none'));
-        
-        // Mostrar los modos de edición
-        document.querySelectorAll('.edit-mode-' + questionId).forEach(el => el.classList.remove('d-none'));
+        const text = textEl.value.trim();
+        const isRequired = requiredEl.checked;
+
+        const container = document.getElementById('question-' + questionId);
+        const originalType = container ? container.dataset.type : '';
+        const originalOptions = container && container.dataset.options ? container.dataset.options.split('\n').filter(o => o.trim()) : [];
+
+        const saveBtn = document.getElementById('questionChangesProceedBtn');
+        const originalBtnHtml = saveBtn ? saveBtn.innerHTML : null;
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Guardando';
+        }
+
+        fetch(`/surveys/questions/${questionId}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ 
+                text: text,
+                is_required: isRequired,
+                type: originalType,
+                options: originalOptions
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
+            if (data.success) {
+                // Actualizar DOM: texto y badge "Requerida"
+                const container = document.getElementById('question-' + questionId);
+                if (container) {
+                    // actualizar texto en vista
+                    const viewTitle = container.querySelector('.view-mode-' + questionId + ' h6') || container.querySelector('h6');
+                    if (viewTitle) viewTitle.textContent = text;
+
+                    // actualizar dataset
+                    container.dataset.text = text;
+                    container.dataset.required = isRequired ? 'true' : 'false';
+                }
+
+                const modalEl = document.getElementById('questionChangesModal');
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+
+                // Mostrar toast de éxito y recargar tras breve pausa
+                showSaveToast('Pregunta guardada', 'Los cambios se han guardado correctamente.');
+                setTimeout(() => { location.reload(); }, 900);
+            } else {
+                alert('Error al guardar: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = originalBtnHtml; }
+            alert('Error de conexión al guardar la pregunta.');
+        });
+    }
+
+    // Mostrar un toast de Bootstrap con mensaje de éxito
+    function showSaveToast(title, message) {
+        const toastEl = document.getElementById('saveSuccessToast');
+        if (!toastEl) return;
+        toastEl.querySelector('.toast-title').textContent = title;
+        toastEl.querySelector('.toast-body-text').textContent = message;
+        const toast = new bootstrap.Toast(toastEl, { delay: 2500 });
+        toast.show();
     }
 
     function escapeHtml(str) {
@@ -844,34 +985,205 @@ function publicarEncuesta(modo) {
     }
     
     function addNewQuestion() {
-        const surveyId = "{{ survey.public_id }}";
-        const text = prompt('Texto de la nueva pregunta:');
-        if (!text) return;
-        
-        fetch(`/surveys/${surveyId}/questions/add/`, {
+        // Diagnóstico: mostrar que se llamó la función
+        try { console.log('addNewQuestion() called'); } catch (e) {}
+
+        // Intentar abrir el modal usando la API de Bootstrap directamente
+        let modalEl = document.getElementById('addQuestionModal');
+        if (!modalEl) {
+            try { console.warn('addNewQuestion: modal element not found — creating dynamically'); } catch (e) {}
+            createAddQuestionModalIfMissing();
+            modalEl = document.getElementById('addQuestionModal');
+            if (!modalEl) {
+                alert('No se encontró el modal de agregar pregunta y la creación dinámica falló. Revisa la consola.');
+                return;
+            }
+        }
+
+        try {
+            if (window.bootstrap && bootstrap.Modal) {
+                try { console.log('addNewQuestion: using bootstrap.Modal to show modal'); } catch (e) {}
+                const m = new bootstrap.Modal(modalEl);
+                m.show();
+                return;
+            } else {
+                try { console.warn('addNewQuestion: bootstrap.Modal not available'); } catch (e) {}
+            }
+        } catch (e) {
+            try { console.warn('Bootstrap Modal show failed', e); } catch (ee) {}
+        }
+
+        // Si bootstrap no está disponible, mostrar el modal manualmente
+        try {
+            console.log('addNewQuestion: attempting manual show fallback');
+            manualShowModal(modalEl);
+            return;
+        } catch (e) {
+            console.error('addNewQuestion: manualShowModal failed', e);
+        }
+
+        // Fallback: disparar evento click en el botón oculto
+        const btn = document.getElementById('openAddQuestionModalBtn');
+        if (btn) {
+            try {
+                btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                return;
+            } catch (e) {
+                try { console.warn('dispatchEvent failed', e); } catch (ee) {}
+            }
+        }
+
+        // Último recurso: informar al usuario
+        alert('No se pudo abrir el modal de crear pregunta. Revisa la consola del navegador para más detalles.');
+    }
+
+    // Crea dinámicamente el modal de agregar pregunta si no existe (fall-back robusto)
+    function createAddQuestionModalIfMissing() {
+        if (document.getElementById('addQuestionModal')) return;
+        const html = `
+        <div class="modal fade" id="addQuestionModal" tabindex="-1" aria-labelledby="addQuestionModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header bg-primary-subtle border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="addQuestionModalLabel">
+                            <i class="bi bi-plus-square me-2"></i> Agregar Nueva Pregunta
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label">Texto de la pregunta</label>
+                            <textarea id="new-question-text" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Tipo de pregunta</label>
+                                <select id="new-question-type" class="form-select">
+                                    <option value="text">Texto libre</option>
+                                    <option value="number">Número</option>
+                                    <option value="single">Selección simple</option>
+                                    <option value="multi">Selección múltiple</option>
+                                    <option value="scale">Escala</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input" type="checkbox" id="new-question-required">
+                                    <label class="form-check-label small text-muted" for="new-question-required">Requerida</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 d-none" id="new-question-options-block">
+                            <label class="form-label small">Opciones (una por línea)</label>
+                            <textarea id="new-question-options" class="form-control" rows="4" placeholder="Opción 1\nOpción 2\nOpción 3"></textarea>
+                            <div class="form-text">Solo se usan para preguntas de selección simple o múltiple.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 bg-body-tertiary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="saveNewQuestionBtn" onclick="saveNewQuestionFromModal()">
+                            <i class="bi bi-save me-2"></i>Crear Pregunta
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        document.body.appendChild(wrapper.firstElementChild);
+
+        // Inicializar listeners para el nuevo modal
+        const typeEl = document.getElementById('new-question-type');
+        const optionsBlock = document.getElementById('new-question-options-block');
+        if (typeEl && optionsBlock) {
+            typeEl.addEventListener('change', function() {
+                const t = this.value;
+                if (t === 'single' || t === 'multi') optionsBlock.classList.remove('d-none'); else optionsBlock.classList.add('d-none');
+            });
+        }
+    }
+
+    function manualShowModal(modalEl) {
+        if (!modalEl) return;
+        // agregar backdrop
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+        modalEl.removeAttribute('aria-hidden');
+        modalEl.setAttribute('aria-modal', 'true');
+        try { console.log('manualShowModal: modal displayed'); } catch (e) {}
+    }
+</script>
+{% endblock %}
+
+<script>
+    // Mostrar/ocultar bloque de opciones según tipo seleccionado
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeEl = document.getElementById('new-question-type');
+        const optionsBlock = document.getElementById('new-question-options-block');
+        if (typeEl && optionsBlock) {
+            function toggleOptions() {
+                const t = typeEl.value;
+                if (t === 'single' || t === 'multi') {
+                    optionsBlock.classList.remove('d-none');
+                } else {
+                    optionsBlock.classList.add('d-none');
+                }
+            }
+            typeEl.addEventListener('change', toggleOptions);
+            toggleOptions();
+        }
+    });
+
+    function saveNewQuestionFromModal() {
+        const text = document.getElementById('new-question-text').value.trim();
+        const type = document.getElementById('new-question-type').value;
+        const isRequired = document.getElementById('new-question-required').checked;
+        const optionsText = document.getElementById('new-question-options').value || '';
+        const options = optionsText.split('\n').map(s => s.trim()).filter(Boolean);
+
+        if (!text) {
+            alert('Escribe el texto de la pregunta.');
+            return;
+        }
+
+        const saveBtn = document.getElementById('saveNewQuestionBtn');
+        const original = saveBtn.innerHTML;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creando';
+
+        fetch(`/surveys/{{ survey.public_id }}/questions/add/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             },
-            body: JSON.stringify({ 
-                text: text,
-                type: 'text',
-                is_required: false
-            })
+            body: JSON.stringify({ text: text, type: type, is_required: isRequired, options: options })
         })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = original;
             if (data.success) {
-                location.reload();
+                const modalEl = document.getElementById('addQuestionModal');
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) modalInstance.hide();
+                showSaveToast('Pregunta creada', 'La nueva pregunta se agregó correctamente.');
+                setTimeout(() => location.reload(), 800);
             } else {
                 alert('Error al crear pregunta: ' + (data.error || 'Error desconocido'));
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al crear la pregunta');
+        .catch(err => {
+            console.error(err);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = original;
+            alert('Error de conexión al crear la pregunta.');
         });
     }
 </script>
-{% endblock %}

@@ -4,9 +4,7 @@ Este subdirectorio contiene servicios reutilizables que encapsulan lógica de ne
 
 ## Archivos
 
-- **analysis_service.py**: Servicio genérico de análisis de datos
 - **survey_analysis.py**: Análisis especializado de encuestas
-- **test_analysis_service.py**: Tests para análisis genérico
 - **test_survey_analysis.py**: Tests para análisis de encuestas
 
 ## Funcionalidad
@@ -18,7 +16,6 @@ Proporciona funciones genéricas de análisis:
 - Cálculos de tendencias
 
 ```python
-from core.services.analysis_service import analyze_data
 
 stats = analyze_data(survey_responses)
 ```
@@ -33,7 +30,6 @@ Análisis especializado para encuestas:
 ```python
 from core.services.survey_analysis import AnalyzeSurvey
 
-survey_analysis = AnalyzeSurvey(survey)
 results = survey_analysis.generate_report()
 ```
 

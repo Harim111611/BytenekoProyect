@@ -1,5 +1,4 @@
 """
-Tests para core/services/analysis_service.py
 Tests unitarios para TextAnalyzer, DataFrameBuilder, QuestionAnalyzer y NPSCalculator
 """
 import pytest
@@ -11,7 +10,6 @@ from django.contrib.auth.models import User
 from surveys.models import (
     Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
 )
-from core.services.analysis_service import (
     TextAnalyzer,
     DataFrameBuilder,
     QuestionAnalyzer,
@@ -354,7 +352,6 @@ class TestQuestionAnalyzerNumeric:
         assert 'Bueno' in result['insight']
     
     @pytest.mark.django_db
-    @patch('core.services.analysis_service.ChartGenerator.generate_vertical_bar_chart')
     def test_analyze_numeric_generates_chart(
         self, mock_chart, question_scale, survey, user
     ):
@@ -480,7 +477,6 @@ class TestQuestionAnalyzerChoice:
         assert apple_opt['count'] == 2
     
     @pytest.mark.django_db
-    @patch('core.services.analysis_service.ChartGenerator.generate_horizontal_bar_chart')
     def test_analyze_choice_generates_chart(
         self, mock_chart, question_single, survey, user
     ):
@@ -549,7 +545,6 @@ class TestQuestionAnalyzerText:
         assert result['insight'] != ''
     
     @pytest.mark.django_db
-    @patch('core.services.analysis_service.TextAnalyzer.analyze_text_responses')
     def test_analyze_text_with_keywords(
         self, mock_analyzer, question_text, survey, user
     ):
@@ -573,7 +568,6 @@ class TestQuestionAnalyzerText:
         assert 'excellent' in result['insight']
     
     @pytest.mark.django_db
-    @patch('core.services.analysis_service.TextAnalyzer.analyze_text_responses')
     def test_analyze_text_no_keywords(
         self, mock_analyzer, question_text, survey, user
     ):
@@ -678,7 +672,6 @@ class TestNPSCalculator:
         assert result['score'] == 30.0
     
     @pytest.mark.django_db
-    @patch('core.services.analysis_service.ChartGenerator.generate_nps_chart')
     def test_calculate_nps_generates_chart(
         self, mock_chart, question_scale, survey, user
     ):

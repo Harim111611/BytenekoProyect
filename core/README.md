@@ -30,7 +30,6 @@ Migraciones de base de datos de Django. Se generan automáticamente y versionan 
 
 #### `/services/`
 Lógica de negocio reutilizable:
-- `analysis_service.py`: Análisis de datos y estadísticas
 - `survey_analysis.py`: Análisis específico de encuestas
 
 #### `/utils/`
