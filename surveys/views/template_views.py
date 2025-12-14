@@ -1,4 +1,4 @@
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
@@ -7,9 +7,11 @@ from surveys.models import SurveyTemplate
 import json
 from asgiref.sync import sync_to_async
 
-@login_required
 @require_http_methods(["POST"])
 async def create_template(request):
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     """Crea una nueva plantilla de encuesta basada en un JSON."""
     try:
         data = json.loads(request.body)
@@ -42,9 +44,11 @@ async def create_template(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-@login_required
 @require_http_methods(["GET"])
 async def list_templates(request):
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     """Lista las plantillas disponibles (campos ligeros)."""
     try:
         # Optimizamos la query trayendo solo lo necesario
@@ -58,9 +62,11 @@ async def list_templates(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-@login_required
 @require_http_methods(["PUT", "PATCH"])
 async def update_template(request, template_id):
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     """Actualiza una plantilla existente."""
     template = await sync_to_async(get_object_or_404, thread_sensitive=True)(SurveyTemplate, id=template_id)
     try:
@@ -88,9 +94,11 @@ async def update_template(request, template_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-@login_required
 @require_http_methods(["DELETE", "POST"])
 async def delete_template(request, template_id):
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     """
     Elimina una plantilla. 
     Se permite POST también para mayor compatibilidad si el frontend lo requiere,

@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, JsonResponse, Http404
 from django.contrib import messages
@@ -18,6 +18,8 @@ from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django_ratelimit.decorators import ratelimit
 from asgiref.sync import sync_to_async
+
+from django.contrib.auth.views import redirect_to_login
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob
 from core.utils.logging_utils import StructuredLogger
@@ -178,12 +180,15 @@ def _process_crosstab_for_template(crosstab_raw):
 # VISTAS PRINCIPALES
 # ============================================================
 
-@login_required
 async def survey_results_view(request, public_id):
     """
     Vista principal del Dashboard de Resultados.
     Orquesta los datos del Service y los pasa al Template.
     """
+    # Manual authentication check for async view
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     try:
         survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
             Survey.objects.select_related('author').prefetch_related('questions__options'),
@@ -192,7 +197,7 @@ async def survey_results_view(request, public_id):
     except Http404:
         render_async = sync_to_async(render, thread_sensitive=True)
         return await render_async(request, 'surveys/crud/not_found.html', {'survey_id': public_id}, status=404)
-    await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
+    await PermissionHelper.verify_survey_access(survey, request.user)
 
     # --- 1. Filtros ---
     start = request.GET.get('start')
@@ -226,7 +231,7 @@ async def survey_results_view(request, public_id):
     # --- 2. Obtener Análisis General ---
     cache_key = f"analysis_view_v17_{survey.id}_{start}_{end}_{segment_col}_{segment_val}"
 
-    analysis_result = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
+    analysis_result = await SurveyAnalysisService.get_analysis_data(
         survey,
         respuestas_qs,
         config={'tone': 'FORMAL', 'include_quotes': True}
@@ -297,12 +302,14 @@ async def survey_results_view(request, public_id):
     return await render_async(request, 'surveys/responses/results.html', context)
 
 
-@login_required
 async def report_preview(request, public_id):
     """Vista AJAX para preview de reportes."""
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     try:
         survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
-        await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
+        await PermissionHelper.verify_survey_access(survey, request.user)
         start = request.POST.get('start_date') or request.GET.get('start_date')
         end = request.POST.get('end_date') or request.GET.get('end_date')
         window = request.POST.get('window_days')
@@ -314,7 +321,7 @@ async def report_preview(request, public_id):
             respuestas_qs = await sync_to_async(lambda: respuestas_qs.filter(created_at__gte=start_dt), thread_sensitive=True)()
         elif start or end:
             respuestas_qs, _ = await sync_to_async(DateFilterHelper.apply_filters, thread_sensitive=True)(respuestas_qs, start, end)
-        analysis = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
+        analysis = await SurveyAnalysisService.get_analysis_data(
             survey, respuestas_qs, include_charts=True
         )
         for item in analysis.get('analysis_data', []):
@@ -334,10 +341,12 @@ async def report_preview(request, public_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@login_required
 @ratelimit(key='user', rate='10/h', method='GET', block=True)
 async def export_survey_csv_view(request, public_id):
     """Exportar resultados de encuesta a CSV."""
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
     try:
         survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author=request.user)
     except Http404:
@@ -380,7 +389,6 @@ async def export_survey_csv_view(request, public_id):
 # API ENDPOINTS
 # ============================================================
 
-@login_required
 async def survey_analysis_ajax(request, public_id):
     """API para obtener datos JSON puros (útil para recargar gráficas)."""
     try:
@@ -392,7 +400,6 @@ async def survey_analysis_ajax(request, public_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-@login_required
 async def api_crosstab_view(request, public_id):
     """API dedicada para cargar cruces de variables vía AJAX."""
     try:
@@ -416,12 +423,11 @@ async def api_crosstab_view(request, public_id):
         logger.error(f"Error crosstab api: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-@login_required
 async def debug_analysis_view(request, public_id):
     """Vista de depuración para verificar qué está viendo el sistema."""
     survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
     await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
-    analysis = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(survey, await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)())
+    analysis = await SurveyAnalysisService.get_analysis_data(survey, await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)())
     return JsonResponse(analysis, encoder=DjangoJSONEncoder)
 
 async def survey_thanks_view(request):
@@ -432,7 +438,6 @@ async def survey_thanks_view(request):
         'success': request.GET.get('success') == '1'
     })
 
-@login_required
 async def change_survey_status(request, public_id):
     """Endpoint para cambiar estado (Active/Pause/Closed)."""
     if request.method != 'POST':

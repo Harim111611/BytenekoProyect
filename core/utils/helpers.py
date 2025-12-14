@@ -186,14 +186,14 @@ class PermissionHelper:
         if survey.author != user:
             # Log security event
             log_security = get_log_security_event()
-            await sync_to_async(log_security)(
+            await log_security(
                 'unauthorized_survey_access',
                 severity='WARNING',
                 user_id=user.id,
                 survey_id=survey.id,
                 survey_author_id=survey.author.id
             )
-            await sync_to_async(logger.warning)(
+            logger.warning(
                 f"User {user.id} tried to access survey {survey.id} without permission"
             )
             raise PermissionDenied("No tiene permiso para acceder a esta encuesta")

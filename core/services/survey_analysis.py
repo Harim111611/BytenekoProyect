@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.db.models import Avg, Max, Min, Count
 from django.db.models.functions import TruncDate
 from surveys.models import QuestionResponse
+from asgiref.sync import sync_to_async
 
 # --- 1. MOTOR DE ENSAMBLAJE DE NARRATIVA ---
 

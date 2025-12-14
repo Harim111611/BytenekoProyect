@@ -44,7 +44,7 @@ async def respond_survey_view(request, public_id):
         )
 
     # Encuesta no activa (cerrada, pausada, fuera de ventana, etc.)
-    if not await sync_to_async(PermissionHelper.verify_survey_is_active, thread_sensitive=True)(survey):
+    if not PermissionHelper.verify_survey_is_active(survey):
         await sync_to_async(messages.warning, thread_sensitive=True)(request, "Esta encuesta no está activa actualmente.")
         redirect_async = sync_to_async(redirect, thread_sensitive=True)
         url = f"{reverse('surveys:thanks')}?public_id={survey.public_id}&status={survey.status}"
