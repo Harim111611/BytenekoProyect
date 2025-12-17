@@ -41,12 +41,12 @@ class OwnerRequiredMixin(UserPassesTestMixin):
     
     def test_func(self):
         """Verifica si el usuario es el creador de la encuesta."""
-        # Para vistas basadas en clases con pk
         identifier = self.kwargs.get('public_id') or self.kwargs.get('pk')
         if identifier and hasattr(self, 'survey_object'):
             is_owner = self.survey_object.author == self.request.user
             return is_owner
-        return True
+        # Si no hay identificador o survey_object, negar acceso
+        return False
     
     def handle_no_permission(self):
         """Maneja el caso de usuario sin permiso."""

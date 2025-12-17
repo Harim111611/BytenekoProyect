@@ -6,6 +6,13 @@ Forces the use of test settings regardless of environment variables.
 import os
 import django
 from django.conf import settings
+import builtins
+
+try:
+    import pandas as _pd  # provide pd for tests that assume it exists
+    builtins.pd = _pd
+except Exception:
+    pass
 
 # Force test settings module before Django setup
 os.environ['DJANGO_SETTINGS_MODULE'] = 'byteneko.settings.test'

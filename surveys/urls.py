@@ -27,6 +27,8 @@ urlpatterns = [
     # 2. Crear NUEVA encuesta desde CSV (Listado) - SOLUCIONA EL ERROR NoReverseMatch
     path('import/new/preview/', import_csv_preview_view, name='import_preview'),
     path('import/new/start/', import_views.csv_create_start_import, name='import_survey_csv_async'), # Mantenemos el nombre que busca el template
+    # Alias esperado por algunos tests/clients
+    path('import/new/', import_views.csv_create_start_import, name='import_new'),
     
     # 3. Polling de Estado (Para ambos casos)
     path('task_status/<str:task_id>/', import_views.get_task_status_view, name='task_status'),

@@ -1,3 +1,20 @@
+
+# --- SYNC WRAPPERS FOR DJANGO TEST CLIENT ---
+# (Moved to end of file to avoid NameError)
+
+# --- SYNC WRAPPERS FOR DJANGO TEST CLIENT ---
+def dashboard_view_sync(request):
+    from asgiref.sync import async_to_sync
+    return async_to_sync(dashboard_view)(request)
+
+def dashboard_results_view_sync(request):
+    from asgiref.sync import async_to_sync
+    return async_to_sync(dashboard_results_view)(request)
+from asgiref.sync import async_to_sync
+
+# --- SYNC WRAPPERS FOR DJANGO TEST CLIENT ---
+# (Moved below imports to avoid NameError)
+
 """
 core/views.py
 Módulo de vistas principales para el dashboard, reportes y análisis.
@@ -7,7 +24,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 from django.shortcuts import render, get_object_or_404
-from asgiref.sync import sync_to_async
+from asgiref.sync import sync_to_async, async_to_sync
 from django.http import HttpResponse, Http404, JsonResponse, HttpRequest
 from django.utils import timezone
 from django.utils.text import slugify
@@ -17,6 +34,13 @@ from django.template.loader import render_to_string
 from django.core.cache import cache
 from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Max
 from django_ratelimit.decorators import ratelimit
+
+# --- SYNC WRAPPERS FOR DJANGO TEST CLIENT ---
+def dashboard_view_sync(request: HttpRequest) -> HttpResponse:
+    return async_to_sync(dashboard_view)(request)
+
+def dashboard_results_view_sync(request: HttpRequest) -> HttpResponse:
+    return async_to_sync(dashboard_results_view)(request)
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, Question
 from core.services.survey_analysis import SurveyAnalysisService
@@ -300,7 +324,7 @@ def _generate_performance_alerts_optimized(user_surveys) -> List[Dict[str, Any]]
         status='active', created_at__lt=seven_days_ago, sample_goal__gt=0
     ).annotate(resp_count=Count('responses')).annotate(
         progress_pct=ExpressionWrapper(F('resp_count') * 100.0 / F('sample_goal'), output_field=FloatField())
-    ).filter(progress_pct__lt=ALERT_PROGRESS_MIN).select_related().order_by('-updated_at')[:5]
+    ).filter(progress_pct__lt=ALERT_PROGRESS_MIN).order_by('-updated_at')[:5]
 
     alerts = []
     for s in alerts_qs:

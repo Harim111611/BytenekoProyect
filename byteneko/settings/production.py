@@ -71,7 +71,7 @@ DATABASES = {
             'connect_timeout': 5,
             'options': '-c statement_timeout=60000', 
         },
-        'ATOMIC_REQUESTS': True,
+        'ATOMIC_REQUESTS': False,  # Disable to allow async views
     }
 }
 
@@ -137,7 +137,15 @@ except ValueError:
     MIDDLEWARE.insert(0, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 # Habilitar compresión y hashing (versionado automático)
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Migración a STORAGES (Django 5.x)
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 if config('USE_S3', default=False, cast=bool):
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'

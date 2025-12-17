@@ -10,7 +10,7 @@ def test_dashboard_view_authenticated():
     user = User.objects.create_user(username='testuser', password='testpass')
     client = Client()
     client.login(username='testuser', password='testpass')
-    response = client.get(reverse('dashboard'))
+    response = client.get(reverse('dashboard'), follow=True)
     assert response.status_code == 200
     assert 'dashboard' in response.context['page_name']
     assert 'kpis' in response.context
@@ -21,7 +21,7 @@ def test_dashboard_results_view_authenticated():
     user = User.objects.create_user(username='testuser', password='testpass')
     client = Client()
     client.login(username='testuser', password='testpass')
-    response = client.get(reverse('dashboard_results'))
+    response = client.get(reverse('dashboard_results'), follow=True)
     assert response.status_code == 200
     assert 'total_responses' in response.context
     assert 'global_satisfaction' in response.context

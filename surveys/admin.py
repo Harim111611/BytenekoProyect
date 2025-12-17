@@ -351,3 +351,16 @@ class AnswerOptionAdmin(admin.ModelAdmin):
         manager = getattr(obj, 'questionresponse', None) or getattr(obj, 'questionresponse_set', None)
         count = manager.count() if manager else 0
         return format_html('<strong>{}</strong> times selected', count)
+
+
+# Registro faltante para pruebas: QuestionResponse en el admin
+@admin.register(QuestionResponse)
+class QuestionResponseAdmin(admin.ModelAdmin):
+    list_display = ('id', 'survey_response', 'question', 'selected_option', 'numeric_value', 'short_text')
+    list_filter = ('question__survey', 'question__type')
+    search_fields = ('question__text', 'text_value')
+
+    def short_text(self, obj):
+        t = obj.text_value or ''
+        return (t[:50] + '...') if len(t) > 50 else t
+    short_text.short_description = 'Texto'

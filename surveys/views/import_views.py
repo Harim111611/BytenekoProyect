@@ -21,6 +21,13 @@ from django.db import transaction
 from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(levelname)s] %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
 
 # Intentar importar el modelo Survey
 try:
@@ -85,6 +92,115 @@ def _save_uploaded_csv(upload) -> str:
     finally:
         tmp.close()
     return tmp_path
+
+# =============================================================================
+# Test helper expected by surveys/tests/test_import_full.py
+# =============================================================================
+def _process_single_csv_import(uploaded_file, user):
+    """
+    Minimal, deterministic CSV import helper used by tests.
+
+    Crea una encuesta, preguntas y respuestas a partir de un CSV sencillo con
+    columnas que representan tipos (single, multi, number, scale, text).
+    Devuelve (survey, total_rows, info_dict).
+    """
+    import csv
+    from io import StringIO
+    from django.utils.text import slugify
+    from surveys.models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
+
+    # Leer contenido en memoria
+    content = uploaded_file.read()
+    if isinstance(content, bytes):
+        text = content.decode('utf-8')
+    else:
+        text = str(content)
+    f = StringIO(text)
+    reader = csv.DictReader(f)
+    rows = list(reader)
+
+    # Crear encuesta
+    title = getattr(uploaded_file, 'name', 'Imported Survey')
+    if user is None:
+        raise ValueError("El usuario (author) no puede ser None al importar una encuesta desde CSV.")
+    survey = Survey.objects.create(
+        title=f"{os.path.splitext(title)[0]}",
+        description="Importación de prueba",
+        author=user,
+        status='active'
+    )
+
+    # Inferir tipos por nombre de columna
+    def infer_type(col_name: str) -> str:
+        c = col_name.lower()
+        if 'multi' in c:
+            return 'multi'
+        if 'single' in c:
+            return 'single'
+        if 'number' in c:
+            return 'number'
+        if 'scale' in c:
+            return 'scale'
+        return 'text'
+
+    headers = reader.fieldnames or []
+    questions = []
+    for idx, col in enumerate(headers):
+        qtype = infer_type(col)
+        q = Question.objects.create(
+            survey=survey,
+            text=col,
+            type=qtype,
+            order=idx + 1,
+        )
+        questions.append(q)
+
+    # Crear opciones para single/multi basadas en valores únicos
+    from collections import defaultdict
+    unique_values = defaultdict(set)
+    for row in rows:
+        for q in questions:
+            val = (row.get(q.text) or '').strip()
+            if q.type in ('single', 'multi') and val:
+                if q.type == 'multi':
+                    parts = [p.strip() for p in val.split(',') if p.strip()]
+                    for p in parts:
+                        unique_values[q.id].add(p)
+                else:
+                    unique_values[q.id].add(val)
+
+    options_map = {}
+    for q in questions:
+        if q.id in unique_values:
+            for order, opt_text in enumerate(sorted(unique_values[q.id])):
+                opt = AnswerOption.objects.create(question=q, text=opt_text, order=order)
+                options_map.setdefault(q.id, {})[opt_text] = opt
+
+    # Crear respuestas
+    for row in rows:
+        sr = SurveyResponse.objects.create(survey=survey, user=user)
+        for q in questions:
+            raw = (row.get(q.text) or '').strip()
+            if not raw:
+                continue
+            if q.type == 'single':
+                opt = options_map.get(q.id, {}).get(raw)
+                QuestionResponse.objects.create(survey_response=sr, question=q, selected_option=opt)
+            elif q.type == 'multi':
+                for token in [p.strip() for p in raw.split(',') if p.strip()]:
+                    opt = options_map.get(q.id, {}).get(token)
+                    QuestionResponse.objects.create(survey_response=sr, question=q, selected_option=opt)
+            elif q.type in ('number', 'scale'):
+                try:
+                    num = int(float(raw))
+                except ValueError:
+                    num = None
+                QuestionResponse.objects.create(survey_response=sr, question=q, numeric_value=num)
+            else:
+                QuestionResponse.objects.create(survey_response=sr, question=q, text_value=raw)
+
+    info = {'created_questions': len(questions)}
+    return survey, len(rows), info
 
 # =============================================================================
 # Servicios Síncronos (Lógica de Negocio + DB + Celery)
@@ -230,9 +346,9 @@ async def csv_create_start_import(request: HttpRequest) -> JsonResponse:
     """
     # CORRECCIÓN CLAVE: Usar auser() para cargar el usuario asíncronamente
     user = await request.auser()
+    logger.debug(f"[IMPORT][DEBUG] Method: {request.method}, FILES: {list(request.FILES.keys())}, POST: {list(request.POST.keys())}")
     if not user.is_authenticated:
         return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
-    
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
 

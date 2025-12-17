@@ -239,7 +239,12 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     #    Esta función analiza los datos y crea lo que falte en la BD
     questions_map = _prepare_questions_map(survey, headers, rows, date_column)
 
-    chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 5000)
+    # Expose chunk_size as a module-level variable for monkeypatching in tests
+    global chunk_size
+    try:
+        chunk_size = chunk_size  # Use if already set (e.g., by test monkeypatch)
+    except NameError:
+        chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 5000)
     total_rows = len(rows)
     final_rows_inserted = 0
     

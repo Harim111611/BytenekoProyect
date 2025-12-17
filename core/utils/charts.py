@@ -7,9 +7,15 @@ import io
 import base64
 import logging
 
-# --- Plotly para gráficos interactivos ---
-import plotly.graph_objects as go
-import plotly.io as pio
+# --- Plotly para gráficos interactivos (opcional) ---
+try:
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    _HAS_PLOTLY = True
+except Exception:
+    go = None
+    pio = None
+    _HAS_PLOTLY = False
 import pandas as pd
 import itertools
 import matplotlib.pyplot as plt # Asegurar importacion de pyplot
@@ -106,14 +112,23 @@ class ChartGenerator:
 
     @staticmethod
     def _fig_to_html(fig):
+        # Intentar usar Plotly cuando esté disponible
+        if _HAS_PLOTLY and pio is not None:
+            try:
+                return pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={
+                    'displayModeBar': False,
+                    'responsive': True
+                })
+            except Exception as e:
+                logger.debug(f"Fallo to_html de plotly, usando fallback base64: {e}")
+        # Fallback seguro: exportar la figura (matplotlib) a PNG base64
         try:
-            return pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={
-                'displayModeBar': False,
-                'responsive': True # IMPORTANTE: Permite que el JS ajuste el ancho
-            })
+            if hasattr(fig, 'savefig'):
+                b64 = ChartGenerator._fig_to_base64(fig)
+                return f'<img src="data:image/png;base64,{b64}" alt="chart" />'
         except Exception as e:
-            logger.error(f"Error chart (plotly): {e}")
-            return None
+            logger.error(f"Error en fallback de conversión a HTML: {e}")
+        return ""
 
     @classmethod
     def generate_horizontal_bar_chart_plotly(

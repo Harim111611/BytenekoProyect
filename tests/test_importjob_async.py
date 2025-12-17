@@ -75,7 +75,8 @@ def test_chunk_processing(monkeypatch, test_user):
 def test_import_survey_csv_async_view(client_logged, test_user, temp_csv_file):
     with open(temp_csv_file, 'rb') as f:
         upload = SimpleUploadedFile('test.csv', f.read(), content_type='text/csv')
-    response = client_logged.post(reverse('surveys:import_survey_csv_async'), {'csv_file': upload})
+        async_client = AsyncClient()
+        response = await async_client.post(reverse('surveys:import_survey_csv_async'), {'csv_file': upload})
     assert response.status_code == 200
     data = response.json()
     assert 'job_id' in data
@@ -86,7 +87,7 @@ def test_import_survey_csv_async_view(client_logged, test_user, temp_csv_file):
 def test_import_job_status_endpoint(client_logged, test_user, temp_csv_file):
     job = ImportJob.objects.create(user=test_user, csv_file=temp_csv_file, status='processing', processed_rows=10, total_rows=100)
     url = reverse('surveys:import_job_status', args=[job.id])
-    response = client_logged.get(url)
+    response = client_logged.get(url, follow=True)
     assert response.status_code == 200
     data = response.json()
     assert data['status'] == 'processing'
@@ -97,7 +98,7 @@ def test_import_job_status_endpoint(client_logged, test_user, temp_csv_file):
 def test_import_job_status_endpoint_failed(client_logged, test_user, temp_csv_file):
     job = ImportJob.objects.create(user=test_user, csv_file=temp_csv_file, status='failed', error_message='Error de prueba')
     url = reverse('surveys:import_job_status', args=[job.id])
-    response = client_logged.get(url)
+    response = client_logged.get(url, follow=True)
     assert response.status_code == 200
     data = response.json()
     assert data['status'] == 'failed'

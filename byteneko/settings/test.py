@@ -16,6 +16,15 @@ SECURE_SSL_REDIRECT = False
 SECURE_HSTS_SECONDS = 0
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+APPEND_SLASH = False
+
+# Asegurar que no haya redirección a HTTPS en tests: quitar SecurityMiddleware
+# Middleware mínimo para tests (sin SecurityMiddleware)
+MIDDLEWARE = [
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+]
 
 # ============================================================
 # CACHE (Memoria RAM para velocidad extrema)

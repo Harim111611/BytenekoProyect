@@ -1,18 +1,22 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models.manager import BaseManager
+from django.db.models.query import QuerySet
+from django.db.models.base import Model
 from django.views.decorators.http import require_POST, require_GET
 from asgiref.sync import sync_to_async
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, UpdateView, DeleteView, CreateView
 from django.urls import reverse, reverse_lazy
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from django.db.models import Count, Prefetch, Q
 from django.core.exceptions import FieldError, ValidationError
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponse, HttpResponse, HttpResponse, JsonResponse, HttpResponseRedirect
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from django.db import transaction
 import json
+from typing import Any, Callable
 
 from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey, Question, AnswerOption
@@ -22,7 +26,7 @@ from core.utils.logging_utils import StructuredLogger, log_user_action
 logger = StructuredLogger('surveys')
 
 # --- Helper Service for Atomic Creation ---
-def create_survey_service(user, data):
+def create_survey_service(user, data) -> Survey:
     """
     Servicio síncrono para crear la encuesta y sus relacionados atómicamente.
     """
@@ -34,7 +38,7 @@ def create_survey_service(user, data):
         sample_goal = int(data.get('sample_goal', 0) or 0)
         questions_data = data.get('structure', [])
 
-        survey = Survey.objects.create(
+        survey: Survey = Survey.objects.create(
             title=title,
             description=description,
             status=status,
@@ -51,7 +55,7 @@ def create_survey_service(user, data):
             if not question_text:
                 raise ValidationError(f"La pregunta en la posición {idx + 1} no tiene texto.")
             
-            question = Question.objects.create(
+            question: Question = Question.objects.create(
                 survey=survey,
                 text=question_text,
                 type=question_type,
@@ -69,7 +73,7 @@ def create_survey_service(user, data):
 
 @login_required
 @require_POST
-async def api_create_survey_from_json(request):
+async def api_create_survey_from_json(request) -> JsonResponse:
     """
     Vista asíncrona que delega la creación transaccional a un hilo síncrono.
     """
@@ -85,7 +89,7 @@ async def api_create_survey_from_json(request):
             return JsonResponse({'success': False, 'error': 'La encuesta debe tener al menos una pregunta válida (structure).'}, status=400)
 
         # Ejecutamos la lógica DB en un hilo síncrono para mantener la atomicidad
-        survey = await sync_to_async(create_survey_service)(request.user, data)
+        survey: Survey = await sync_to_async(create_survey_service)(request.user, data)
 
         await sync_to_async(log_user_action)(
             'publish_survey', success=True, user_id=request.user.id, survey_title=survey.title
@@ -108,25 +112,25 @@ async def api_create_survey_from_json(request):
 
 @login_required
 @require_GET
-async def survey_list_count(request):
+async def survey_list_count(request) -> JsonResponse:
     # Nota: .count() es síncrono, envolvemos la llamada
-    count = await sync_to_async(Survey.objects.filter(owner=request.user).count)()
+    count: int = await sync_to_async(Survey.objects.filter(owner=request.user).count)()
     return JsonResponse({"count": count})
 
 
-def legacy_survey_redirect_view(request, pk, legacy_path=None):
-    survey = get_object_or_404(Survey, pk=pk)
-    base = reverse('surveys:detail', args=[survey.public_id])
+def legacy_survey_redirect_view(request, pk, legacy_path=None) -> HttpResponseRedirect:
+    survey: Survey = get_object_or_404(Survey, pk=pk)
+    base: str = reverse('surveys:detail', args=[survey.public_id])
     if legacy_path:
         cleaned = legacy_path.strip('/')
         if cleaned:
-            base = f"{base.rstrip('/')}/{cleaned}/"
+            base: str = f"{base.rstrip('/')}/{cleaned}/"
     return redirect(base)
 
 
 @login_required
 @require_GET
-def delete_task_status(request, task_id):
+def delete_task_status(request, task_id) -> JsonResponse:
     """
     Vista SÍNCRONA para consultar el estado de la tarea.
     Evita errores 500 causados por la interacción entre Celery, async views y hilos.
@@ -167,7 +171,7 @@ def delete_task_status(request, task_id):
 @login_required
 @require_POST
 @ratelimit(key="user", rate="50/h", method="POST", block=True)
-def bulk_delete_surveys_view(request):
+def bulk_delete_surveys_view(request) -> JsonResponse | HttpResponseRedirect:
     """
     Vista SÍNCRONA para compatibilidad con rate_limit y llamadas a Celery.
     """
@@ -183,7 +187,7 @@ def bulk_delete_surveys_view(request):
             return HttpResponseRedirect(reverse('surveys:list'))
 
         try:
-            clean_ids = [int(sid) for sid in survey_ids]
+            clean_ids: list[int] = [int(sid) for sid in survey_ids]
         except ValueError:
             logger.error('[BULK_DELETE] IDs inválidos.')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -191,7 +195,7 @@ def bulk_delete_surveys_view(request):
             messages.error(request, 'IDs de encuestas inválidos.')
             return HttpResponseRedirect(reverse('surveys:list'))
 
-        base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
+        base_qs: BaseManager[Survey] = Survey.objects.filter(id__in=clean_ids, author=request.user)
         if base_qs.count() == 0:
             msg = 'No tienes permisos o las encuestas no existen.'
             logger.error(f'[BULK_DELETE] {msg}')
@@ -213,7 +217,7 @@ def bulk_delete_surveys_view(request):
                 with transaction.atomic():
                     deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
                 
-                msg = f'Se eliminaron {len(clean_ids)} encuesta(s).'
+                msg: str = f'Se eliminaron {len(clean_ids)} encuesta(s).'
                 logger.info(f'[BULK_DELETE][SYNC_DELETE] {msg}')
                 
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -252,38 +256,38 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
     context_object_name = 'surveys'
     paginate_by = 12
 
-    def get(self, request, *args, **kwargs):
-        category_filter = request.GET.get('category', '').strip()
+    def get(self, request, *args, **kwargs) -> HttpResponseRedirect | HttpResponse:
+        category_filter: str = request.GET.get('category', '').strip()
         
         if category_filter:
-            exists = Survey.objects.filter(author=request.user, category=category_filter).exists()
+            exists: bool = Survey.objects.filter(author=request.user, category=category_filter).exists()
             if not exists:
                 messages.info(request, f"Filtro eliminado: La categoría '{category_filter}' ya no tiene encuestas.")
                 return redirect('surveys:list')
 
         return super().get(request, *args, **kwargs)
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        qs = qs.filter(author=self.request.user)
+    def get_queryset(self) -> BaseManager[Survey]:
+        qs: BaseManager[Survey] = super().get_queryset()
+        qs: BaseManager[Survey] = qs.filter(author=self.request.user)
         try:
-            q = (self.request.GET.get('q') or '').strip()
-            status = (self.request.GET.get('status') or '').strip()
-            category = (self.request.GET.get('category') or '').strip()
+            q: str = (self.request.GET.get('q') or '').strip()
+            status: str = (self.request.GET.get('status') or '').strip()
+            category: str = (self.request.GET.get('category') or '').strip()
 
             if q:
-                qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+                qs: BaseManager[Survey] = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
             if status:
-                qs = qs.filter(status=status)
+                qs: BaseManager[Survey] = qs.filter(status=status)
             if category: 
-                qs = qs.filter(category=category)
+                qs: BaseManager[Survey] = qs.filter(category=category)
 
         except Exception as e:
             logger.warning(f"SurveyListView.get_queryset: Exception: {e}")
             pass
         
         try:
-            qs = qs.annotate(
+            qs: BaseManager[Survey] = qs.annotate(
                 total_responses=Count('responses', distinct=True),
                 total_questions=Count('questions', distinct=True),
             )
@@ -291,13 +295,13 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
             pass
         
         try:
-            qs = qs.order_by('-created_at')
+            qs: BaseManager[Survey] = qs.order_by('-created_at')
         except FieldError:
-            qs = qs.order_by('-id')
+            qs: BaseManager[Survey] = qs.order_by('-id')
         return qs
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         context['unique_categories'] = Survey.objects.filter(
             author=self.request.user
         ).values_list('category', flat=True).distinct().order_by('category')
@@ -311,7 +315,7 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Any]:
         return super().get_queryset().prefetch_related(
             Prefetch(
                 'questions',
@@ -321,8 +325,8 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             )
         )
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         survey = context.get('survey') or self.object
         
         base_url = getattr(settings, 'PUBLIC_BASE_URL', '').strip()
@@ -330,7 +334,7 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
             base_url = base_url.rstrip('/')
         else:
             base_url = self.request.build_absolute_uri('/').rstrip('/')
-        respond_path = reverse('surveys:respond', args=[survey.public_id])
+        respond_path: str = reverse('surveys:respond', args=[survey.public_id])
         context['respond_absolute_url'] = f"{base_url}{respond_path}"
         
         responses_count = survey.responses.count()
@@ -347,22 +351,22 @@ class SurveyDetailView(LoginRequiredMixin, OwnerRequiredMixin, DetailView):
 class SurveyCreateView(LoginRequiredMixin, CreateView):
     model = Survey
     template_name = 'surveys/forms/survey_create.html'
-    fields = ['title', 'description', 'category', 'sample_goal']
-    success_url = reverse_lazy('surveys:list')
+    fields: list[str] = ['title', 'description', 'category', 'sample_goal']
+    success_url: str | Callable[..., Any] | None = reverse_lazy('surveys:list')
 
-    def post(self, request, *args, **kwargs):
-        content_type = request.content_type or ''
+    def post(self, request, *args, **kwargs) -> HttpResponse:
+        content_type: str = request.content_type or ''
         if 'application/json' in content_type:
             pass
         return super().post(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         from surveys.models import SurveyTemplate
         context['survey_templates'] = SurveyTemplate.objects.all()
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form) -> HttpResponse:
         form.instance.author = self.request.user
         form.instance.status = 'draft'
         log_user_action('create_survey', success=True, user_id=self.request.user.id, survey_title=form.instance.title)
@@ -377,15 +381,15 @@ class SurveyUpdateView(LoginRequiredMixin, OwnerRequiredMixin, UpdateView):
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
 
-    def get_success_url(self):
+    def get_success_url(self) -> str:
         return reverse('surveys:detail', kwargs={'public_id': self.object.public_id})
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get_context_data(self, **kwargs) -> dict[str, Any]:
+        context: dict[str, Any] = super().get_context_data(**kwargs)
         context['is_editing'] = True
         return context
 
-    def form_valid(self, form):
+    def form_valid(self, form) -> HttpResponse:
         messages.success(self.request, "Encuesta actualizada correctamente.")
         return super().form_valid(form)
 
@@ -396,14 +400,14 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
     """
     model = Survey
     template_name = 'surveys/crud/confirm_delete.html'
-    success_url = reverse_lazy('surveys:list')
+    success_url: str | None = reverse_lazy('surveys:list')
     slug_field = 'public_id'
     slug_url_kwarg = 'public_id'
 
-    def delete(self, request, *args, **kwargs):
+    def delete(self, request, *args, **kwargs) -> JsonResponse | HttpResponseRedirect:
         from surveys.tasks import delete_surveys_task
         
-        self.object = self.get_object()
+        self.object: Model = self.get_object()
         survey_id = self.object.id
         survey_title = self.object.title
         
@@ -420,10 +424,10 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
 
 @login_required
 @require_POST
-async def handle_goal_decision(request, public_id):
+async def handle_goal_decision(request, public_id) -> HttpResponseRedirect:
     @sync_to_async
-    def process_decision():
-        survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
+    def process_decision() -> str:
+        survey: Survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
         decision = request.POST.get('decision')
         
         if decision == 'continue':
@@ -438,5 +442,5 @@ async def handle_goal_decision(request, public_id):
         
         return reverse('surveys:detail', kwargs={'public_id': public_id})
 
-    url = await process_decision()
+    url: str = await process_decision()
     return HttpResponseRedirect(url)

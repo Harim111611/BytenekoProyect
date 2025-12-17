@@ -24,6 +24,8 @@ def test_import_csv_files():
         'data/samples/encuesta_hotel_huespedes.csv'
     ]
     user = User.objects.first()
+    if not user:
+        user = User.objects.create_user(username='importtest', password='test')
     for archivo in archivos:
         job = ImportJob.objects.create(user=user, csv_file=archivo, status='pending')
         result = process_survey_import(job.id)

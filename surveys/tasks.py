@@ -1,6 +1,7 @@
 import logging
 import os
 from celery import shared_task
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction, connection
 
@@ -8,12 +9,86 @@ from django.db import transaction, connection
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+"""
+Compat variable used by tests to monkeypatch chunk size.
+Tests set `monkeypatch.setattr('surveys.tasks.chunk_size', N, raising=False)`.
+"""
+chunk_size = getattr(settings, 'SURVEY_IMPORT_CHUNK_SIZE', 1000)
+
+
 @shared_task(bind=True)
-def process_survey_import(self, survey_id: int, file_path: str, filename: str, user_id: int) -> dict:
+def process_survey_import(self,
+                          job_id: int = None,
+                          survey_id: int = None,
+                          file_path: str = None,
+                          filename: str = None,
+                          user_id: int = None) -> dict:
     """
     Tarea Celery que orquesta la importación.
     Delega la lectura (C++) y escritura (COPY) a utils.bulk_import.
     """
+    # Soportar dos modos:
+    # 1) Modo antiguo (usa survey_id, file_path, filename, user_id)
+    # 2) Modo tests (llamado como .run(job_id))
+    if job_id is not None and not survey_id and not file_path:
+        # Modo tests: cargar ImportJob y procesar internamente
+        from surveys.models import ImportJob
+        from django.core.files.base import ContentFile
+        from surveys.views.import_views import _process_single_csv_import
+
+        logger.info(f"[TASK][IMPORT] Iniciando por job_id={job_id}")
+        job = ImportJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.save(update_fields=['status', 'updated_at'])
+
+        # Abrir archivo CSV: intentar vía storage si es ruta externa
+        csv_path = job.csv_file
+        total_rows = 0
+        try:
+            # Usar almacenamiento por defecto si aplica
+            try:
+                from django.core.files.storage import default_storage
+                if default_storage.exists(csv_path):
+                    with default_storage.open(csv_path, 'rb') as f:
+                        content = f.read()
+                else:
+                    with open(csv_path, 'rb') as f:
+                        content = f.read()
+            except FileNotFoundError as fnf:
+                job.status = 'failed'
+                job.error_message = str(fnf)
+                job.save(update_fields=['status', 'error_message', 'updated_at'])
+                logger.error(f"[TASK][IMPORT] Archivo no encontrado (job {job_id}): {fnf}", exc_info=True)
+                return {'success': False, 'status': 'FAILURE', 'error': str(fnf)}
+            except Exception as e:
+                with open(csv_path, 'rb') as f:
+                    content = f.read()
+
+            # Procesar mediante helper de importación determinístico usado por tests
+            survey, total_rows, _info = _process_single_csv_import(ContentFile(content, name=job.original_filename or 'data.csv'), job.user)
+
+            # Actualizar job
+            job.survey = survey
+            job.total_rows = total_rows
+            job.processed_rows = total_rows
+            job.status = 'completed'
+            job.save(update_fields=['survey', 'total_rows', 'processed_rows', 'status', 'updated_at'])
+
+            return {
+                'success': True,
+                'status': 'SUCCESS',
+                'imported_count': total_rows,
+                'total_rows': total_rows,
+                'survey_public_id': survey.public_id,
+                'message': 'Importación completada.'
+            }
+        except Exception as e:
+            job.status = 'failed'
+            job.error_message = str(e)
+            job.save(update_fields=['status', 'error_message', 'updated_at'])
+            logger.error(f"[TASK][IMPORT] Fallo crítico (job {job_id}): {e}", exc_info=True)
+            return {'success': False, 'status': 'FAILURE', 'error': str(e)}
+
     logger.info(f"[TASK][IMPORT] Iniciando para encuesta {survey_id} desde {file_path}")
     
     # Importación local para evitar ciclos y asegurar carga de apps

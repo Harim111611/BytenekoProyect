@@ -10,7 +10,7 @@ from datetime import datetime
 
 from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponse, JsonResponse, Http404
+from django.http import HttpResponse, JsonResponse, Http404, FileResponse
 from django.contrib import messages
 from django.template.loader import render_to_string
 from django.db.models import Q
@@ -353,15 +353,22 @@ async def export_survey_csv_view(request, public_id):
         messages.error(request, "Encuesta no encontrada.")
         return redirect('dashboard')
 
-    # Caso 1: Importada (Archivo original)
+    # Caso 1: Importada (Archivo original) — usar API de storage si es posible
     if getattr(survey, 'is_imported', False):
         import_job = await sync_to_async(lambda: ImportJob.objects.filter(survey=survey, status="completed").order_by('-created_at').first(), thread_sensitive=True)()
         import os
-        if import_job and import_job.csv_file and os.path.exists(import_job.csv_file):
-            with open(import_job.csv_file, 'rb') as f:
-                response = HttpResponse(f.read(), content_type='text/csv')
-                response['Content-Disposition'] = f'attachment; filename="{import_job.original_filename or "data.csv"}"'
-                return response
+        if import_job and import_job.csv_file:
+            # Intentar primero con el storage por si se usa S3 u otro backend
+            try:
+                from django.core.files.storage import default_storage
+                if default_storage.exists(import_job.csv_file):
+                    file_obj = default_storage.open(import_job.csv_file, 'rb')
+                    return FileResponse(file_obj, as_attachment=True, filename=import_job.original_filename or 'data.csv', content_type='text/csv')
+            except Exception:
+                pass
+            # Fallback a sistema de archivos local
+            if os.path.exists(import_job.csv_file):
+                return FileResponse(open(import_job.csv_file, 'rb'), as_attachment=True, filename=import_job.original_filename or 'data.csv', content_type='text/csv')
 
     # Caso 2: Nativa (Generar)
     respuestas = await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey).order_by('created_at').prefetch_related('question_responses__question'), thread_sensitive=True)()

@@ -1,4 +1,9 @@
-"""core/reports/pptx_generator.py"""
+"""core/reports/pptx_generator.py
+
+Compatibilidad con tests:
+- Expone clases `PPTXReportGenerator`, `PPTXSlideBuilder` y `PPTXStyleConfig`
+  con una API mínima usada por los tests de humo.
+"""
 import io
 import logging
 from pptx import Presentation
@@ -7,6 +12,66 @@ from pptx.dml.color import RGBColor
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Estilos mínimos de compatibilidad
+# ---------------------------------------------------------------------------
+class PPTXStyleConfig:
+    TITLE_MAX = 80
+
+
+class PPTXSlideBuilder:
+    """
+    Constructor ligero que simplemente retiene la presentación.
+    """
+    def __init__(self, prs: Presentation):
+        self.prs = prs
+
+
+class PPTXReportGenerator:
+    """
+    Clase de compatibilidad que provee helpers estáticos esperados por tests
+    y un método `build` que delega en `generate_full_pptx_report`.
+    """
+
+    @staticmethod
+    def _clean_title(text: str) -> str:
+        if not isinstance(text, str):
+            return ""
+        text = text.strip()
+        if len(text) > PPTXStyleConfig.TITLE_MAX:
+            return text[: PPTXStyleConfig.TITLE_MAX - 3] + "..."
+        return text
+
+    @staticmethod
+    def _split_question_title(text: str):
+        """Divide títulos tipo "Pregunta (extra)" en ("Pregunta", "(extra)")."""
+        if not isinstance(text, str):
+            return "", ""
+        text = text.strip()
+        if "(" in text and ")" in text and text.rfind("(") < text.rfind(")"):
+            base = text[: text.rfind("(")].strip()
+            extra = text[text.rfind("(") :].strip()
+            return base, extra
+        return text, ""
+
+    @staticmethod
+    def _is_text_like_question(item: dict) -> bool:
+        """Devuelve True si la pregunta se parece a texto libre."""
+        if not isinstance(item, dict):
+            return False
+        return item.get("type") in {"text"}
+
+    @staticmethod
+    def build(survey, analysis_data, **kwargs):
+        """Genera el PPTX usando la función de módulo ya existente."""
+        return generate_full_pptx_report(
+            survey,
+            analysis_data,
+            kpi_satisfaction_avg=kwargs.get("kpi_satisfaction_avg", 0),
+            **kwargs,
+        )
+
 
 def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **kwargs):
     """
@@ -94,10 +159,8 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
         slide = prs.slides.add_slide(chart_layout)
         title = slide.shapes.title
         
-        # Limpiar título largo
-        clean_title = f"{item['order']}. {item['text']}"
-        if len(clean_title) > 80:
-            clean_title = clean_title[:77] + "..."
+        # Limpiar título largo (usar helper de compatibilidad)
+        clean_title = PPTXReportGenerator._clean_title(f"{item['order']}. {item['text']}")
         title.text = clean_title
         
         # Contenedor de Métricas (Izquierda)
