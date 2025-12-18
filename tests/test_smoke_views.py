@@ -1,13 +1,14 @@
 import pytest
 from django.test import RequestFactory
 from core import views
+from asgiref.sync import async_to_sync
 
 def test_dashboard_view_smoke():
     from django.contrib.auth.models import AnonymousUser
     rf = RequestFactory()
     request = rf.get("/dashboard/")
     request.user = AnonymousUser()
-    response = views.dashboard_view(request)
+    response = async_to_sync(views.dashboard_view)(request)
     assert hasattr(response, "status_code")
 
 def test_dashboard_results_view_importable():

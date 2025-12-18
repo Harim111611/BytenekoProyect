@@ -17,6 +17,7 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', LOCAL_LAN_IP]
 MIDDLEWARE = [
     'core.middleware_logging.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Para servir estáticos con Gunicorn
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -46,10 +47,10 @@ CSRF_TRUSTED_ORIGINS = [
     f'http://{LOCAL_LAN_IP}:8010', 
 ]
 
-# 2. OPTIMIZACIÓN DE ARCHIVOS ESTÁTICOS
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+# 2. ARCHIVOS ESTÁTICOS CON WHITENOISE
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# 3. BASE DE DATOS OPTIMIZADA
+# 3. BASE DE DATOS OPTIMIZADA PARA 4GB RAM
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -58,10 +59,20 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default='127.0.0.1'),
         'PORT': config('DB_PORT', default='5432'),
+        'ATOMIC_REQUESTS': False,  # No atomic requests para mejor performance
+        'AUTOCOMMIT': True,
+        'CONN_MAX_AGE': 300,  # 5 minutos de persistent connections
+        'CONN_HEALTH_CHECKS': True,  # Check health de connections
         'OPTIONS': {
             'client_encoding': 'UTF8',
+            'connect_timeout': 10,
+            'options': '-c statement_timeout=30000',  # 30s timeout
         },
-        'CONN_MAX_AGE': 600, 
+        # Pool de conexiones limitado
+        'POOL_OPTIONS': {
+            'POOL_SIZE': 10,  # Máximo 10 conexiones por proceso
+            'MAX_OVERFLOW': 5,
+        },
     }
 }
 
@@ -192,26 +203,89 @@ LOGGING = {
     },
 }
 # ============================================================
-# PARIDAD DE PRODUCCIÓN PARA IMPORTACIÓN
+# OPTIMIZACIONES PARA 4GB RAM Y MÚLTIPLES IMPORTACIONES
 # ============================================================
+
+# Usar cpp_csv para importaciones (CRÍTICO para rendimiento)
+SURVEY_IMPORT_USE_CPP = True
 SURVEY_IMPORT_USE_COPY_QR = True
 
-# Tamaño del lote para inserción de datos (bulk_create / chunking de Pandas)
-SURVEY_IMPORT_CHUNK_SIZE = 5000
+# Chunks más pequeños para evitar picos de memoria
+SURVEY_IMPORT_CHUNK_SIZE = 2500  # Reducido de 5000 a 2500
+SURVEY_IMPORT_SAMPLE_SIZE = 5000  # Reducido de 10000 a 5000
+SURVEY_DELETE_CHUNK_SIZE = 2000  # Reducido de 5000 a 2000
 
-# Tamaño de la muestra para detección de tipo de columna
-SURVEY_IMPORT_SAMPLE_SIZE = 10000
-
-# CRÍTICO: Tamaño del lote para eliminación masiva (chunked deletion)
-SURVEY_DELETE_CHUNK_SIZE = 5000
+# Límites de memoria para procesamiento
+MAX_CSV_FILE_SIZE_MB = 50  # Máximo 50MB por archivo CSV
+MAX_CONCURRENT_IMPORTS = 6  # Máximo 6 importaciones simultáneas
 
 # ============================================================
-# CELERY (Modo asíncrono con worker real)
+# CELERY OPTIMIZADO PARA MÚLTIPLES USUARIOS
 # ============================================================
-# El broker URL se toma de base.py
 
-# Configuraciones de Celery Development
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1 
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000 
-CELERY_TASK_TIME_LIMIT = 300  # 5 min
-CELERY_TASK_SOFT_TIME_LIMIT = 240 # 4 min
+# Configuraciones de worker optimizadas
+CELERY_WORKER_PREFETCH_MULTIPLIER = 2  # Prefetch 2 tareas
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100  # Reciclar después de 100 tareas
+CELERY_TASK_TIME_LIMIT = 1800  # 30 min hard limit
+CELERY_TASK_SOFT_TIME_LIMIT = 1500  # 25 min soft limit
+
+# Configuraciones de cola
+CELERY_TASK_ACKS_LATE = True  # Ack después de completar
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_DISABLE_RATE_LIMITS = True
+
+# Compresión para ahorrar memoria
+CELERY_TASK_COMPRESSION = 'gzip'
+CELERY_RESULT_COMPRESSION = 'gzip'
+CELERY_RESULT_EXPIRES = 3600  # 1 hora
+
+# ============================================================
+# CACHE OPTIMIZADO PARA 4GB RAM
+# ============================================================
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 20,  # Limitado para 4GB
+                'retry_on_timeout': True,
+            },
+            'IGNORE_EXCEPTIONS': True,  # No fallar si Redis cae
+        },
+        'KEY_PREFIX': 'byteneko',
+        'TIMEOUT': 300,  # 5 minutos por defecto
+    }
+}
+
+# Session en Redis para liberar DB
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
+# ============================================================
+# OPTIMIZACIONES DE MEMORIA
+# ============================================================
+
+# Reducir DATA_UPLOAD_MAX_MEMORY_SIZE para controlar picos
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',  # Usar disco, no memoria
+]
+
+# Paginación por defecto más agresiva
+REST_FRAMEWORK_DEFAULT_PAGE_SIZE = 25  # Reducido de 50
+
+# Template caching - solo para producción, comentado en local
+# TEMPLATES[0]['APP_DIRS'] = False
+# TEMPLATES[0]['OPTIONS']['loaders'] = [
+#     ('django.template.loaders.cached.Loader', [
+#         'django.template.loaders.filesystem.Loader',
+#         'django.template.loaders.app_directories.Loader',
+#     ]),
+# ]

@@ -1,4 +1,5 @@
 """core/reports/pdf_generator.py"""
+import json
 import logging
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -11,6 +12,44 @@ except ImportError:
     HTML = None
 
 logger = logging.getLogger(__name__)
+
+
+def add_static_chart_images(analysis_data, include_charts: bool = True) -> None:
+    """Enriquece los ítems de analysis_data con `chart_image_base64` si es posible.
+
+    Útil para:
+    - PDF (WeasyPrint no ejecuta JS)
+    - Preview que quiere replicar el PDF (sin depender de Plotly/JS)
+    """
+    if not include_charts:
+        return
+    try:
+        from core.utils.charts import ChartGenerator
+    except Exception:
+        logger.exception("No se pudo importar ChartGenerator")
+        return
+
+    for item in analysis_data or []:
+        try:
+            labels = item.get('chart_labels') or []
+            counts = item.get('chart_data') or []
+            if not labels or not counts:
+                continue
+
+            q_type = item.get('type')
+            chart_b64 = None
+            if q_type in ['single', 'multi', 'radio', 'select']:
+                if (item.get('tipo_display') == 'doughnut') or (len(labels) <= 4):
+                    chart_b64 = ChartGenerator.generate_pie_chart(labels, counts, title='', dark_mode=False)
+                else:
+                    chart_b64 = ChartGenerator.generate_horizontal_bar_chart(labels, counts, title='', dark_mode=False)
+            elif q_type in ['scale', 'number', 'numeric']:
+                chart_b64 = ChartGenerator.generate_horizontal_bar_chart(labels, counts, title='', dark_mode=False)
+
+            if chart_b64:
+                item['chart_image_base64'] = chart_b64
+        except Exception:
+            logger.exception("No se pudieron generar imágenes de gráficos para un ítem")
 
 class DataNormalizer:
     """
@@ -31,12 +70,12 @@ class DataNormalizer:
             insight = item.get('insight_data') or {}
             q_type = item.get('type')
             
-            if q_type in ['scale', 'number']:
+            if q_type in ['scale', 'number', 'numeric']:
                 avg = insight.get('avg')
                 if avg is not None:
                     metric_display = f"{avg:.1f} (Promedio)"
             
-            elif q_type in ['single', 'multi']:
+            elif q_type in ['single', 'multi', 'radio', 'select']:
                 top = insight.get('top_option')
                 if top:
                     metric_display = f"{top['option']} ({top['count']})"
@@ -90,10 +129,19 @@ class PDFReportGenerator:
             'total_responses': kwargs.get('total_responses', 0)
         }
 
+        # Enriquecer analysis_data para PDF (WeasyPrint no ejecuta JS)
+        # Generamos imágenes estáticas (base64) a partir de chart_labels/chart_data.
+        for item in analysis_data or []:
+            # Compat: algunos flujos aún usan total_respuestas
+            if 'total_responses' not in item and 'total_respuestas' in item:
+                item['total_responses'] = item.get('total_respuestas', 0)
+        add_static_chart_images(analysis_data, include_charts=bool(options.get('include_charts')))
+
         # Contexto completo para el template
         context = {
             'survey': survey,
             'analysis': analysis_data,
+            'analysis_items': analysis_data,
             'kpi_score': kpi_satisfaction_avg,
             'generated_at': timezone.now(),
             'options': options,
@@ -124,12 +172,34 @@ class PDFReportGenerator:
         if HTML is None: return None
         
         try:
-            context = {
-                'data': data,
+            # Compat: el template global espera variables planas y `fecha_generacion`.
+            context: dict = {
+                **(data or {}),
+                'data': data or {},
                 'generated_at': timezone.now(),
+                'fecha_generacion': timezone.now(),
                 'company_name': getattr(settings, 'COMPANY_NAME', 'Byteneko SaaS'),
-                'is_global': True
+                'is_global': True,
             }
+
+            # Derivar distribución por categoría a partir de los campos usados en charts.
+            # _get_analytics_summary entrega `categoria_labels`/`categoria_data` como JSON strings.
+            labels = context.get('categoria_labels')
+            values = context.get('categoria_data')
+            try:
+                if isinstance(labels, str):
+                    labels = json.loads(labels)
+                if isinstance(values, str):
+                    values = json.loads(values)
+                if isinstance(labels, list) and isinstance(values, list):
+                    context['categoria_distribution'] = list(zip(labels, values))
+            except Exception:
+                context['categoria_distribution'] = None
+
+            # Defaults numéricos amigables
+            for k in ['total_surveys', 'total_active', 'total_responses']:
+                if context.get(k) is None:
+                    context[k] = 0
             
             # Usamos un template específico o reutilizamos uno genérico con flag is_global
             html_string = render_to_string('core/reports/_global_results_pdf.html', context)

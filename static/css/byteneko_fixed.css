@@ -1843,15 +1843,12 @@ a:hover { color: var(--bk-primary); }
 }
 
 /* Import modal exception - no epic effects */
-#importModalPreview .modal-content {
-    animation: none !important;
-}
-
-#importModalPreview .modal-header {
-    animation: none !important;
-}
-
+#importModalPreview .modal-content,
+#importModalPreview .modal-header,
 #importModalPreview .modal-body {
+    background: auto !important;
+    border: 1px solid #dee2e6 !important;
+    box-shadow: auto !important;
     animation: none !important;
 }
 

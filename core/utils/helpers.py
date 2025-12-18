@@ -183,18 +183,21 @@ class PermissionHelper:
         Raises:
             PermissionDenied: If the user does not have access
         """
-        if survey.author != user:
-            # Log security event
+        # Use the foreign-key id to avoid triggering a sync DB access from async context
+        survey_author_id = getattr(survey, 'author_id', None)
+        user_id = getattr(user, 'id', None)
+        if survey_author_id != user_id:
+            # Log security event without accessing related objects
             log_security = get_log_security_event()
             await log_security(
                 'unauthorized_survey_access',
                 severity='WARNING',
-                user_id=user.id,
-                survey_id=survey.id,
-                survey_author_id=survey.author.id
+                user_id=user_id,
+                survey_id=getattr(survey, 'id', None),
+                survey_author_id=survey_author_id
             )
             logger.warning(
-                f"User {user.id} tried to access survey {survey.id} without permission"
+                f"User {user_id} tried to access survey {getattr(survey, 'id', None)} without permission"
             )
             raise PermissionDenied("No tiene permiso para acceder a esta encuesta")
     

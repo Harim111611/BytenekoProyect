@@ -1,65 +1,124 @@
-# Docker Compose para Byteneko (desarrollo local)
+# Docker Compose Optimizado para 4GB RAM Total
+# Soporta múltiples usuarios con importaciones simultáneas
 
 services:
   db:
     image: postgres:15-alpine
     container_name: byteneko_db
+    env_file:
+      - .env.docker
     environment:
-      POSTGRES_DB: byteneko_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Seiyadepegaso16
+      POSTGRES_DB: ${POSTGRES_DB:-byteneko_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     ports:
       - "5432:5432"
-    mem_limit: 1g
+    mem_limit: 800m
+    mem_reservation: 600m
+    cpus: 1.5
+    command: |
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=64MB
+      -c max_connections=50
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:6-alpine
     container_name: byteneko_redis
     ports:
       - "6379:6379"
-    mem_limit: 256m
+    mem_limit: 200m
+    mem_reservation: 128m
+    cpus: 0.5
+    command: |
+      redis-server
+      --maxmemory 150mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-backlog 511
+      --timeout 300
+      --tcp-keepalive 60
+      --loglevel notice
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
   django:
     build: .
     container_name: byteneko_app
+    env_file:
+      - .env.docker
     environment:
-      DJANGO_SETTINGS_MODULE: byteneko.settings.local
-      DB_HOST: db
-      DB_NAME: byteneko_db
-      DB_USER: postgres
-      DB_PASSWORD: Seiyadepegaso16
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-    command: python manage.py runserver 0.0.0.0:8000
+      PYTHONHASHSEED: random
+      PYTHONMALLOC: malloc
+      TMPDIR: /tmp
+    command: gunicorn byteneko.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4 --worker-class gthread --worker-tmp-dir /dev/shm --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload
     volumes:
       - .:/usr/src/app
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/media
+      - /dev/shm:/dev/shm
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
-    mem_limit: 1.5g
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 1400m
+    mem_reservation: 1000m
+    cpus: 2.0
+    restart: unless-stopped
 
   celery_worker:
     build: .
     container_name: byteneko_celery
-    command: celery -A byteneko worker --loglevel=info --concurrency=8
+    env_file:
+      - .env.docker
     environment:
-      DJANGO_SETTINGS_MODULE: byteneko.settings.local
-      DB_HOST: db
-      DB_NAME: byteneko_db
-      DB_USER: postgres
-      DB_PASSWORD: Seiyadepegaso16
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PYTHONHASHSEED: random
+      CELERYD_MAX_TASKS_PER_CHILD: 100
+      CELERYD_TASK_TIME_LIMIT: 1800
+      CELERYD_TASK_SOFT_TIME_LIMIT: 1500
+      TMPDIR: /tmp
+    entrypoint: /bin/bash
+    command: -c "python manage.py migrate --noinput && celery -A byteneko worker --loglevel=info --concurrency=6 --prefetch-multiplier=2 --max-tasks-per-child=100 -O fair --pool=prefork"
     volumes:
       - .:/usr/src/app
+      - media_volume:/usr/src/app/media
+      - /dev/shm:/dev/shm
     depends_on:
-      - redis
-      - db
-    mem_limit: 1.25g
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      django:
+        condition: service_started
+    mem_limit: 1600m
+    mem_reservation: 1200m
+    cpus: 2.5
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  static_volume:
+  media_volume:

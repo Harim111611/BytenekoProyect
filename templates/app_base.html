@@ -19,7 +19,7 @@
     <aside class="app-sidebar">
         <div class="app-sidebar-logo">
             <div class="d-flex align-items-center gap-2">
-                <img src="{% static 'img/favicon.ico' %}" alt="Logo" style="width: 32px; height: 32px;" class="rounded-2 shadow-sm">
+                <img src="{% static 'img/favicon.ico' %}" alt="Logo" class="rounded-2 shadow-sm logo-icon">
                 <span class="fs-5 fw-bold text-body">Byteneko</span>
             </div>
             <button class="btn btn-sm btn-icon ms-auto d-lg-none text-muted" id="sidebarCloseBtn"><i class="bi bi-x-lg"></i></button>
@@ -45,7 +45,7 @@
 
         <div class="app-sidebar-footer">
             <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px;">
+                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0 avatar-circle-md">
                     {{ request.user.username|first|upper }}
                 </div>
                 <div class="overflow-hidden">
@@ -64,13 +64,23 @@
         {% block app_content %}{% endblock %}
     </main>
     
-    {# Loader Modal Global #}
-    <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+    {# Loader Modal Global - Used for Analysis/Results Page Loading #}
+    <div class="modal fade" id="globalResultsLoaderModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="globalResultsLoaderLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 bg-transparent shadow-none">
-                <div class="modal-body text-center">
-                    <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
-                    <div class="mt-3 text-white text-shadow"><strong>Cargando...</strong></div>
+            <div class="modal-content border-0 shadow-lg loading-modal-content">
+                <div class="modal-body text-center p-5">
+                    <div class="mb-4">
+                        <div class="spinner-border text-white spinner-64" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                    <h5 class="text-white fw-bold mb-2" id="globalResultsLoaderLabel">Cargando Análisis</h5>
+                    <p class="text-white-50 small">Por favor espera mientras preparamos tus datos...</p>
+                    <div class="mt-4">
+                        <div class="progress loading-progress-bar progress-thin bg-light-translucent">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated loading-progress-fill bg-light-translucent-strong"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

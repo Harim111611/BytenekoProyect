@@ -13,6 +13,7 @@ from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from django.db import transaction
 import json
+from django.core.cache import cache
 
 from core.mixins import OwnerRequiredMixin, EncuestaQuerysetMixin
 from surveys.models import Survey, Question, AnswerOption
@@ -69,9 +70,12 @@ def create_survey_service(user, data):
 
 @login_required
 @require_POST
-async def api_create_survey_from_json(request):
-    """
-    Vista asíncrona que delega la creación transaccional a un hilo síncrono.
+def api_create_survey_from_json(request):
+    """Crear encuesta desde JSON.
+
+    Esta vista es SÍNCRONA a propósito: los decoradores `login_required` y
+    `require_POST` envuelven vistas síncronas, y si la función es `async def`
+    pueden devolver una coroutine sin await (provocando: "returned an unawaited coroutine").
     """
     content_type = request.content_type or ''
     if 'application/json' not in content_type:
@@ -84,18 +88,20 @@ async def api_create_survey_from_json(request):
         if not questions_data or not isinstance(questions_data, list):
             return JsonResponse({'success': False, 'error': 'La encuesta debe tener al menos una pregunta válida (structure).'}, status=400)
 
-        # Ejecutamos la lógica DB en un hilo síncrono para mantener la atomicidad
-        survey = await sync_to_async(create_survey_service)(request.user, data)
+        # Ejecutamos la lógica DB de forma síncrona para mantener atomicidad
+        survey = create_survey_service(request.user, data)
 
-        await sync_to_async(log_user_action)(
+        log_user_action(
             'publish_survey', success=True, user_id=request.user.id, survey_title=survey.title
         )
         
-        return JsonResponse({
-            'success': True, 
-            'survey_id': survey.id, 
-            'redirect_url': reverse('surveys:detail', args=[survey.public_id])
-        })
+        return JsonResponse(
+            {
+                'success': True,
+                'survey_id': survey.id,
+                'redirect_url': reverse('surveys:detail', args=[survey.public_id]),
+            }
+        )
 
     except ValidationError as e:
         return JsonResponse({'success': False, 'error': f"Error de validación: {e.message}"}, status=400)
@@ -108,9 +114,9 @@ async def api_create_survey_from_json(request):
 
 @login_required
 @require_GET
-async def survey_list_count(request):
-    # Nota: .count() es síncrono, envolvemos la llamada
-    count = await sync_to_async(Survey.objects.filter(owner=request.user).count)()
+def survey_list_count(request):
+    # Vista síncrona para compatibilidad con require_GET/login_required
+    count = Survey.objects.filter(owner=request.user).count()
     return JsonResponse({"count": count})
 
 
@@ -132,8 +138,9 @@ def delete_task_status(request, task_id):
     Evita errores 500 causados por la interacción entre Celery, async views y hilos.
     """
     from celery.result import AsyncResult
+    from byteneko.celery import app as celery_app
     try:
-        result = AsyncResult(task_id)
+        result = AsyncResult(task_id, app=celery_app)
         response_data = {
             'task_id': task_id,
             'status': result.state,
@@ -209,17 +216,29 @@ def bulk_delete_surveys_view(request):
             logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")
 
         if task_result is None:
+            # Fallback: usar eliminación SQL directa sin Celery
+            from surveys.utils.delete_optimizer import fast_delete_surveys
+            
             try:
-                with transaction.atomic():
-                    deleted_count, _ = Survey.objects.filter(id__in=clean_ids, author=request.user).delete()
+                result = fast_delete_surveys(clean_ids)
                 
-                msg = f'Se eliminaron {len(clean_ids)} encuesta(s).'
-                logger.info(f'[BULK_DELETE][SYNC_DELETE] {msg}')
-                
-                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'success': True, 'deleted': deleted_count, 'message': msg})
-                messages.success(request, msg)
-                return HttpResponseRedirect(reverse('surveys:list'))
+                if result['status'] == 'SUCCESS':
+                    # fast_delete_surveys no dispara señales → invalidar cache manualmente
+                    try:
+                        cache.delete(f"dashboard_data_user_{request.user.id}")
+                    except Exception:
+                        pass
+                    deleted_count = result['deleted']
+                    msg = f'Se eliminaron {deleted_count} encuesta(s).'
+                    logger.info(f'[BULK_DELETE][SYNC_DELETE] {msg}')
+                    
+                    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                        return JsonResponse({'success': True, 'deleted': deleted_count, 'message': msg})
+                    messages.success(request, msg)
+                    return HttpResponseRedirect(reverse('surveys:list'))
+                else:
+                    raise Exception(result.get('error', 'Error desconocido'))
+                    
             except Exception as e:
                 logger.error(f"[BULK_DELETE][SYNC_ERROR] {e}")
                 msg = 'Error al eliminar.'
@@ -402,41 +421,63 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
 
     def delete(self, request, *args, **kwargs):
         from surveys.tasks import delete_surveys_task
+        from surveys.utils.delete_optimizer import fast_delete_surveys
         
         self.object = self.get_object()
         survey_id = self.object.id
         survey_title = self.object.title
         
-        logger.info(f"[DELETE] Iniciando borrado task para survey_id={survey_id}")
+        logger.info(f"[DELETE] Iniciando borrado para survey_id={survey_id}")
         
-        task_result = delete_surveys_task.delay([survey_id], request.user.id)
-        
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'success': True, 'task_id': task_result.id, 'message': f"Eliminando '{survey_title}'..."})
-        
-        messages.success(request, f"Procesando eliminación de '{survey_title}'...")
-        return HttpResponseRedirect(self.success_url)
+        try:
+            # Intentar Celery primero
+            task_result = delete_surveys_task.delay([survey_id], request.user.id)
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'task_id': task_result.id, 'message': f"Eliminando '{survey_title}'..."})
+            
+            messages.success(request, f"Procesando eliminación de '{survey_title}'...")
+            return HttpResponseRedirect(self.success_url)
+            
+        except Exception as e:
+            # Fallback: eliminación SQL directa inmediata
+            logger.warning(f"[DELETE] Celery no disponible, usando SQL directo: {e}")
+            result = fast_delete_surveys([survey_id])
+            
+            if result['status'] == 'SUCCESS':
+                # fast_delete_surveys no dispara señales → invalidar cache manualmente
+                try:
+                    cache.delete(f"dashboard_data_user_{request.user.id}")
+                except Exception:
+                    pass
+                msg = f"Encuesta '{survey_title}' eliminada exitosamente."
+                messages.success(request, msg)
+            else:
+                msg = f"Error al eliminar '{survey_title}': {result.get('error', 'Error desconocido')}"
+                messages.error(request, msg)
+            
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse(result)
+            
+            return HttpResponseRedirect(self.success_url)
 
 
 @login_required
 @require_POST
-async def handle_goal_decision(request, public_id):
-    @sync_to_async
-    def process_decision():
-        survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
-        decision = request.POST.get('decision')
-        
-        if decision == 'continue':
-            survey.sample_goal = 0
-            survey.status = Survey.STATUS_ACTIVE
-            survey.save()
-            messages.success(request, "¡Meta removida! La encuesta está activa nuevamente sin límites.")
-        elif decision == 'stop':
-            survey.status = Survey.STATUS_CLOSED
-            survey.save()
-            messages.info(request, "Encuesta cerrada oficialmente. Meta cumplida.")
-        
-        return reverse('surveys:detail', kwargs={'public_id': public_id})
+def handle_goal_decision(request, public_id):
+    survey = get_object_or_404(Survey, public_id=public_id, author=request.user)
+    decision = request.POST.get('decision')
 
-    url = await process_decision()
-    return HttpResponseRedirect(url)
+    if decision == 'continue':
+        survey.validate_status_transition(Survey.STATUS_ACTIVE)
+        survey.sample_goal = 0
+        survey.status = Survey.STATUS_ACTIVE
+        survey.save()
+        messages.success(request, "¡Meta removida! La encuesta está activa nuevamente sin límites.")
+    elif decision == 'stop':
+        survey.validate_status_transition(Survey.STATUS_CLOSED)
+        survey.status = Survey.STATUS_CLOSED
+        survey.save()
+        messages.info(request, "Encuesta cerrada oficialmente. Meta cumplida.")
+
+    return HttpResponseRedirect(reverse('surveys:detail', kwargs={'public_id': public_id}))

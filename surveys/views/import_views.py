@@ -6,9 +6,16 @@ import os
 import tempfile
 import importlib
 
-cpp_csv = importlib.import_module('cpp_csv')
+# Intentar importar cpp_csv, pero hacerlo opcional
+try:
+    cpp_csv = importlib.import_module('cpp_csv')
+except ModuleNotFoundError:
+    cpp_csv = None
+    logger = logging.getLogger(__name__)
+    logger.warning("cpp_csv module not found. Some optimizations will be disabled.")
 
 from celery.result import AsyncResult
+from byteneko.celery import app as celery_app
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpRequest, HttpResponse
@@ -103,8 +110,10 @@ def service_create_import_job(user, uploaded_file, survey_title=None, is_bulk=Fa
     # 1. Guardar archivo temporalmente
     file_path = _save_uploaded_csv(uploaded_file)
 
-    # 2. Leer primeras filas para inferir esquema
-    rows = cpp_csv.read_csv_dicts(file_path)
+    # 2. Leer primeras filas para inferir esquema (con límite de muestra como en bulk_import)
+    sample_size = min(getattr(settings, "SURVEY_IMPORT_SAMPLE_SIZE", 5000), 5000)
+    # cpp_csv no soporta max_rows, leemos y truncamos en Python
+    rows = cpp_csv.read_csv_dicts(file_path)[:sample_size]
     if not rows:
         return {'success': False, 'error': 'El archivo CSV está vacío o no tiene datos válidos.'}
     first_row = rows[0]
@@ -131,7 +140,7 @@ def service_create_import_job(user, uploaded_file, survey_title=None, is_bulk=Fa
             author=user,
             title=title_to_use,
             description="Importación masiva desde CSV" if is_bulk else "Importada desde CSV",
-            status='closed' if is_bulk else 'active',
+            status=Survey.STATUS_CLOSED,
             is_imported=True
         )
 
@@ -187,8 +196,9 @@ def service_generate_preview(uploaded_file):
             for chunk in uploaded_file.chunks():
                 tmp.write(chunk)
             tmp.flush()
-            # Leer con cpp_csv
-            rows = cpp_csv.read_csv_dicts(tmp.name)
+            # Leer con cpp_csv (con límite de muestra como en bulk_import)
+            sample_size = min(getattr(settings, "SURVEY_IMPORT_SAMPLE_SIZE", 5000), 5000)
+            rows = cpp_csv.read_csv_dicts(tmp.name)[:sample_size]
             if not rows:
                 return {"success": False, "error": "El archivo está vacío o no tiene datos válidos."}
             columns_info = []
@@ -362,7 +372,7 @@ async def get_task_status_view(request: HttpRequest, task_id: str) -> JsonRespon
     Consulta estado de Celery.
     """
     def _get_status_sync(tid):
-        result = AsyncResult(tid)
+        result = AsyncResult(tid, app=celery_app)
         response = {'task_id': tid, 'status': result.status.lower()}
 
         if result.state == 'SUCCESS':

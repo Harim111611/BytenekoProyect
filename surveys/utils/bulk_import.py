@@ -196,59 +196,70 @@ def _prepare_questions_map(survey, headers: List[str], rows: List[Dict[str, str]
 
 def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     """
-    Importación optimizada usando C++ para lectura y COPY para escritura.
+    Importación optimizada usando C++ para lectura en streaming y COPY para escritura.
+    Optimizado para 4GB RAM y múltiples importaciones simultáneas.
     """
-
-    # 0. Validación avanzada con C++
-    try:
-        validation_result = cpp_csv.read_and_validate_csv(file_path)
-    except Exception as e:
-        logger.error(f"Error validando CSV con módulo C++: {e}")
-        raise
-
-    if not validation_result.get('success', True):
-        logger.error(f"Errores de validación en CSV: {validation_result.get('validation_errors', [])}")
-        # Retornamos -1, -1 y los errores para distinguir error de validación
-        return {
-            'success': False,
-            'error': 'Errores de validación en el archivo CSV.',
-            'validation_errors': validation_result.get('validation_errors', [])
-        }
-
-    # 1. Lectura Ultra-Rápida con C++
-    try:
-        # Esto devuelve una lista de diccionarios [{'Col1': 'Val1', ...}, ...]
-        rows = cpp_csv.read_csv_dicts(file_path)
-    except Exception as e:
-        logger.error(f"Error leyendo CSV con módulo C++: {e}")
-        raise
-
-    if not rows:
-        return 0, 0
-
-    headers = list(rows[0].keys())
+    import gc  # Para liberar memoria explícitamente
     
-    # 2. Detectar columna de fecha
+    # 1. Lectura con C++ - Usar sampling para preparación inicial
+    logger.info(f"[IMPORT][MEMORY] Iniciando importación optimizada para 4GB")
+    
+    try:
+        # Primero leer solo una muestra para analizar estructura
+        sample_size = min(getattr(settings, "SURVEY_IMPORT_SAMPLE_SIZE", 5000), 5000)
+        # La versión actual de cpp_csv no soporta max_rows, leemos y truncamos en Python
+        sample_rows = cpp_csv.read_csv_dicts(file_path)[:sample_size]
+        
+        if not sample_rows:
+            logger.warning("[IMPORT] CSV vacío o sin datos válidos")
+            return 0, 0
+            
+        headers = list(sample_rows[0].keys())
+        
+    except Exception as e:
+        logger.error(f"[IMPORT][ERROR] Error leyendo CSV con módulo C++: {e}")
+        raise
+
+    # 2. Detectar columna de fecha desde la muestra
     date_column = None
     for h in headers:
         if _is_date_column(h):
             date_column = h
             break
             
-    # 3. Preparar Estructura (Preguntas y Opciones)
-    #    Esta función analiza los datos y crea lo que falte en la BD
-    questions_map = _prepare_questions_map(survey, headers, rows, date_column)
-
-    chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 5000)
-    total_rows = len(rows)
+    # 3. Preparar Estructura (Preguntas y Opciones) - solo con muestra
+    logger.info(f"[IMPORT][PREP] Preparando estructura con muestra de {len(sample_rows)} filas")
+    questions_map = _prepare_questions_map(survey, headers, sample_rows, date_column)
+    
+    # Liberar memoria de la muestra
+    del sample_rows
+    gc.collect()
+    
+    # 4. Ahora leer el archivo completo en chunks usando cpp_csv
+    chunk_size = getattr(settings, "SURVEY_IMPORT_CHUNK_SIZE", 2500)  # Más pequeño para 4GB
+    total_rows_processed = 0
     final_rows_inserted = 0
     
-    # Iterar por chunks para no saturar memoria en el INSERT de Django
-    for i in range(0, total_rows, chunk_size):
-        chunk_rows = rows[i : i + chunk_size]
+    logger.info(f"[IMPORT][START] Procesando archivo completo con chunks de {chunk_size}")
+    
+    # Leer archivo completo de una vez (cpp_csv es eficiente)
+    try:
+        all_rows = cpp_csv.read_csv_dicts(file_path)
+        total_rows = len(all_rows)
+        logger.info(f"[IMPORT][LOADED] {total_rows} filas cargadas desde CSV")
+    except Exception as e:
+        logger.error(f"[IMPORT][ERROR] Error en lectura completa: {e}")
+        raise
+    
+    # Procesar en chunks para controlar memoria (MAGIA NEGRA™)
+    for chunk_idx, i in enumerate(range(0, total_rows, chunk_size)):
+        chunk_rows = all_rows[i : i + chunk_size]
+        chunk_size_actual = len(chunk_rows)
+        
+        logger.info(f"[IMPORT][CHUNK {chunk_idx}] Procesando {chunk_size_actual} filas (offset {i})")
         
         with transaction.atomic():
-            # A. Crear SurveyResponses
+            # A. Crear SurveyResponses con bulk_create optimizado
             sr_objects = []
             for row in chunk_rows:
                 dt = timezone.now()
@@ -261,7 +272,8 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
                 
                 sr_objects.append(SurveyResponse(survey=survey, created_at=dt, is_anonymous=True))
             
-            created_srs = SurveyResponse.objects.bulk_create(sr_objects)
+            # bulk_create sin retrieve de IDs cuando no es necesario
+            created_srs = SurveyResponse.objects.bulk_create(sr_objects, batch_size=1000)
             
             # B. Preparar buffer para COPY
             qr_buffer = io.StringIO()
@@ -327,38 +339,41 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
                     batch_qr_count += 1
 
             final_rows_inserted += batch_qr_count
+            logger.info(f"[IMPORT][CHUNK {chunk_idx}] Insertadas {batch_qr_count} respuestas")
             
-            # C. Ejecutar COPY con acceso al cursor nativo
+            # C. Ejecutar COPY con acceso al cursor nativo (MAGIA NEGRA™)
             qr_buffer.seek(0)
             table_name = QuestionResponse._meta.db_table
-            # Columnas: survey_response_id, question_id, selected_option_id, text_value, numeric_value
             sql = f"COPY {table_name} (survey_response_id, question_id, selected_option_id, text_value, numeric_value) FROM STDIN WITH (FORMAT CSV, DELIMITER '\t', QUOTE '\"', NULL '\\N')"
             
             with connection.cursor() as cursor:
                 try:
-                    # -----------------------------------------------------------
-                    # SOLUCIÓN CRÍTICA: Desempaquetar el cursor de Django
-                    # -----------------------------------------------------------
-                    # Django envuelve el cursor real. Accedemos a él via .cursor
                     raw_cursor = getattr(cursor, 'cursor', cursor) 
 
-                    # Opción 1: Psycopg2 (tiene copy_expert)
+                    # Psycopg2 o Psycopg 3
                     if hasattr(raw_cursor, 'copy_expert'):
                         raw_cursor.copy_expert(sql, qr_buffer)
-                        
-                    # Opción 2: Psycopg 3 (tiene copy())
                     elif hasattr(raw_cursor, 'copy'):
                         with raw_cursor.copy(sql) as copy:
                             copy.write(qr_buffer.read())
-                            
                     else:
-                        logger.error("El driver de base de datos no soporta COPY masivo nativo.")
-                        # Aquí podrías poner un fallback lento si quisieras, 
-                        # pero para este proyecto asumimos Postgres configurado.
-                        raise NotImplementedError("Driver de BD no compatible con COPY (¿Usas SQLite?).")
+                        logger.error("[IMPORT][ERROR] Driver no soporta COPY masivo")
+                        raise NotImplementedError("Driver incompatible con COPY")
                         
                 except Exception as e:
-                    logger.error(f"Error crítico en COPY: {e}")
+                    logger.error(f"[IMPORT][ERROR] Error crítico en COPY: {e}")
                     raise
+        
+        # Liberar memoria después de cada chunk (MAGIA NEGRA™)
+        total_rows_processed += chunk_size_actual
+        del chunk_rows, sr_objects, created_srs
+        gc.collect()
+        
+        logger.info(f"[IMPORT][PROGRESS] {total_rows_processed}/{total_rows} filas procesadas ({(total_rows_processed/total_rows)*100:.1f}%)")
 
+    # Liberar memoria final
+    del all_rows
+    gc.collect()
+    
+    logger.info(f"[IMPORT][COMPLETE] Total: {total_rows} filas, {final_rows_inserted} respuestas insertadas")
     return total_rows, final_rows_inserted

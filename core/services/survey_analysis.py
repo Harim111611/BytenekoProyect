@@ -592,16 +592,20 @@ class SurveyAnalysisService:
             return [d['option'] for d in top_8] + ["Otros"], [d['count'] for d in top_8] + [sum(d['count'] for d in others)]
 
     @staticmethod
-    @staticmethod
     async def get_analysis_data(survey, responses_queryset, include_charts=None, cache_key=None, config=None):
         config = config or {}
         tone = config.get('tone', 'FORMAL').upper()
         include_quotes = config.get('include_quotes', True)
+        include_charts = True if include_charts is None else bool(include_charts)
         
         if cache_key is None:
-            total = await sync_to_async(responses_queryset.count)()
-            last_id = await sync_to_async(lambda: responses_queryset.order_by('-id').values_list('id', flat=True).first() or 0)()
-            cache_key = f"analysis_v20_ultra:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}"
+            # OPT: usar una sola query (aggregate) para total + last_id.
+            agg = await sync_to_async(
+                lambda: responses_queryset.aggregate(total=Count('id'), last_id=Max('id'))
+            )()
+            total = int(agg.get('total') or 0)
+            last_id = int(agg.get('last_id') or 0)
+            cache_key = f"analysis_v20_ultra:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}:charts={int(include_charts)}"
             
         cached = cache.get(cache_key)
         if cached: return cached
@@ -614,7 +618,9 @@ class SurveyAnalysisService:
         text_responses = await SurveyAnalysisService._fetch_text_responses(analyzable_q, responses_queryset)
         
         analysis_data = []
-        satisfaction_values = []
+        # OPT: evitar listas enormes para KPI (usar promedio ponderado)
+        satisfaction_sum = 0.0
+        satisfaction_count = 0
         main_satisfaction_qid = next((q.id for q in analyzable_q if q.type in ['scale', 'number']), None)
 
         for idx, q in enumerate(analyzable_q, 1):
@@ -631,9 +637,15 @@ class SurveyAnalysisService:
                 raw_dist = numeric_dist.get(q.id, [])
                 item.update(st)
                 item['total_respuestas'] = st.get('count', 0)
+                # Compat: export/templates suelen esperar total_responses
+                item['total_responses'] = item['total_respuestas']
                 if q.id == main_satisfaction_qid:
                     for d in raw_dist:
-                        if d['value'] is not None: satisfaction_values.extend([d['value']] * d['count'])
+                        v = d.get('value', None)
+                        c = int(d.get('count') or 0)
+                        if v is not None and c > 0:
+                            satisfaction_sum += float(v) * c
+                            satisfaction_count += c
                 
                 item['chart_labels'], item['chart_data'] = SurveyAnalysisService._optimize_chart_data(raw_dist, is_numeric=True)
                 item['tipo_display'] = 'bar'
@@ -641,9 +653,19 @@ class SurveyAnalysisService:
                 is_demo = getattr(q, 'is_demographic', False) or (q.text and 'edad' in q.text.lower())
                 narrative = NumericNarrative.analyze(st['avg'], st['max'], min_val=st['min'], stats_dist=raw_dist, tone=tone, is_demographic=is_demo)
                 item['insight'] = narrative
-                item['insight_data'] = {'type': 'numeric', 'average': st['avg'], 'max': st['max'], 'min': st['min'], 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']:
-                    # Generar gráfico Plotly interactivo
+                # Compat: algunos templates esperan keys avg/max/min/trend_delta
+                item['insight_data'] = {
+                    'type': 'numeric',
+                    'average': st['avg'],
+                    'avg': st['avg'],
+                    'max': st['max'],
+                    'min': st['min'],
+                    'trend_delta': None,
+                    'narrative': narrative,
+                    'key_insight': narrative,
+                }
+                if include_charts and item['chart_labels']:
+                    # Gráfico interactivo (HTML) para UI web.
                     from core.utils.charts import ChartGenerator
                     item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
                         item['chart_labels'], item['chart_data'], title=None, dark_mode=False
@@ -653,6 +675,7 @@ class SurveyAnalysisService:
                 texts = text_responses[q.id]
                 topics, sentiment = TextMiningEngine.extract_topics_and_sentiment(texts)
                 item['total_respuestas'] = len(texts)
+                item['total_responses'] = item['total_respuestas']
                 item['top_responses'] = texts[:5]
                 item['samples_texto'] = texts[:5]
                 item['tipo_display'] = 'text'
@@ -660,20 +683,50 @@ class SurveyAnalysisService:
                 if include_quotes and topics: quote = TextMiningEngine.find_representative_quote(texts, topics[0])
                 full_narrative = TextNarrative.generate(len(texts), topics, sentiment, quote, tone)
                 item['insight'] = full_narrative
-                item['insight_data'] = {'type': 'text', 'narrative': full_narrative, 'key_insight': full_narrative, 'topics': topics}
+                item['insight_data'] = {
+                    'type': 'text',
+                    'narrative': full_narrative,
+                    'key_insight': full_narrative,
+                    'topics': topics,
+                }
 
             elif q.id in choice_dist:
                 raw_dist = choice_dist[q.id]
                 total_q = sum(d['count'] for d in raw_dist)
                 item['total_respuestas'] = total_q
+                item['total_responses'] = item['total_respuestas']
                 item['chart_labels'], item['chart_data'] = SurveyAnalysisService._optimize_chart_data(raw_dist, is_numeric=False)
                 item['opciones'] = [{'label': d['option'], 'count': d['count'], 'percent': (d['count']/total_q)*100 if total_q else 0} for d in raw_dist]
                 chart_type = 'bar' if len(item['chart_labels']) > 4 else 'doughnut'
                 item['tipo_display'] = chart_type
                 narrative = DemographicNarrative.analyze(raw_dist, total_q, tone=tone)
                 item['insight'] = narrative
-                item['insight_data'] = {'type': 'categorical', 'narrative': narrative, 'key_insight': narrative}
-                if item['chart_labels']:
+                # Compat: algunos templates esperan distribution/top_option
+                distribution = [
+                    {
+                        'option': d['option'],
+                        'count': d['count'],
+                        'percent': (d['count'] / total_q) * 100 if total_q else 0,
+                    }
+                    for d in raw_dist
+                ]
+                top_option = max(raw_dist, key=lambda x: x['count']) if raw_dist else None
+                item['insight_data'] = {
+                    'type': 'categorical',
+                    'narrative': narrative,
+                    'key_insight': narrative,
+                    'distribution': distribution,
+                    'top_option': (
+                        {
+                            'option': top_option['option'],
+                            'count': top_option['count'],
+                        }
+                        if top_option
+                        else None
+                    ),
+                    'total': total_q,
+                }
+                if include_charts and item['chart_labels']:
                     from core.utils.charts import ChartGenerator
                     if chart_type == 'bar':
                         item['chart'] = ChartGenerator.generate_horizontal_bar_chart_plotly(
@@ -686,7 +739,7 @@ class SurveyAnalysisService:
 
             analysis_data.append(item)
 
-        kpi = round(sum(satisfaction_values)/len(satisfaction_values), 1) if satisfaction_values else 0
+        kpi = round((satisfaction_sum / satisfaction_count), 1) if satisfaction_count > 0 else 0
         evolution = await sync_to_async(TimelineEngine.analyze_evolution)(responses_queryset)
         result = {
             'analysis_data': analysis_data, 'kpi_prom_satisfaccion': kpi,
@@ -735,4 +788,138 @@ class SurveyAnalysisService:
     
     @staticmethod
     def generate_crosstab(survey, row_id, col_id, queryset=None):
-        return {'error': 'Crosstab requiere dataframe builder.'}
+        """
+        Genera una tabla cruzada optimizada usando pandas.
+        
+        Args:
+            survey: Instancia del Survey
+            row_id: ID de la pregunta para las filas
+            col_id: ID de la pregunta para las columnas
+            queryset: QuerySet opcional de SurveyResponse filtrado
+            
+        Returns:
+            dict: Estructura con la tabla cruzada en formato 'split' + metadatos
+        """
+        try:
+            import pandas as pd
+            import numpy as np
+        except ImportError:
+            return {'error': 'Pandas no está disponible para generar tablas cruzadas.'}
+        
+        # Cache key único
+        cache_key = f"crosstab_v3_{survey.id}_{row_id}_{col_id}_{hash(str(queryset.query)) if queryset else 'all'}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            # Obtener las preguntas
+            row_question = survey.questions.filter(id=row_id).first()
+            col_question = survey.questions.filter(id=col_id).first()
+            
+            if not row_question or not col_question:
+                return {'error': 'Una o ambas preguntas no existen.'}
+            
+            # Usar queryset o todos los responses
+            if queryset is None:
+                from surveys.models import SurveyResponse
+                queryset = SurveyResponse.objects.filter(survey=survey)
+            
+            response_ids = list(queryset.values_list('id', flat=True))
+            
+            if not response_ids:
+                return {'error': 'No hay respuestas para analizar.'}
+            
+            # Obtener respuestas para ambas preguntas
+            row_responses = QuestionResponse.objects.filter(
+                question=row_question,
+                survey_response_id__in=response_ids
+            ).select_related('selected_option').values(
+                'survey_response_id',
+                'selected_option__text',
+                'text_value',
+                'numeric_value'
+            )
+            
+            col_responses = QuestionResponse.objects.filter(
+                question=col_question,
+                survey_response_id__in=response_ids
+            ).select_related('selected_option').values(
+                'survey_response_id',
+                'selected_option__text',
+                'text_value',
+                'numeric_value'
+            )
+            
+            # Convertir a diccionarios indexados por survey_response_id
+            row_data = {}
+            for r in row_responses:
+                value = r['selected_option__text'] or r['text_value'] or str(r['numeric_value']) if r['numeric_value'] is not None else 'Sin respuesta'
+                row_data[r['survey_response_id']] = str(value).strip() if value else 'Sin respuesta'
+            
+            col_data = {}
+            for r in col_responses:
+                value = r['selected_option__text'] or r['text_value'] or str(r['numeric_value']) if r['numeric_value'] is not None else 'Sin respuesta'
+                col_data[r['survey_response_id']] = str(value).strip() if value else 'Sin respuesta'
+            
+            # Crear DataFrame
+            df_list = []
+            for resp_id in response_ids:
+                row_val = row_data.get(resp_id, 'Sin respuesta')
+                col_val = col_data.get(resp_id, 'Sin respuesta')
+                df_list.append({
+                    'row': row_val,
+                    'col': col_val
+                })
+            
+            if not df_list:
+                return {'error': 'No hay datos suficientes para cruzar.'}
+            
+            df = pd.DataFrame(df_list)
+            
+            # Generar tabla cruzada con pandas
+            crosstab = pd.crosstab(
+                df['row'],
+                df['col'],
+                margins=True,
+                margins_name='Total'
+            )
+            
+            # Ordenar por totales (descendente) excepto la fila Total
+            row_totals = crosstab['Total'].drop('Total')
+            sorted_rows = row_totals.sort_values(ascending=False).index.tolist()
+            sorted_rows.append('Total')  # Total al final
+            crosstab = crosstab.reindex(sorted_rows)
+            
+            # Ordenar columnas por totales (descendente) excepto Total
+            col_totals = crosstab.loc['Total'].drop('Total')
+            sorted_cols = col_totals.sort_values(ascending=False).index.tolist()
+            sorted_cols.append('Total')  # Total al final
+            crosstab = crosstab[sorted_cols]
+            
+            # Limitar a top 10 categorías para cada eje (más Total)
+            if len(crosstab.index) > 11:  # 10 + Total
+                top_rows = list(crosstab.index[:10]) + ['Total']
+                crosstab = crosstab.loc[top_rows]
+            
+            if len(crosstab.columns) > 11:
+                top_cols = list(crosstab.columns[:10]) + ['Total']
+                crosstab = crosstab[top_cols]
+            
+            # Convertir a formato 'split' para JSON serialization
+            result = {
+                'data': crosstab.to_dict('split'),
+                'row_label': row_question.text[:50],
+                'col_label': col_question.text[:50],
+                'total_responses': len(df),
+                'row_categories': len(crosstab.index) - 1,  # Sin contar Total
+                'col_categories': len(crosstab.columns) - 1  # Sin contar Total
+            }
+            
+            # Cache por 10 minutos
+            cache.set(cache_key, result, 600)
+            
+            return result
+            
+        except Exception as e:
+            return {'error': f'Error generando tabla cruzada: {str(e)}'}

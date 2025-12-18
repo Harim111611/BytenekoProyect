@@ -3,329 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <title>Resultados Globales - Byteneko</title>
+    <style>
+        @page { size: A4; margin: 16mm 14mm; }
+        body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 10.5pt; color: #111827; }
+
+        .header { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; }
+        .header h1 { margin: 0; font-size: 18pt; }
+        .subtitle { margin: 4px 0 0; color: #6b7280; font-size: 9.5pt; }
+        .date { margin: 6px 0 0; color: #6b7280; font-size: 9pt; }
+
+        .section-title { font-size: 11.5pt; font-weight: 800; margin: 14px 0 8px; }
+
+        .kpi-table { width: 100%; border-collapse: separate; border-spacing: 8px; margin: 10px 0 10px; }
+        .kpi-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; background: #ffffff; }
+        .kpi-label { font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+        .kpi-value { font-size: 18pt; font-weight: 800; margin-top: 4px; }
+        .kpi-subtext { font-size: 9pt; color: #6b7280; margin-top: 2px; }
+        .trend { font-weight: 700; }
+        .trend.positive { color: #16a34a; }
+        .trend.negative { color: #dc2626; }
+
+        .panel { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; background: #ffffff; page-break-inside: avoid; }
+        .nps-grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .nps-score { font-size: 26pt; font-weight: 900; text-align: right; }
+        .nps-label { font-size: 9pt; color: #6b7280; margin: 2px 0 0; }
+        .nps-badges { width: 100%; border-collapse: separate; border-spacing: 6px; margin-top: 8px; }
+        .badge { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; }
+        .badge-title { font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+        .badge-value { font-size: 14pt; font-weight: 800; margin-top: 4px; }
+
+        .two-col { width: 100%; border-collapse: separate; border-spacing: 10px; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { text-align: left; font-size: 9pt; color: #6b7280; border-bottom: 1px solid #e5e7eb; padding: 6px; }
+        .table td { border-bottom: 1px solid #f3f4f6; padding: 6px; vertical-align: top; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 8.5pt; border: 1px solid #e5e7eb; }
+
+        .bar-row { margin: 6px 0 8px; }
+        .bar-head { font-size: 9pt; color: #374151; margin-bottom: 3px; }
+        .bar-track { width: 100%; height: 7px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+        .bar-fill { height: 7px; background: #6366f1; }
+
+        .summary { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; background: #f9fafb; margin-top: 10px; }
+        .summary h3 { margin: 0 0 6px; font-size: 10.5pt; }
+        .summary ul { margin: 0; padding-left: 18px; }
+        .summary li { margin: 0 0 4px; }
+
+        .footer { margin-top: 14px; text-align: center; color: #9ca3af; font-size: 8.5pt; }
+    </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 Vista Global de Resultados</h1>
-        <p class="subtitle">Análisis consolidado de todas tus surveys - Un vistazo rápido a cómo van las cosas</p>
-        <p class="date">Reporte generado el {{ fecha_generacion }}</p>
+        <h1>Vista Global de Resultados</h1>
+        <p class="subtitle">Análisis consolidado de tus encuestas (resumen ejecutivo).</p>
+        <p class="date">Reporte generado el {{ fecha_generacion|date:"d/m/Y H:i" }}</p>
     </div>
 
-    <!-- KPIs principales -->
-    <div class="kpi-grid">
-        <div class="kpi-card primary">
-            <div class="icon">👥</div>
-            <div class="label">Respuestas Recibidas</div>
-            <div class="value">{{ total_responses|default:"0" }}</div>
-            <div class="subtext">
-                Personas que completaron surveys{% if weekly_change and weekly_change != 0 %}<br>
-                <span class="trend-badge {% if weekly_change >= 0 %}positive{% else %}negative{% endif %}">
-                    {% if weekly_change >= 0 %}▲{% else %}▼{% endif %}{{ weekly_change|floatformat:1 }}% vs semana pasada
-                </span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="kpi-card success">
-            <div class="icon">😊</div>
-            <div class="label">Nivel de Satisfacción</div>
-            <div class="value">{{ global_satisfaction|floatformat:1 }}</div>
-            <div class="subtext">de 10 puntos posibles</div>
-        </div>
-
-        <div class="kpi-card info">
-            <div class="icon">📡</div>
-            <div class="label">Encuestas Activas</div>
-            <div class="value">{{ total_active }}</div>
-            <div class="subtext">Recibiendo respuestas ahora</div>
-        </div>
-
-        <div class="kpi-card secondary">
-            <div class="icon">📋</div>
-            <div class="label">Total Encuestas</div>
-            <div class="value">{{ total_surveys }}</div>
-            <div class="subtext">Creadas en total</div>
-        </div>
-    </div>
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-card">
+                <div class="kpi-label">Respuestas Recibidas</div>
+                <div class="kpi-value">{{ total_responses|default:"0" }}</div>
+                <div class="kpi-subtext">
+                    {% if weekly_change and weekly_change != 0 %}
+                        <span class="trend {% if weekly_change >= 0 %}positive{% else %}negative{% endif %}">
+                            {% if weekly_change >= 0 %}▲{% else %}▼{% endif %} {{ weekly_change|floatformat:1 }}% vs semana pasada
+                        </span>
+                    {% else %}
+                        Evolución semanal: N/A
+                    {% endif %}
+                </div>
+            </td>
+            <td class="kpi-card">
+                <div class="kpi-label">Satisfacción Promedio</div>
+                <div class="kpi-value">{{ global_satisfaction|default:"0"|floatformat:1 }}/10</div>
+                <div class="kpi-subtext">Promedio de calificaciones numéricas</div>
+            </td>
+        </tr>
+        <tr>
+            <td class="kpi-card">
+                <div class="kpi-label">Encuestas Activas</div>
+                <div class="kpi-value">{{ total_active|default:"0" }}</div>
+                <div class="kpi-subtext">Recibiendo respuestas actualmente</div>
+            </td>
+            <td class="kpi-card">
+                <div class="kpi-label">Total de Encuestas</div>
+                <div class="kpi-value">{{ total_surveys|default:"0" }}</div>
+                <div class="kpi-subtext">Creadas en total</div>
+            </td>
+        </tr>
+    </table>
 
     <!-- Sección NPS -->
     {% if global_nps is not None %}
-    <div class="nps-section">
-        <div class="nps-header">
-            <h3>¿Qué tan probable es que te recomienden?</h3>
-            <div class="nps-score {% if global_nps >= 50 %}excellent{% elif global_nps >= 0 %}good{% else %}poor{% endif %}">
-                {{ global_nps|default:"0"|floatformat:0 }}
-            </div>
-            <p class="nps-label">Indicador de Recomendación (NPS) • {% if global_nps >= 50 %}Excelente{% elif global_nps >= 0 %}Bueno{% else %}Necesita mejorar{% endif %}</p>
-        </div>
+    <div class="panel">
+        <table class="nps-grid">
+            <tr>
+                <td style="width: 70%;">
+                    <div class="section-title" style="margin-top: 0;">Indicador de Recomendación (NPS)</div>
+                    <div class="nps-label">Qué tan probable es que te recomienden (0 a 100)</div>
+                </td>
+                <td style="width: 30%;">
+                    <div class="nps-score">{{ global_nps|default:"0"|floatformat:0 }}</div>
+                </td>
+            </tr>
+        </table>
 
-        <div class="nps-breakdown">
-            <div class="nps-item promoters">
-                <div class="emoji">😍</div>
-                <div class="label">Te recomiendan</div>
-                <div class="percentage">{{ promoters|default:"0"|floatformat:0 }}%</div>
-            </div>
-            <div class="nps-item passives">
-                <div class="emoji">😐</div>
-                <div class="label">Están neutrales</div>
-                <div class="percentage">{{ passives|default:"0"|floatformat:0 }}%</div>
-            </div>
-            <div class="nps-item detractors">
-                <div class="emoji">😞</div>
-                <div class="label">No recomiendan</div>
-                <div class="percentage">{{ detractors|default:"0"|floatformat:0 }}%</div>
-            </div>
-        </div>
-        <div class="interpretation-note">
-            💡 <strong>¿Qué significa esto?</strong> El indicador se calcula restando el % de personas que no te recomiendan del % que sí te recomiendan. Un valor mayor a 50 es excelente, mayor a 0 es bueno.
-        </div>
+        <table class="nps-badges">
+            <tr>
+                <td class="badge">
+                    <div class="badge-title">Promotores</div>
+                    <div class="badge-value">{{ promoters|default:"0"|floatformat:0 }}%</div>
+                </td>
+                <td class="badge">
+                    <div class="badge-title">Pasivos</div>
+                    <div class="badge-value">{{ passives|default:"0"|floatformat:0 }}%</div>
+                </td>
+                <td class="badge">
+                    <div class="badge-title">Detractores</div>
+                    <div class="badge-value">{{ detractors|default:"0"|floatformat:0 }}%</div>
+                </td>
+            </tr>
+        </table>
     </div>
     {% endif %}
 
-    <!-- Top Preguntas y Top Encuestas -->
-    <div class="two-column">
-        <div>
-            <h2 class="section-title"><span class="icon">🏆</span>Preguntas Mejor Valoradas</h2>
-            <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Las questions que obtuvieron las calificaciones más altas de tus usuarios</p>
-            {% if top_preguntas %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 8%;">#</th>
-                            <th>Pregunta</th>
-                            <th style="width: 20%; text-align: center;">Calificación</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for question in top_preguntas %}
-                        <tr>
-                            <td style="text-align: center;">
-                                <span class="rank-number {% if forloop.counter == 1 %}gold{% elif forloop.counter == 2 %}silver{% elif forloop.counter == 3 %}bronze{% endif %}">
-                                    {{ forloop.counter }}
-                                </span>
-                            </td>
-                            <td>
-                                <div style="font-weight: 700; color: #212529;">{{ question.text|truncatechars:45 }}</div>
-                                <div style="font-size: 6pt; color: #6c757d;">{{ question.survey.title|truncatechars:30 }}</div>
-                            </td>
-                            <td style="text-align: center;">
-                                <span class="badge {% if question.avg_score >= 8 %}success{% elif question.avg_score >= 6 %}primary{% else %}warning{% endif %}">
-                                    {{ question.avg_score|floatformat:1 }}/10
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <div class="empty-state">
-                    <div class="icon">📊</div>
-                    <p style="font-size: 7pt;">Aún no hay suficientes respuestas</p>
-                    <p style="font-size: 6pt; margin-top: 2px;">Se necesitan al menos 5 respuestas por question</p>
-                </div>
-            {% endif %}
-        </div>
+    <table class="two-col">
+        <tr>
+            <td class="panel" style="width: 52%;">
+                <div class="section-title" style="margin-top: 0;">Preguntas Mejor Valoradas</div>
+                {% if top_preguntas %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 8%;">#</th>
+                                <th>Pregunta</th>
+                                <th style="width: 18%; text-align: right;">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for question in top_preguntas %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <div style="font-weight: 700;">{{ question.text|truncatechars:48 }}</div>
+                                    <div style="font-size: 8.5pt; color: #6b7280;">{{ question.survey.title|truncatechars:36 }}</div>
+                                </td>
+                                <td style="text-align: right; font-weight: 800;">{{ question.avg_score|floatformat:1 }}/10</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div style="color: #6b7280;">Sin datos suficientes para ranking.</div>
+                {% endif %}
+            </td>
+            <td class="panel" style="width: 48%;">
+                <div class="section-title" style="margin-top: 0;">Encuestas Más Populares</div>
+                {% if top_surveys %}
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 8%;">#</th>
+                                <th>Encuesta</th>
+                                <th style="width: 18%; text-align: right;">Resp.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for survey in top_surveys %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <div style="font-weight: 700;">{{ survey.title|truncatechars:46 }}</div>
+                                    <div style="font-size: 8.5pt; color: #6b7280;">Estado: {{ survey.get_status_display|default:survey.status }}</div>
+                                </td>
+                                <td style="text-align: right; font-weight: 800;">{{ survey.response_count|default:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div style="color: #6b7280;">Sin encuestas disponibles.</div>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
 
-        <div>
-            <h2 class="section-title"><span class="icon">⭐</span>Encuestas Más Populares</h2>
-            <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Las surveys que han recibido más participación</p>
-            {% if top_surveys %}
-                {% for survey in top_surveys %}
-                <div class="top-survey-item">
-                    <span class="number">{{ forloop.counter }}</span>
-                    <div style="display: inline-block; vertical-align: top; width: calc(100% - 28px);">
-                        <div class="title">{{ survey.title|truncatechars:40 }}</div>
-                        <div class="meta">
-                            👥 {{ survey.response_count }} persona{{ survey.response_count|pluralize }}
-                            {% if survey.status == 'active' %}
-                                <span class="badge active">● Activa</span>
-                            {% elif survey.status == 'paused' %}
-                                <span class="badge paused">● En pausa</span>
-                            {% elif survey.status == 'draft' %}
-                                <span class="badge draft">● Borrador</span>
-                            {% elif survey.status == 'closed' %}
-                                <span class="badge closed">● Cerrada</span>
-                            {% endif %}
-                        </div>
+    {% if categoria_distribution %}
+        <div class="section-title">Distribución de Encuestas</div>
+        <div class="panel">
+            {% for label, count in categoria_distribution %}
+                <div class="bar-row">
+                    <div class="bar-head">
+                        <span style="font-weight: 700;">{{ label }}</span>
+                        <span style="float: right; color: #6b7280;">{{ count }}</span>
+                    </div>
+                    <div class="bar-track">
+                        {% if total_surveys|default:0|add:0 > 0 %}
+                            <div class="bar-fill" style="width: {% widthratio count total_surveys 100 %}%;"></div>
+                        {% else %}
+                            <div class="bar-fill" style="width: 0%;"></div>
+                        {% endif %}
                     </div>
                 </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">
-                    <div class="icon">📋</div>
-                    <p style="font-size: 7pt;">Aún no has creado surveys</p>
-                </div>
-            {% endif %}
+            {% endfor %}
         </div>
-    </div>
-
-    <!-- Distribución por categoría (Compacta) -->
-    {% if categoria_distribution %}
-    <h2 class="section-title"><span class="icon">📊</span>Tus Encuestas por Tema</h2>
-    <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 8px 0; font-style: italic;">Cómo se distribuyen tus surveys según su categoría o temática</p>
-    <div style="margin-bottom: 12px;">
-        {% for label, count in categoria_distribution %}
-        <div class="categoria-item">
-            <div class="nombre">
-                {{ label }}
-                <span style="float: right; font-weight: 700; color: #0d6efd; font-size: 7pt;">{{ count }}</span>
-            </div>
-            <div class="bar">
-                <div class="bar-fill" style="width: {% widthratio count total_surveys 100 %}%;"></div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
     {% endif %}
 
-    <!-- Resumen ejecutivo compacto -->
-    <div class="summary-box">
-        <h3>💡 En Resumen</h3>
+    <div class="summary">
+        <h3>Resumen ejecutivo</h3>
         <ul>
-            <li><strong>Has recibido {{ total_responses|default:"0" }} respuesta{{ total_responses|default:0|pluralize }}</strong> con una satisfacción promedio de <strong>{{ global_satisfaction|default:"0"|floatformat:1 }} de 10</strong>{% if global_nps is not None %}. Tu indicador de recomendación es <strong>{{ global_nps|floatformat:0 }}</strong> ({% if global_nps >= 50 %}¡Excelente!{% elif global_nps >= 0 %}Bien{% else %}Mejorable{% endif %}){% endif %}</li>
-            <li><strong>{{ total_active|default:"0" }} de tus {{ total_surveys|default:"0" }} survey{{ total_surveys|default:0|pluralize }}</strong> {% if total_active == 1 %}está activa{% else %}están activas{% endif %} ({{ total_surveys|default:0|yesno:"{% widthratio total_active total_surveys 100 %}%,0%" }}){% if weekly_change and weekly_change != 0 %}. {% if weekly_change >= 0 %}Has tenido un <strong>aumento del {{ weekly_change|floatformat:1 }}%</strong> en respuestas esta semana{% else %}Has tenido una <strong>disminución del {{ weekly_change|floatformat:1|cut:"-" }}%</strong> en respuestas esta semana{% endif %}{% endif %}</li>
+            <li><strong>{{ total_responses|default:"0" }}</strong> respuestas analizadas; satisfacción promedio <strong>{{ global_satisfaction|default:"0"|floatformat:1 }}/10</strong>.</li>
+            <li><strong>{{ total_active|default:"0" }}</strong> encuestas activas de <strong>{{ total_surveys|default:"0" }}</strong> en total.</li>
+            {% if global_nps is not None %}
+                <li>NPS global: <strong>{{ global_nps|floatformat:0 }}</strong>.</li>
+            {% endif %}
         </ul>
     </div>
 
-    <!-- Sección de Actividad Reciente -->
-    {% if recent_surveys %}
-    <h2 class="section-title"><span class="icon">🕒</span>Actividad Reciente</h2>
-    <p style="font-size: 6.5pt; color: #6c757d; margin: 4px 0 6px 0; font-style: italic;">Tus últimas surveys creadas</p>
-    <table style="margin-bottom: 10px;">
-        <thead>
-            <tr>
-                <th style="width: 50%;">Encuesta</th>
-                <th style="width: 20%; text-align: center;">Creada</th>
-                <th style="width: 15%; text-align: center;">Estado</th>
-                <th style="width: 15%; text-align: center;">Respuestas</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for survey in recent_surveys %}
-            <tr>
-                <td>
-                    <div style="font-weight: 700; color: #212529; font-size: 7pt;">{{ survey.title|truncatechars:50 }}</div>
-                    {% if survey.categoria %}
-                        <div style="font-size: 6pt; color: #6c757d;">📁 {{ survey.categoria }}</div>
-                    {% endif %}
-                </td>
-                <td style="text-align: center; font-size: 6.5pt; color: #6c757d;">
-                    {{ survey.fecha_creacion|date:"d/m/Y" }}
-                </td>
-                <td style="text-align: center;">
-                    {% if survey.status == 'active' %}
-                        <span class="badge success" style="font-size: 5.5pt;">Activa</span>
-                    {% elif survey.status == 'paused' %}
-                        <span class="badge paused" style="font-size: 5.5pt;">En pausa</span>
-                    {% elif survey.status == 'draft' %}
-                        <span class="badge draft" style="font-size: 5.5pt;">Borrador</span>
-                    {% else %}
-                        <span class="badge closed" style="font-size: 5.5pt;">Cerrada</span>
-                    {% endif %}
-                </td>
-                <td style="text-align: center; font-weight: 700; color: #0d6efd; font-size: 7pt;">
-                    {{ survey.respuestas.count }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
-
-    <!-- Sección de Análisis y Recomendaciones -->
-    <h2 class="section-title"><span class="icon">💡</span>Análisis y Recomendaciones</h2>
-    
-    <div class="stat-row">
-        <div class="mini-stat">
-            <div class="label">Promedio por Encuesta</div>
-            <div class="value">
-                {% if total_surveys > 0 %}
-                    {% widthratio total_responses total_surveys 1 %}
-                {% else %}
-                    0
-                {% endif %}
-            </div>
-        </div>
-        <div class="mini-stat">
-            <div class="label">Tasa de Actividad</div>
-            <div class="value" style="font-size: 12pt;">
-                {% if total_surveys > 0 %}
-                    {% widthratio total_active total_surveys 100 %}%
-                {% else %}
-                    0%
-                {% endif %}
-            </div>
-        </div>
-        <div class="mini-stat">
-            <div class="label">Nivel General</div>
-            <div class="value" style="font-size: 10pt; {% if global_satisfaction >= 7 %}color: #198754{% elif global_satisfaction >= 5 %}color: #ffc107{% else %}color: #dc3545{% endif %}">
-                {% if global_satisfaction >= 7 %}⭐ Bueno{% elif global_satisfaction >= 5 %}⚠️ Regular{% else %}❌ Bajo{% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Insights personalizados -->
-    {% if global_satisfaction >= 7 %}
-    <div class="insight-box" style="border-left-color: #198754; background: linear-gradient(135deg, #d1f4e0 0%, #f8f9fa 100%);">
-        <h4 style="color: #198754;">🎉 ¡Excelente trabajo!</h4>
-        <p>Tu nivel de satisfacción promedio de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> está por encima del promedio. Tus usuarios están contentos con las surveys.</p>
-    </div>
-    {% elif global_satisfaction >= 5 %}
-    <div class="insight-box" style="border-left-color: #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);">
-        <h4 style="color: #997404;">📊 Vas por buen camino</h4>
-        <p>Tu nivel de satisfacción de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> es aceptable, pero hay espacio para mejorar. Considera revisar las questions con calificaciones más bajas.</p>
-    </div>
-    {% else %}
-    <div class="insight-box" style="border-left-color: #dc3545; background: linear-gradient(135deg, #f8d7da 0%, #f8f9fa 100%);">
-        <h4 style="color: #dc3545;">⚠️ Área de mejora</h4>
-        <p>Tu nivel de satisfacción de <strong>{{ global_satisfaction|floatformat:1 }}/10</strong> sugiere que deberías revisar el contenido y formato de tus surveys para mejorar la experiencia.</p>
-    </div>
-    {% endif %}
-
-    {% if weekly_change > 50 %}
-    <div class="insight-box" style="border-left-color: #198754; background: linear-gradient(135deg, #d1f4e0 0%, #f8f9fa 100%);">
-        <h4 style="color: #198754;">🚀 Crecimiento acelerado</h4>
-        <p>Has tenido un <strong>aumento del {{ weekly_change|floatformat:1 }}%</strong> en respuestas esta semana. ¡Mantén el impulso compartiendo tus surveys activamente!</p>
-    </div>
-    {% elif weekly_change < -30 %}
-    <div class="insight-box" style="border-left-color: #ffc107; background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);">
-        <h4 style="color: #997404;">💻 Actividad reducida</h4>
-        <p>Has tenido una <strong>disminución del {{ weekly_change|floatformat:1|cut:"-" }}%</strong> en respuestas esta semana. Considera reactivar tus surveys o crear contenido nuevo.</p>
-    </div>
-    {% endif %}
-
-    {% if total_active == 0 and total_surveys > 0 %}
-    <div class="tip-box">
-        <div class="tip-title">💡 Consejo</div>
-        <div class="tip-content">No tienes surveys activas en este momento. Activa al menos una survey para empezar a recolectar respuestas y obtener feedback valioso.</div>
-    </div>
-    {% elif total_surveys == 0 %}
-    <div class="tip-box">
-        <div class="tip-title">🎓 Primeros pasos</div>
-        <div class="tip-content">Aún no has creado ninguna survey. Crea tu primera survey para empezar a recopilar opiniones y datos de tus usuarios.</div>
-    </div>
-    {% elif total_responses < 10 %}
-    <div class="tip-box">
-        <div class="tip-title">📢 Promoción</div>
-        <div class="tip-content">Tienes pocas respuestas. Comparte tus surveys en redes sociales, email o donde esté tu audiencia para obtener más participación.</div>
-    </div>
-    {% endif %}
-
-    <!-- Desglose visual de participación -->
-    {% if total_surveys > 0 %}
-    <h3 style="font-size: 8pt; font-weight: 700; color: #6c757d; margin: 10px 0 6px 0;">📊 Nivel de Participación</h3>
-    <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #dee2e6;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-            <span style="font-size: 7pt; color: #495057;">Respuestas totales:</span>
-            <span style="font-size: 8pt; font-weight: 700; color: #0d6efd;">{{ total_responses|default:"0" }}</span>
-        </div>
-        <div class="progress-bar-container">
-            <div class="progress-bar-fill" style="width: {% if total_responses > 100 %}100{% else %}{{ total_responses }}{% endif %}%;"></div>
-        </div>
-        <div style="font-size: 6pt; color: #6c757d; margin-top: 3px; text-align: center;">
-            {% if total_responses < 50 %}Objetivo: Alcanzar 50 respuestas{% elif total_responses < 100 %}Objetivo: Alcanzar 100 respuestas{% else %}¡Meta alcanzada!{% endif %}
-        </div>
-    </div>
-    {% endif %}
+    <div class="footer">Byteneko • Reporte Global</div>
 </body>
 </html>

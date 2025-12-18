@@ -22,7 +22,10 @@ logger = logging.getLogger('surveys')
 async def update_question_view(request, pk):
     """Actualizar una pregunta existente (AJAX)."""
     try:
-        question = await sync_to_async(get_object_or_404, thread_sensitive=True)(Question.objects.select_related('survey'), pk=pk)
+        question = await sync_to_async(get_object_or_404, thread_sensitive=True)(
+            Question.objects.select_related('survey__author'),
+            pk=pk,
+        )
     except Http404:
         logger.warning(f"Intento de actualizar pregunta inexistente: ID {pk} por usuario {request.user.username}")
         return JsonResponse({'success': False, 'error': 'Pregunta no encontrada'}, status=404)
@@ -73,7 +76,10 @@ async def update_question_view(request, pk):
 async def delete_question_view(request, pk):
     """Eliminar una pregunta (AJAX)."""
     try:
-        question = await sync_to_async(get_object_or_404, thread_sensitive=True)(Question.objects.select_related('survey'), pk=pk)
+        question = await sync_to_async(get_object_or_404, thread_sensitive=True)(
+            Question.objects.select_related('survey__author'),
+            pk=pk,
+        )
     except Http404:
         logger.warning(f"Intento de eliminar pregunta inexistente: ID {pk} por usuario {request.user.username}")
         return JsonResponse({'success': False, 'error': 'Pregunta no encontrada'}, status=404)
@@ -114,7 +120,12 @@ async def delete_question_view(request, pk):
 async def add_question_view(request, public_id):
     """Agregar una nueva pregunta a una encuesta (AJAX)."""
     try:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
+        # NOTE: En contexto async no debemos disparar queries al acceder a survey.author.
+        # select_related('author') garantiza que el FK ya viene cargado.
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
+            Survey.objects.select_related('author'),
+            public_id=public_id,
+        )
     except Http404:
         logger.warning(f"Intento de agregar pregunta a encuesta inexistente: ID {public_id} por usuario {request.user.username}")
         return JsonResponse({'success': False, 'error': 'Encuesta no encontrada'}, status=404)
@@ -137,13 +148,25 @@ async def add_question_view(request, public_id):
         @sync_to_async
         def create_question():
             next_order = survey.questions.count() + 1
+            question_type = data.get('type', 'text')
             question = Question.objects.create(
                 survey=survey,
                 text=data.get('text', 'Nueva pregunta')[:500],
-                type=data.get('type', 'text'),
+                type=question_type,
                 is_required=data.get('is_required', False),
                 order=next_order
             )
+
+            if question_type in ['single', 'multi']:
+                options_data = data.get('options', [])
+                if isinstance(options_data, list):
+                    for idx, option_text in enumerate(options_data):
+                        if str(option_text).strip():
+                            AnswerOption.objects.create(
+                                question=question,
+                                text=str(option_text).strip(),
+                                order=idx,
+                            )
             return question
         question = await create_question()
         logger.info(f"Nueva pregunta {question.id} creada en encuesta {public_id} por usuario {request.user.username}")

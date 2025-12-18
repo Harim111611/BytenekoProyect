@@ -1,19 +1,31 @@
 import logging
 import os
+import gc
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction, connection
+from django.core.cache import cache
+
+# Monitoreo de recursos
+from core.utils.memory_monitor import (
+    memory_guard, 
+    get_memory_usage, 
+    force_garbage_collection,
+    log_system_stats
+)
 
 # Logger
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 @shared_task(bind=True)
+@memory_guard(max_memory_mb=500)  # Límite de 500MB por importación
 def process_survey_import(self, survey_id: int, file_path: str, filename: str, user_id: int) -> dict:
     """
-    Tarea Celery que orquesta la importación.
-    Delega la lectura (C++) y escritura (COPY) a utils.bulk_import.
+    Tarea Celery optimizada para importación con monitoreo de memoria.
+    Soporta múltiples importaciones simultáneas en 4GB RAM.
     """
+    log_system_stats()
     logger.info(f"[TASK][IMPORT] Iniciando para encuesta {survey_id} desde {file_path}")
     
     # Importación local para evitar ciclos y asegurar carga de apps
@@ -63,57 +75,38 @@ def process_survey_import(self, survey_id: int, file_path: str, filename: str, u
                 logger.debug(f"Archivo temporal eliminado: {file_path}")
             except Exception as e:
                 logger.warning(f"No se pudo eliminar {file_path}: {e}")
+        
+        # Liberar memoria explícitamente (MAGIA NEGRA™)
+        gc.collect()
+        freed = force_garbage_collection()
+        log_system_stats()
 
 @shared_task
 def delete_surveys_task(survey_ids: list, user_id: int = None):
     """
-    Borrado masivo optimizado (SQL directo).
+    Borrado masivo optimizado usando fast_delete_surveys.
     """
+    from surveys.utils.delete_optimizer import fast_delete_surveys
+    
     if not survey_ids:
         return {'status': 'SUCCESS', 'deleted': 0}
 
-    # Sanitizar IDs
-    try:
-        ids = [int(i) for i in survey_ids]
-    except ValueError:
-        return {'status': 'FAILURE', 'error': 'IDs inválidos'}
+    logger.info(f"[TASK][DELETE] Iniciando borrado de {len(survey_ids)} encuestas")
+    result = fast_delete_surveys(survey_ids)
 
-    logger.info(f"[TASK][DELETE] Borrando {len(ids)} encuestas.")
-
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                # Orden de borrado para respetar FKs
-                # 1. Respuestas a preguntas (Tabla más pesada)
-                cursor.execute("""
-                    DELETE FROM surveys_questionresponse 
-                    WHERE survey_response_id IN (
-                        SELECT id FROM surveys_surveyresponse WHERE survey_id = ANY(%s::int[])
-                    )
-                """, (ids,))
-                
-                # 2. Respuestas de encuesta
-                cursor.execute("DELETE FROM surveys_surveyresponse WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 3. Opciones de respuesta (definición)
-                cursor.execute("""
-                    DELETE FROM surveys_answeroption 
-                    WHERE question_id IN (
-                        SELECT id FROM surveys_question WHERE survey_id = ANY(%s::int[])
-                    )
-                """, (ids,))
-                
-                # 4. Preguntas
-                cursor.execute("DELETE FROM surveys_question WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 5. Jobs de importación asociados (si aplica en tu esquema)
-                # cursor.execute("DELETE FROM surveys_importjob WHERE survey_id = ANY(%s::int[])", (ids,))
-                
-                # 6. La encuesta en sí
-                cursor.execute("DELETE FROM surveys_survey WHERE id = ANY(%s::int[])", (ids,))
-                
-        return {'status': 'SUCCESS', 'deleted': len(ids)}
-
-    except Exception as e:
-        logger.error(f"[TASK][DELETE] Error: {e}", exc_info=True)
-        return {'status': 'FAILURE', 'error': str(e)}
+    # IMPORTANTE: fast_delete_surveys usa SQL directo y no dispara señales.
+    # Invalidamos explícitamente el cache del dashboard del usuario para que
+    # los contadores se regeneren en la próxima carga.
+    if user_id:
+        try:
+            cache.delete(f"dashboard_data_user_{int(user_id)}")
+        except Exception:
+            # No bloquear la tarea por problemas de cache
+            pass
+    
+    if result['status'] == 'SUCCESS':
+        logger.info(f"[TASK][DELETE] ✅ Completado - {result['deleted']} encuestas eliminadas")
+    else:
+        logger.error(f"[TASK][DELETE] ❌ Error: {result.get('error', 'Unknown')}")
+    
+    return result

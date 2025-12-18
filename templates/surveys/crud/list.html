@@ -14,279 +14,287 @@
 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
 
 {# --- OVERLAY DE ELIMINACIÓN --- #}
-<div id="deletingOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(245,247,250,0.7); background:var(--bk-body-bg,rgba(245,247,250,0.7)); z-index:9999; align-items:center; justify-content:center;">
-    <div class="text-center">
-        <div class="spinner-border text-danger mb-3" role="status" style="width:3rem; height:3rem;"></div>
-        <div class="h4 fw-bold text-danger" id="deletingOverlayText">Eliminando...</div>
-    </div>
+<div id="deletingOverlay" class="deleting-overlay-full">
+  <div class="text-center">
+    <div class="spinner-border text-danger mb-3" role="status" style="width:3rem; height:3rem;"></div>
+    <div class="h4 fw-bold text-danger" id="deletingOverlayText">Eliminando...</div>
+  </div>
 </div>
 
 <div class="container-xl p-4 p-md-5">
 
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-        <div>
-            <h1 class="h2 fw-bold mb-1 text-body-emphasis">Mis Proyectos</h1>
-            <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap justify-content-md-end">
-            <button type="button"
-                    class="btn btn-outline-secondary border-dashed fw-medium shadow-sm hover-lift"
-                    data-bs-toggle="modal"
-                    data-bs-target="#importModalPreview"
-                    title="Importar CSV">
-                <i class="bi bi-cloud-upload me-2"></i>Importar CSV
-            </button>
-            <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-medium shadow-sm px-4 hover-lift">
-                <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
-            </a>
-            <button type="button"
-                    class="btn btn-outline-danger fw-medium"
-                    id="toggleSelectionBtn"
-                    title="Seleccionar múltiples encuestas"
-                    {% if not surveys %}disabled{% endif %}>
-                <i class="bi bi-check2-square me-1"></i>Seleccionar
-            </button>
-        </div>
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+    <div>
+      <h1 class="h2 fw-bold mb-1 text-body-emphasis">Mis Proyectos</h1>
+      <p class="text-muted mb-0">Gestiona y organiza tus estudios de mercado.</p>
     </div>
-
-    {# Alertas dinámicas (Alertas en página, distintas al Toast) #}
-    <div id="pageAlert" class="alert alert-success d-none mb-4 shadow-sm border-0" role="alert">
-        <strong id="pageAlertTitle"></strong><span id="pageAlertBody" class="ms-2"></span>
+    <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+      <button type="button"
+              class="btn btn-outline-secondary border-dashed fw-medium shadow-sm hover-lift"
+              data-bs-toggle="modal"
+              data-bs-target="#importModalPreview"
+              title="Importar CSV">
+        <i class="bi bi-cloud-upload me-2"></i>Importar CSV
+      </button>
+      <a href="{% url 'surveys:create' %}" class="btn btn-primary fw-medium shadow-sm px-4 hover-lift">
+        <i class="bi bi-plus-lg me-2"></i>Crear Encuesta
+      </a>
+      <button type="button"
+              class="btn btn-outline-danger fw-medium"
+              id="toggleSelectionBtn"
+              title="Seleccionar múltiples encuestas"
+              {% if not surveys %}disabled{% endif %}>
+        <i class="bi bi-check2-square me-1"></i>Seleccionar
+      </button>
     </div>
-    
-    {# BARRA DE BÚSQUEDA Y FILTROS (ACTUALIZADA CON CATEGORÍA) #}
-    <div class="card border-0 shadow-sm mb-4 bg-body-tertiary" style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
-        <div class="card-body p-2">
-            <form method="get" class="row g-2 align-items-center">
-                <div class="col-md-5">
-                    <div class="input-group">
-                        <input type="text" name="q" class="form-control border-0 bg-body-tertiary search-input py-2" 
-                               placeholder="Buscar por título..." 
-                               value="{{ request.GET.q|default_if_none:'' }}">
-                        <button type="submit" class="btn btn-outline-primary border-0 px-3" title="Buscar" style="z-index:2;">
-                            <i class="bi bi-search"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <select name="category" class="form-select border-0 bg-body-tertiary py-2" onchange="this.form.submit()">
-                        <option value="">Todas las categorías</option>
-                        {% for cat in unique_categories %}
-                            {% if cat %}
-                            <option value="{{ cat }}" {% if request.GET.category == cat %}selected{% endif %}>{{ cat }}</option>
-                            {% endif %}
-                        {% endfor %}
-                    </select>
-                </div>
+  </div>
 
-                <div class="col-md-4">
-                    <select name="status" class="form-select border-0 bg-body-tertiary py-2" onchange="this.form.submit()">
-                        <option value="">Todos los estados</option>
-                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Activas</option>
-                        <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Borradores</option>
-                        <option value="closed" {% if request.GET.status == 'closed' %}selected{% endif %}>Cerradas</option>
-                        <option value="paused" {% if request.GET.status == 'paused' %}selected{% endif %}>En pausa</option>
-                    </select>
-                </div>
-            </form>
-        </div>
-    </div>
+  {# Alertas dinámicas (Alertas en página, distintas al Toast) #}
+  <div id="pageAlert" class="alert alert-success d-none mb-4 shadow-sm border-0" role="alert">
+    <strong id="pageAlertTitle"></strong><span id="pageAlertBody" class="ms-2"></span>
+  </div>
 
-    {# Barra de Acciones Masivas (Oculta por defecto) #}
-    <div id="bulkActionsBar"
-        class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 bulk-actions-bar-custom shadow-sm"
-        style="display:none !important;">
-        <div class="d-flex align-items-center mb-2 mb-md-0 gap-2">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            <span class="small">
-                <strong><span id="selectedCountSpan">0</span> encuestas seleccionadas.</strong>
-            </span>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-sm btn-light border" id="selectAllBtn">Todas</button>
-            <button type="button" class="btn btn-sm btn-light border" id="deselectAllBtn" style="display:none;">Nada</button>
-            <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteSelectedBtn">
-                <i class="bi bi-trash-fill me-1"></i>Eliminar Selección
+  {# BARRA DE BÚSQUEDA Y FILTROS #}
+  <div class="card border-0 shadow-sm mb-4 bg-body-tertiary">
+    <div class="card-body p-2">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-md-5">
+          <div class="input-group">
+            <input type="text" name="q" class="form-control border-0 search-input py-2"
+                   placeholder="Buscar por título..."
+                   value="{{ request.GET.q|default_if_none:'' }}">
+            <button type="submit" class="btn btn-outline-primary border-0 px-3" title="Buscar">
+              <i class="bi bi-search"></i>
             </button>
-            <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteAllBtn">
-                <i class="bi bi-trash3-fill me-1"></i>Eliminar TODO
-            </button>
-            <button type="button" class="btn btn-sm btn-dark" id="cancelSelectionBtn">Cancelar</button>
+          </div>
         </div>
-    </div>
 
-    {# Lista de Encuestas #}
-    {% if surveys %}
-        <div class="row g-4">
-            {% for survey in surveys %}
-            <div class="col-md-6 col-lg-4">
-                <div class="card h-100 survey-card border-0 shadow-sm overflow-hidden" data-survey-id="{{ survey.pk }}">
-                    
-                    <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox" style="z-index: 10; display: none;">
-                        <button type="button" class="btn btn-sm survey-select-btn js-select-survey-btn"
-                                data-survey-id="{{ survey.pk }}"
-                                style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid var(--bs-border-color);">
-                            <i class="bi bi-circle" style="font-size: 1rem;"></i>
-                        </button>
-                    </div>
-
-                    <div class="card-body d-flex flex-column p-4">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill text-uppercase border border-primary-subtle" style="font-size: 0.7rem; letter-spacing: 0.5px; font-weight: 600;">
-                                {{ survey.category|default:"General" }}
-                            </span>
-                            
-                            <div class="d-flex align-items-center small">
-                                {% if survey.is_imported %}
-                                    <span class="badge rounded-pill bg-light text-dark border me-1" title="Importada"><i class="bi bi-filetype-csv"></i></span>
-                                {% endif %}
-
-                                {% if survey.status == 'active' %}
-                                    <span class="status-dot bg-success"></span><span class="text-success-emphasis fw-bold ms-1" style="font-size:0.8rem">Activa</span>
-                                {% elif survey.status == 'paused' %}
-                                    <span class="status-dot bg-warning"></span><span class="text-warning-emphasis fw-bold ms-1" style="font-size:0.8rem">Pausa</span>
-                                {% elif survey.status == 'draft' %}
-                                    <span class="status-dot bg-secondary"></span><span class="text-body-secondary ms-1" style="font-size:0.8rem">Borrador</span>
-                                {% else %}
-                                    <span class="status-dot bg-danger"></span><span class="text-danger-emphasis ms-1" style="font-size:0.8rem">Cerrada</span>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        {# Insight/Context Preview #}
-                        {% if survey.insight %}
-                        <div class="mb-3" style="max-height: 140px; min-height: 48px;">
-                            {% autoescape off %}{{ survey.insight }}{% endautoescape %}
-                        </div>
-                        {% endif %}
-
-                        <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate" title="{{ survey.title }}">
-                            <a href="{% url 'surveys:detail' survey.public_id %}" class="text-decoration-none text-reset stretched-link hover-underline-animation">
-                                {{ survey.title }}
-                            </a>
-                        </h5>
-
-                        <p class="card-text text-body-secondary small flex-grow-1 mb-4 text-truncate-2">
-                            {{ survey.description|default:"Sin descripción adicional." }}
-                        </p>
-
-                        <div class="mb-4">
-                            {% if survey.sample_goal > 0 %}
-                                <div class="d-flex justify-content-between align-items-center mb-1 small">
-                                    <span class="text-muted fw-medium">Progreso de Muestra</span>
-                                    <span class="text-primary fw-bold">{{ survey.total_responses }} <span class="text-muted fw-normal">/ {{ survey.sample_goal }}</span></span>
-                                </div>
-                                <div class="progress" style="height: 6px;">
-                                    {% widthratio survey.total_responses survey.sample_goal 100 as progress_percent %}
-                                    <div class="progress-bar bg-primary rounded-pill" role="progressbar" style="width: {{ progress_percent }}%" aria-valuenow="{{ survey.total_responses }}" aria-valuemin="0" aria-valuemax="{{ survey.sample_goal }}"></div>
-                                </div>
-                            {% else %}
-                                <div class="row g-2 text-center">
-                                    <div class="col-6">
-                                        <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100" style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
-                                            <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_responses }}</div>
-                                            <div class="small text-muted" style="font-size: 0.75rem;">Respuestas</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100" style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
-                                            <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_questions|default:"0" }}</div>
-                                            <div class="small text-muted" style="font-size: 0.75rem;">Preguntas</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-center mt-auto pt-3 border-top border-light-subtle">
-                             <div class="small text-body-secondary d-flex align-items-center" title="Fecha de creación">
-                                <i class="bi bi-calendar3 me-2 opacity-50"></i>{{ survey.created_at|date:"d M Y" }}
-                             </div>
-                             
-                             <div class="d-flex gap-2 position-relative" style="z-index: 2;">
-                                 <a href="{% url 'surveys:results' survey.public_id %}" 
-                                    class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm" 
-                                    data-bs-toggle="tooltip" title="Ver Resultados">
-                                    <i class="bi bi-bar-chart-fill"></i>
-                                </a>
-                                 <a href="{% url 'surveys:edit' survey.public_id %}" 
-                                    class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm" 
-                                    data-bs-toggle="tooltip" title="Configuración">
-                                    <i class="bi bi-gear-fill"></i>
-                                </a>
-                                <button type="button" 
-                                        class="btn btn-sm btn-light border text-danger hover-danger shadow-sm js-delete-survey-btn"
-                                        data-action="delete-survey" 
-                                        data-survey-id="{{ survey.pk }}"
-                                        data-bs-toggle="tooltip" title="Eliminar">
-                                    <i class="bi bi-trash-fill"></i>
-                                </button>
-                             </div>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
+        <div class="col-md-3">
+          <select name="category" class="form-select border-0 py-2" onchange="this.form.submit()">
+            <option value="">Todas las categorías</option>
+            {% for cat in unique_categories %}
+              {% if cat %}
+                <option value="{{ cat }}" {% if request.GET.category == cat %}selected{% endif %}>{{ cat }}</option>
+              {% endif %}
             {% endfor %}
+          </select>
         </div>
-        
-        {# Paginación #}
-        {% if is_paginated %}
-        <nav aria-label="Page navigation" class="mt-5">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link border-0 rounded-pill px-3 me-1 shadow-sm bg-body-tertiary text-body" 
-                       href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
-                        <i class="bi bi-chevron-left"></i> Anterior
-                    </a>
-                </li>
-                {% endif %}
-                <li class="page-item disabled">
-                    <span class="page-link border-0 bg-transparent fw-bold mx-2 text-muted">
-                        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link border-0 rounded-pill px-3 ms-1 shadow-sm bg-body-tertiary text-body" 
-                       href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
-                        Siguiente <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
 
-    {% else %}
-        {# Empty State #}
-        <div class="text-center py-5 my-5" id="surveys-empty-state">
-            <div class="mb-4">
-                <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed animate-float" style="width: 120px; height: 120px; background-color:var(--bk-card-bg);">
-                    <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3.5rem;"></i>
-                </div>
-            </div>
-            <h3 class="fw-bold text-body-emphasis mb-2" style="color:var(--bk-text-primary);">No tienes encuestas aún</h3>
-            <p class="text-muted mb-4 col-md-6 mx-auto" style="color:var(--bk-text-secondary);">
-                {% if request.GET.q or request.GET.status or request.GET.category %}
-                    No se encontraron resultados para los filtros aplicados.
-                {% else %}
-                    Comienza creando una encuesta desde cero o importando datos existentes.
-                {% endif %}
-            </p>
-            <div class="d-flex justify-content-center gap-3">
-                <a href="{% url 'surveys:create' %}" class="btn btn-primary btn-lg px-4 shadow-sm hover-lift">
-                    <i class="bi bi-plus-lg me-2"></i>Crear Nueva
-                </a>
-                <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm hover-lift"
-                        data-bs-toggle="modal" data-bs-target="#importModalPreview">
-                    Importar CSV
-                </button>
-            </div>
+        <div class="col-md-4">
+          <select name="status" class="form-select border-0 py-2" onchange="this.form.submit()">
+            <option value="">Todos los estados</option>
+            <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Activas</option>
+            <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Borradores</option>
+            <option value="closed" {% if request.GET.status == 'closed' %}selected{% endif %}>Cerradas</option>
+            <option value="paused" {% if request.GET.status == 'paused' %}selected{% endif %}>En pausa</option>
+          </select>
         </div>
+      </form>
+    </div>
+  </div>
+
+  {# Barra de Acciones Masivas #}
+    <div id="bulkActionsBar" hidden
+      class="alert alert-warning d-none flex-column flex-md-row align-items-md-center justify-content-between mb-4 bulk-actions-bar-custom shadow-sm">
+    <div class="d-flex align-items-center mb-2 mb-md-0 gap-2">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span class="small">
+        <strong><span id="selectedCountSpan">0</span> encuestas seleccionadas.</strong>
+      </span>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-sm btn-light border" id="selectAllBtn">Todas</button>
+      <button type="button" class="btn btn-sm btn-light border" id="deselectAllBtn" style="display:none;">Nada</button>
+      <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteSelectedBtn">
+        <i class="bi bi-trash-fill me-1"></i>Eliminar Selección
+      </button>
+      <button type="button" class="btn btn-sm btn-danger shadow-sm" id="deleteAllBtn">
+        <i class="bi bi-trash3-fill me-1"></i>Eliminar TODO
+      </button>
+      <button type="button" class="btn btn-sm btn-dark" id="cancelSelectionBtn">Cancelar</button>
+    </div>
+  </div>
+
+  {# Lista de Encuestas #}
+  {% if surveys %}
+    <div class="row g-4">
+      {% for survey in surveys %}
+        <div class="col-md-6 col-lg-4">
+          <div class="card h-100 survey-card border-0 shadow-sm overflow-hidden" data-survey-id="{{ survey.pk }}">
+
+            <div class="position-absolute top-0 start-0 mt-3 ms-3 selection-checkbox">
+              <button type="button" class="btn btn-sm survey-select-btn js-select-survey-btn"
+                      data-survey-id="{{ survey.pk }}"
+                      style="width: 36px; height: 36px; border-radius: 8px; padding: 0; border: 2px solid var(--bs-border-color);">
+                <i class="bi bi-circle" style="font-size: 1rem;"></i>
+              </button>
+            </div>
+
+            <div class="card-body d-flex flex-column p-4">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <span class="badge bg-primary-subtle text-primary-emphasis rounded-pill text-uppercase border border-primary-subtle"
+                      style="font-size: 0.7rem; letter-spacing: 0.5px; font-weight: 600;">
+                  {{ survey.category|default:"General" }}
+                </span>
+
+                <div class="d-flex align-items-center small">
+                  {% if survey.is_imported %}
+                    <span class="badge rounded-pill bg-light text-dark border me-1" title="Importada">
+                      <i class="bi bi-filetype-csv"></i>
+                    </span>
+                  {% endif %}
+
+                  {% if survey.status == 'active' %}
+                    <span class="status-dot bg-success"></span><span class="text-success-emphasis fw-bold ms-1">Activa</span>
+                  {% elif survey.status == 'paused' %}
+                    <span class="status-dot bg-warning"></span><span class="text-warning-emphasis fw-bold ms-1">Pausa</span>
+                  {% elif survey.status == 'draft' %}
+                    <span class="status-dot bg-secondary"></span><span class="text-body-secondary ms-1">Borrador</span>
+                  {% else %}
+                    <span class="status-dot bg-danger"></span><span class="text-danger-emphasis ms-1" style="font-size:0.8rem">Cerrada</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              {% if survey.insight %}
+                <div class="mb-3" style="max-height: 140px; min-height: 48px;">
+                  {% autoescape off %}{{ survey.insight }}{% endautoescape %}
+                </div>
+              {% endif %}
+
+              <h5 class="card-title fw-bold text-body-emphasis mb-2 text-truncate" title="{{ survey.title }}">
+                <a href="{% url 'surveys:detail' survey.public_id %}"
+                   class="text-decoration-none text-reset stretched-link hover-underline-animation">
+                  {{ survey.title }}
+                </a>
+              </h5>
+
+              <p class="card-text text-body-secondary small flex-grow-1 mb-4 text-truncate-2">
+                {{ survey.description|default:"Sin descripción adicional." }}
+              </p>
+
+              <div class="mb-4">
+                {% if survey.sample_goal > 0 %}
+                  <div class="d-flex justify-content-between align-items-center mb-1 small">
+                    <span class="text-muted fw-medium">Progreso de Muestra</span>
+                    <span class="text-primary fw-bold">{{ survey.total_responses }}
+                      <span class="text-muted fw-normal">/ {{ survey.sample_goal }}</span>
+                    </span>
+                  </div>
+                  <div class="progress" style="height: 6px;">
+                    {% widthratio survey.total_responses survey.sample_goal 100 as progress_percent %}
+                    <div class="progress-bar bg-primary rounded-pill" role="progressbar"
+                         style="width: {{ progress_percent }}%"
+                         aria-valuenow="{{ survey.total_responses }}" aria-valuemin="0" aria-valuemax="{{ survey.sample_goal }}"></div>
+                  </div>
+                {% else %}
+                  <div class="row g-2 text-center">
+                    <div class="col-6">
+                      <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100"
+                           style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
+                        <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_responses }}</div>
+                        <div class="small text-muted" style="font-size: 0.75rem;">Respuestas</div>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="p-2 rounded-3 bg-body-tertiary border border-dashed h-100"
+                           style="background-color:var(--bk-card-bg);color:var(--bk-text-primary);">
+                        <div class="h5 fw-bold text-body-emphasis mb-0">{{ survey.total_questions|default:"0" }}</div>
+                        <div class="small text-muted" style="font-size: 0.75rem;">Preguntas</div>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center mt-auto pt-3 border-top border-light-subtle">
+                <div class="small text-body-secondary d-flex align-items-center" title="Fecha de creación">
+                  <i class="bi bi-calendar3 me-2 opacity-50"></i>{{ survey.created_at|date:"d M Y" }}
+                </div>
+
+                <div class="d-flex gap-2 position-relative" style="z-index: 2;">
+                  <a href="{% url 'surveys:results' survey.public_id %}"
+                     class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm"
+                     data-bs-toggle="tooltip" title="Ver Resultados">
+                    <i class="bi bi-bar-chart-fill"></i>
+                  </a>
+                  <a href="{% url 'surveys:edit' survey.public_id %}"
+                     class="btn btn-sm btn-light border text-body-secondary hover-primary shadow-sm"
+                     data-bs-toggle="tooltip" title="Configuración">
+                    <i class="bi bi-gear-fill"></i>
+                  </a>
+                  <button type="button"
+                          class="btn btn-sm btn-light border text-danger hover-danger shadow-sm js-delete-survey-btn"
+                          data-action="delete-survey"
+                          data-survey-id="{{ survey.pk }}"
+                          data-bs-toggle="tooltip" title="Eliminar">
+                    <i class="bi bi-trash-fill"></i>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {# Paginación #}
+    {% if is_paginated %}
+      <nav aria-label="Page navigation" class="mt-5">
+        <ul class="pagination justify-content-center">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link border-0 rounded-pill px-3 me-1 shadow-sm bg-body-tertiary text-body"
+                 href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
+                <i class="bi bi-chevron-left"></i> Anterior
+              </a>
+            </li>
+          {% endif %}
+          <li class="page-item disabled">
+            <span class="page-link border-0 bg-transparent fw-bold mx-2 text-muted">
+              {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+            </span>
+          </li>
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link border-0 rounded-pill px-3 ms-1 shadow-sm bg-body-tertiary text-body"
+                 href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">
+                Siguiente <i class="bi bi-chevron-right"></i>
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
     {% endif %}
+
+  {% else %}
+    <div class="text-center py-5 my-5" id="surveys-empty-state">
+      <div class="mb-4">
+        <div class="bg-body-tertiary rounded-circle d-inline-flex align-items-center justify-content-center border border-dashed animate-float"
+             style="width: 120px; height: 120px; background-color:var(--bk-card-bg);">
+          <i class="bi bi-folder2-open text-muted opacity-50" style="font-size: 3.5rem;"></i>
+        </div>
+      </div>
+      <h3 class="fw-bold text-body-emphasis mb-2" style="color:var(--bk-text-primary);">No tienes encuestas aún</h3>
+      <p class="text-muted mb-4 col-md-6 mx-auto" style="color:var(--bk-text-secondary);">
+        {% if request.GET.q or request.GET.status or request.GET.category %}
+          No se encontraron resultados para los filtros aplicados.
+        {% else %}
+          Comienza creando una encuesta desde cero o importando datos existentes.
+        {% endif %}
+      </p>
+      <div class="d-flex justify-content-center gap-3">
+        <a href="{% url 'surveys:create' %}" class="btn btn-primary btn-lg px-4 shadow-sm hover-lift">
+          <i class="bi bi-plus-lg me-2"></i>Crear Nueva
+        </a>
+        <button class="btn btn-outline-secondary btn-lg px-4 shadow-sm hover-lift"
+                data-bs-toggle="modal" data-bs-target="#importModalPreview">
+          Importar CSV
+        </button>
+      </div>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -294,543 +302,696 @@
 <link rel="stylesheet" href="{% static 'css/byteneko.css' %}">
 
 <script id="urls-data" type="application/json">
-    {
-        "importAsync": "{% url 'surveys:import_survey_csv_async' %}",
-        "importPreview": "{% url 'surveys:import_preview' %}",
-        "bulkDelete": "{% url 'surveys:bulk_delete' %}",
-        "taskStatus": "{% url 'surveys:task_status' '0000' %}" 
-    }
+{
+  "importAsync": "{% url 'surveys:import_survey_csv_async' %}",
+  "importPreview": "{% url 'surveys:import_preview' %}",
+  "bulkDelete": "{% url 'surveys:bulk_delete' %}",
+
+  "taskStatus": "{% url 'surveys:task_status' '0000' %}",
+  "deleteTaskStatus": "{% url 'surveys:delete_task_status' '0000' %}"
+}
 </script>
 
 <script>
-/**
- * SURVEY LIST LOGIC - OPTIMIZED BY SENIOR DJANGO DEV
- * Highlights:
- * 1. Implemented LocalStorage Messaging Pattern to persist Toast notifications across reloads.
- * 2. Unified delete logic to DRY principles.
- * 3. Corrected Toast vs Modal instantiation.
- */
-document.addEventListener('DOMContentLoaded', function() {
-    
-    // --- 1. CONFIG & SYSTEM UTILS ---
-    let urls = {};
-    try {
-        urls = JSON.parse(document.getElementById('urls-data').textContent);
-    } catch (e) {
-        console.error("Error parsing URLs JSON:", e);
+document.addEventListener('DOMContentLoaded', function () {
+
+  // ----------------------------
+  // CONFIG
+  // ----------------------------
+  let urls = {};
+  try {
+    urls = JSON.parse(document.getElementById('urls-data').textContent);
+  } catch (e) {
+    console.error("Error parsing URLs JSON:", e);
+  }
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // ----------------------------
+  // CSRF + FETCH
+  // ----------------------------
+  const getCsrfToken = () => {
+    const input = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (input) return input.value;
+
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, 10) === 'csrftoken=') {
+          cookieValue = decodeURIComponent(cookie.substring(10));
+          break;
+        }
+      }
     }
-    
-    // CSRF Utility
-    const getCsrfToken = () => {
-        const input = document.querySelector('[name=csrfmiddlewaretoken]');
-        if (input) return input.value;
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, 10) === ('csrftoken=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(10));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
+    return cookieValue;
+  };
+
+  const fetchSecure = async (url, options = {}) => {
+    const headers = {
+      'X-CSRFToken': getCsrfToken(),
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(options.headers || {})
     };
-    
-    // API Fetcher
-    const fetchSecure = async (url, options = {}) => {
-        const headers = {
-            'X-CSRFToken': getCsrfToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-            ...(options.headers || {})
-        };
-        if (options.body && !(options.body instanceof FormData)) {
-            headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        }
-        return fetch(url, { ...options, headers });
-    };
+    // Si no es FormData, manda urlencoded
+    if (options.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+    return fetch(url, { ...options, headers });
+  };
 
-    // Task Polling
-    const pollTask = async (taskId, onComplete, onError) => {
-        const statusUrl = urls.taskStatus.replace('0000', taskId);
-        const startTime = Date.now();
-        const timeout = 300000; // 5 mins
+  // ----------------------------
+  // TOAST / ALERT
+  // ----------------------------
+  const showToast = (message) => {
+    const toastEl = document.getElementById('announcementModal');
+    if (!toastEl) return;
+    const bodyEl = document.getElementById('announcementModalBody');
+    if (bodyEl) bodyEl.textContent = message;
+    new bootstrap.Toast(toastEl).show();
+  };
 
-        while (Date.now() - startTime < timeout) {
-            try {
-                const res = await fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                if (!res.ok) throw new Error('Network error');
-                
-                const data = await res.json();
-                
-                if (['SUCCESS', 'success', 'completed'].includes(data.status)) {
-                    if (onComplete) onComplete(data);
-                    return true;
-                }
-                if (['FAILURE', 'failure', 'failed'].includes(data.status) || data.error) {
-                    if (onError) onError(data.error || data.error_message || 'Task failed');
-                    return false;
-                }
-            } catch (e) { console.warn('Polling...', e); }
-            
-            await new Promise(r => setTimeout(r, 2000));
-        }
-        if (onError) onError('Timeout');
-        return false;
-    };
+  const checkPendingNotifications = () => {
+    const pendingMsg = localStorage.getItem('app_toast_message');
+    if (pendingMsg) {
+      showToast(pendingMsg);
+      localStorage.removeItem('app_toast_message');
+    }
+  };
 
-    // --- 2. NOTIFICATION SYSTEM (TOASTS) ---
-    // Verifica si hay mensajes pendientes en LocalStorage (ej: después de reload)
-    const checkPendingNotifications = () => {
-        const pendingMsg = localStorage.getItem('app_toast_message');
-        if (pendingMsg) {
-            showToast(pendingMsg);
-            localStorage.removeItem('app_toast_message'); // Limpiar para que no salga siempre
-        }
-    };
+  const showPageAlert = (type, title, body, durationMs = 5000) => {
+    const box = document.getElementById('pageAlert');
+    if (!box) return;
+    box.className = `alert alert-${type} d-flex align-items-center mb-4 shadow-sm border-0`;
+    box.classList.remove('d-none');
+    const t = document.getElementById('pageAlertTitle');
+    const b = document.getElementById('pageAlertBody');
+    if (t) t.textContent = title;
+    if (b) b.textContent = body;
+    setTimeout(() => box.classList.add('d-none'), durationMs);
+  };
 
-    const showToast = (message) => {
-        const toastEl = document.getElementById('announcementModal'); // Es un Toast, aunque el ID diga modal
-        if (toastEl) {
-            const bodyEl = document.getElementById('announcementModalBody');
-            if (bodyEl) bodyEl.textContent = message;
-            
-            // Importante: Usar bootstrap.Toast, no Modal
-            const toast = new bootstrap.Toast(toastEl);
-            toast.show();
-        }
-    };
+  // ----------------------------
+  // POLLING (IMPORT vs DELETE)
+  // ----------------------------
+  const pollTaskGeneric = async (taskId, urlTemplate, onComplete, onError) => {
+    const statusUrl = (urlTemplate || '').replace('0000', taskId);
+    const startTime = Date.now();
+    const timeout = 900000; // 15 min
+    let pollCount = 0;
 
-    const showPageAlert = (type, title, body, durationMs = 5000) => {
-        const box = document.getElementById('pageAlert');
-        if (!box) return;
-        box.className = `alert alert-${type} d-flex align-items-center mb-4 shadow-sm border-0`;
-        box.classList.remove('d-none');
-        document.getElementById('pageAlertTitle').textContent = title;
-        document.getElementById('pageAlertBody').textContent = body;
-        setTimeout(() => box.classList.add('d-none'), durationMs);
-    };
+    while (Date.now() - startTime < timeout) {
+      pollCount++;
+      try {
+        const res = await fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) throw new Error(`Network error (${res.status})`);
 
-    // --- 3. DELETE LOGIC (Centralized) ---
-    // Overlay dentro de la tarjeta
-    const showDeletingOverlayInCard = (surveyId) => {
-        const card = document.querySelector('.survey-card[data-survey-id="' + surveyId + '"]');
-        if (!card) return;
-        let overlay = card.querySelector('.deleting-overlay-card');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.className = 'deleting-overlay-card position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center';
-            overlay.style.background = 'var(--bs-body-bg, #fff)';
-            overlay.style.zIndex = '20';
-            overlay.innerHTML = `
-                <div class="spinner-border text-danger mb-2" role="status" style="width:2.5rem; height:2.5rem;"></div>
-                <div class="fw-bold text-danger" style="font-size:1.1rem;">Eliminando...</div>
-            `;
-            // Adaptar a modo noche/día
-            if (document.documentElement.classList.contains('dark') || document.body.classList.contains('bg-dark')) {
-                overlay.style.background = 'rgba(33,37,41,0.85)';
-                overlay.querySelector('.text-danger').classList.add('text-light');
-            } else {
-                overlay.style.background = 'rgba(255,255,255,0.85)';
-            }
-            card.appendChild(overlay);
-        }
-        overlay.style.display = 'flex';
-    };
+        const data = await res.json();
 
-    const hideDeletingOverlayInCard = (surveyId) => {
-        const card = document.querySelector('.survey-card[data-survey-id="' + surveyId + '"]');
-        if (!card) return;
-        const overlay = card.querySelector('.deleting-overlay-card');
-        if (overlay) overlay.style.display = 'none';
-    };
-
-    // Para bulk delete, mostrar en todas las tarjetas seleccionadas
-    const showBulkDeletingOverlays = (idsList) => {
-        idsList.forEach(id => showDeletingOverlayInCard(id));
-    };
-    const hideBulkDeletingOverlays = (idsList) => {
-        idsList.forEach(id => hideDeletingOverlayInCard(id));
-    };
-
-    const executeDelete = async (idsList, successMessage = "Encuestas eliminadas con éxito") => {
-        if (idsList.length === 1) {
-            showDeletingOverlayInCard(idsList[0]);
-        } else {
-            showBulkDeletingOverlays(idsList);
-        }
-        try {
-            const formData = new FormData();
-            idsList.forEach(id => formData.append('survey_ids', id));
-            const res = await fetchSecure(urls.bulkDelete, { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.task_id) {
-                await pollTask(data.task_id);
-                // GUARDAR MENSAJE EN LOCALSTORAGE ANTES DEL RELOAD
-                localStorage.setItem('app_toast_message', successMessage);
-                window.location.reload();
-            } else {
-                throw new Error(data.error || 'Error desconocido');
-            }
-        } catch (e) {
-            if (idsList.length === 1) {
-                hideDeletingOverlayInCard(idsList[0]);
-            } else {
-                hideBulkDeletingOverlays(idsList);
-            }
-            showPageAlert('danger', 'Error', 'Falló la eliminación: ' + e.message);
-        }
-    };
-
-    // --- 4. IMPORT LOGIC (OPTIMIZADA) ---
-    const initImportModal = () => {
-        const modalEl = document.getElementById('importModalPreview');
-        if (!modalEl) return;
-        
-        const els = {
-            fileInput: document.getElementById('csvFileInput'),
-            titleInput: document.getElementById('surveyTitleInput'),
-            btnAnalyze: document.getElementById('btn-analyze'),
-            btnConfirm: document.getElementById('btn-import-confirm'),
-            fileList: document.getElementById('fileList'),
-            multiWarning: document.getElementById('multi-file-warning'),
-            // Referencias a elementos de la UI del preview
-            previewFilename: document.getElementById('preview-filename'),
-            totalRows: document.getElementById('preview-total-rows'),
-            totalCols: document.getElementById('preview-total-questions'),
-            columnsTable: document.getElementById('preview-columns-table'),
-            sampleHeader: document.getElementById('preview-sample-header'),
-            sampleBody: document.getElementById('preview-sample-body'),
-            
-            steps: {
-                upload: document.getElementById('step1-upload'),
-                preview: document.getElementById('step2-preview'),
-                loading: document.getElementById('step-loading'),
-                error: document.getElementById('step-error')
-            }
-        };
-
-        const showStep = (stepName) => {
-            Object.values(els.steps).forEach(el => { if(el) el.style.display = 'none'; });
-            if(els.steps[stepName]) els.steps[stepName].style.display = 'block';
-        };
-
-        const showError = (msg) => {
-            const errEl = document.getElementById('error-message');
-            if(errEl) errEl.textContent = msg;
-            showStep('error');
-        };
-
-        // --- FUNCIÓN DE RENDERIZADO (LA PIEZA QUE FALTABA) ---
-        const renderPreviewData = (data) => {
-            // 1. Actualizar Resumen
-            if(els.previewFilename) els.previewFilename.textContent = data.filename;
-            if(els.totalRows) els.totalRows.textContent = data.total_rows;
-            if(els.totalCols) els.totalCols.textContent = data.total_columns;
-
-            // 2. Renderizar Tabla de Estructura (Columnas)
-            if (els.columnsTable) {
-                els.columnsTable.innerHTML = ''; // Limpiar previo
-                data.columns.forEach((col, index) => {
-                    const sampleBadges = col.sample_values
-                        .map(v => `<span class="badge bg-light text-dark border me-1">${v}</span>`)
-                        .join('');
-                    
-                    const row = `
-                        <tr>
-                            <td class="ps-4 text-muted">${index + 1}</td>
-                            <td class="fw-medium text-primary">${col.name}</td>
-                            <td><span class="badge bg-secondary-subtle text-secondary-emphasis">Texto</span></td>
-                            <td class="text-center">${col.unique_values}</td>
-                            <td>${sampleBadges}</td>
-                        </tr>
-                    `;
-                    els.columnsTable.insertAdjacentHTML('beforeend', row);
-                });
-            }
-
-            // 3. Renderizar Tabla de Datos (Sample)
-            // 3.1 Headers
-            if (els.sampleHeader) {
-                els.sampleHeader.innerHTML = '';
-                let headerRow = '<tr>';
-                data.columns.forEach(col => {
-                    headerRow += `<th class="bg-body-tertiary text-nowrap">${col.name}</th>`;
-                });
-                headerRow += '</tr>';
-                els.sampleHeader.innerHTML = headerRow;
-            }
-
-            // 3.2 Body Rows
-            if (els.sampleBody) {
-                els.sampleBody.innerHTML = '';
-                data.sample_rows.forEach(rowValues => {
-                    let rowHtml = '<tr>';
-                    rowValues.forEach(val => {
-                        // Truncar textos muy largos para que no rompan la tabla
-                        const displayVal = val.length > 50 ? val.substring(0, 50) + '...' : val;
-                        rowHtml += `<td class="text-nowrap" title="${val}">${displayVal}</td>`;
-                    });
-                    rowHtml += '</tr>';
-                    els.sampleBody.insertAdjacentHTML('beforeend', rowHtml);
-                });
-            }
-        };
-
-        if (els.fileInput) {
-            els.fileInput.addEventListener('change', function() {
-                const count = this.files.length;
-                els.fileList.textContent = count > 0 ? 
-                    (count === 1 ? this.files[0].name : `${count} archivos seleccionados`) : 
-                    'Ningún archivo seleccionado';
-                
-                els.btnAnalyze.disabled = count === 0;
-                if(els.multiWarning) els.multiWarning.style.display = count > 1 ? 'block' : 'none';
-                els.btnAnalyze.innerHTML = count > 1 ? 
-                    '<i class="bi bi-cloud-upload me-2"></i>Importar Todos' : 
-                    '<i class="bi bi-magic me-2"></i>Analizar Archivo';
-            });
+        // Si hay contador visible (import modal)
+        const counterEl = document.getElementById('loading-counter');
+        if (counterEl) {
+          const dots = '.'.repeat((pollCount % 3) + 1);
+          counterEl.textContent = `Verificando estado${dots}`;
         }
 
+        if (['SUCCESS', 'success', 'completed'].includes(data.status)) {
+          if (onComplete) onComplete(data);
+          return true;
+        }
+
+        if (['FAILURE', 'failure', 'failed'].includes(data.status) || data.error) {
+          if (onError) onError(data.error || data.error_message || 'Task failed');
+          return false;
+        }
+      } catch (e) {
+        console.warn('Polling...', e);
+      }
+
+      await sleep(1500);
+    }
+
+    if (onError) onError('Timeout después de 15 minutos');
+    return false;
+  };
+
+  const pollImportTask = (taskId, onComplete, onError) =>
+    pollTaskGeneric(taskId, urls.taskStatus, onComplete, onError);
+
+  const pollDeleteTask = (taskId, onComplete, onError) =>
+    pollTaskGeneric(taskId, urls.deleteTaskStatus, onComplete, onError);
+
+  // ----------------------------
+  // DELETE OVERLAYS
+  // ----------------------------
+  const showDeletingOverlayInCard = (surveyId) => {
+    const card = document.querySelector(`.survey-card[data-survey-id="${surveyId}"]`);
+    if (!card) return;
+
+    let overlay = card.querySelector('.deleting-overlay-card');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'deleting-overlay-card position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center';
+      overlay.style.zIndex = '20';
+
+      const isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('bg-dark');
+      overlay.style.background = isDark ? 'rgba(33,37,41,0.85)' : 'rgba(255,255,255,0.85)';
+
+      overlay.innerHTML = `
+        <div class="spinner-border text-danger mb-2" role="status" style="width:2.5rem; height:2.5rem;"></div>
+        <div class="fw-bold ${isDark ? 'text-light' : 'text-danger'}" style="font-size:1.1rem;">Eliminando...</div>
+      `;
+      card.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+  };
+
+  const hideDeletingOverlayInCard = (surveyId) => {
+    const card = document.querySelector(`.survey-card[data-survey-id="${surveyId}"]`);
+    if (!card) return;
+    const overlay = card.querySelector('.deleting-overlay-card');
+    if (overlay) overlay.style.display = 'none';
+  };
+
+  const showBulkDeletingOverlays = (idsList) => idsList.forEach(showDeletingOverlayInCard);
+  const hideBulkDeletingOverlays = (idsList) => idsList.forEach(hideDeletingOverlayInCard);
+
+  const executeDelete = async (idsList, successMessage = "Encuestas eliminadas con éxito") => {
+    if (!idsList || !idsList.length) return;
+
+    if (idsList.length === 1) showDeletingOverlayInCard(idsList[0]);
+    else showBulkDeletingOverlays(idsList);
+
+    try {
+      const formData = new FormData();
+      idsList.forEach(id => formData.append('survey_ids', id));
+
+      const res = await fetchSecure(urls.bulkDelete, { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.task_id) {
+        await pollDeleteTask(
+          data.task_id,
+          () => {
+            localStorage.setItem('app_toast_message', successMessage);
+            window.location.reload();
+          },
+          (err) => {
+            throw new Error(err || 'Task failed');
+          }
+        );
+        return;
+      }
+
+      if (data.success) {
+        localStorage.setItem('app_toast_message', successMessage);
+        window.location.reload();
+        return;
+      }
+
+      throw new Error(data.error || 'Error desconocido');
+
+    } catch (e) {
+      if (idsList.length === 1) hideDeletingOverlayInCard(idsList[0]);
+      else hideBulkDeletingOverlays(idsList);
+      showPageAlert('danger', 'Error', 'Falló la eliminación: ' + e.message);
+    }
+  };
+
+  // ----------------------------
+  // IMPORT MODAL
+  // ----------------------------
+  const initImportModal = () => {
+    const modalEl = document.getElementById('importModalPreview');
+    if (!modalEl) return;
+
+    const els = {
+      fileInput: document.getElementById('csvFileInput'),
+      titleInput: document.getElementById('surveyTitleInput'),
+      btnAnalyze: document.getElementById('btn-analyze'),
+      btnConfirm: document.getElementById('btn-import-confirm'),
+      fileList: document.getElementById('fileList'),
+      multiWarning: document.getElementById('multi-file-warning'),
+
+      previewFilename: document.getElementById('preview-filename'),
+      totalRows: document.getElementById('preview-total-rows'),
+      totalCols: document.getElementById('preview-total-questions'),
+      columnsTable: document.getElementById('preview-columns-table'),
+      sampleHeader: document.getElementById('preview-sample-header'),
+      sampleBody: document.getElementById('preview-sample-body'),
+
+      steps: {
+        upload: document.getElementById('step1-upload'),
+        preview: document.getElementById('step2-preview'),
+        loading: document.getElementById('step-loading'),
+        error: document.getElementById('step-error')
+      }
+    };
+
+    const showStep = (name) => {
+      Object.values(els.steps).forEach(el => {
+        if (!el) return;
+        el.classList.add('d-none');
+        el.style.display = 'none';
+      });
+      if (els.steps[name]) {
+        els.steps[name].classList.remove('d-none');
+        els.steps[name].style.display = 'block';
+      }
+
+      const closeBtn = document.getElementById('btn-close-import-modal-header');
+      if (closeBtn) closeBtn.style.display = name === 'loading' ? 'none' : 'block';
+    };
+
+    const resetPreviewUI = () => {
+      if (els.previewFilename) els.previewFilename.textContent = 'archivo.csv';
+      if (els.totalRows) els.totalRows.textContent = '0';
+      if (els.totalCols) els.totalCols.textContent = '0';
+      if (els.columnsTable) els.columnsTable.innerHTML = '';
+      if (els.sampleHeader) els.sampleHeader.innerHTML = '';
+      if (els.sampleBody) els.sampleBody.innerHTML = '';
+      const errEl = document.getElementById('error-message');
+      if (errEl) errEl.textContent = '';
+    };
+
+    const showError = (msg) => {
+      const errEl = document.getElementById('error-message');
+      if (errEl) errEl.textContent = msg || 'Error desconocido';
+      showStep('error');
+    };
+
+    const renderPreview = (data) => {
+      const cols = Array.isArray(data.columns) ? data.columns : [];
+      const rows = Array.isArray(data.sample_rows) ? data.sample_rows : [];
+
+      if (els.previewFilename) els.previewFilename.textContent = data.filename || 'archivo.csv';
+      if (els.totalRows) els.totalRows.textContent = (data.total_rows ?? rows.length);
+      if (els.totalCols) els.totalCols.textContent = (data.total_columns ?? cols.length);
+
+      if (els.columnsTable) {
+        els.columnsTable.innerHTML = '';
+        cols.forEach((col, idx) => {
+          const displayName = col.display_name || col.name || `Col ${idx + 1}`;
+          const sampleBadges = (col.sample_values || [])
+            .slice(0, 6)
+            .map(v => {
+              const safe = (v === null || v === undefined) ? '' : String(v);
+              return `<span class="badge bg-light text-dark border me-1">${safe}</span>`;
+            })
+            .join('');
+          const row = `
+            <tr>
+              <td class="ps-4 text-muted">${idx + 1}</td>
+              <td class="fw-medium text-primary">${displayName}</td>
+              <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${col.type || col.dtype || 'Texto'}</span></td>
+              <td class="text-center">${col.unique_values ?? ''}</td>
+              <td>${sampleBadges}</td>
+            </tr>`;
+          els.columnsTable.insertAdjacentHTML('beforeend', row);
+        });
+      }
+
+      if (els.sampleHeader) {
+        let header = '<tr>';
+        cols.forEach(col => {
+          const displayName = col.display_name || col.name || '';
+          header += `<th class="bg-body-tertiary text-nowrap">${displayName}</th>`;
+        });
+        header += '</tr>';
+        els.sampleHeader.innerHTML = header;
+      }
+
+      if (els.sampleBody) {
+        els.sampleBody.innerHTML = '';
+        rows.forEach(r => {
+          let rowHtml = '<tr>';
+          (Array.isArray(r) ? r : Object.values(r || {})).forEach(val => {
+            const safe = (val === null || val === undefined) ? '' : String(val);
+            const display = safe.length > 120 ? safe.slice(0, 120) + '…' : safe;
+            rowHtml += `<td class="text-nowrap" title="${safe.replaceAll('"','&quot;')}">${display}</td>`;
+          });
+          rowHtml += '</tr>';
+          els.sampleBody.insertAdjacentHTML('beforeend', rowHtml);
+        });
+      }
+    };
+
+    const resetAll = () => {
+      resetPreviewUI();
+      if (els.multiWarning) els.multiWarning.style.display = 'none';
+      if (els.fileInput) els.fileInput.value = '';
+      if (els.fileList) els.fileList.textContent = 'Ningún archivo seleccionado';
+      if (els.btnAnalyze) els.btnAnalyze.disabled = true;
+      if (els.titleInput) els.titleInput.value = '';
+      showStep('upload');
+    };
+
+    // Input change
+    if (els.fileInput) {
+      els.fileInput.addEventListener('change', function () {
+        const count = this.files ? this.files.length : 0;
+        if (els.fileList) {
+          els.fileList.textContent =
+            count === 0 ? 'Ningún archivo seleccionado'
+            : (count === 1 ? this.files[0].name : `${count} archivos seleccionados`);
+        }
         if (els.btnAnalyze) {
-            els.btnAnalyze.addEventListener('click', async () => {
-                if (!els.fileInput.files.length) return;
-                
-                showStep('loading');
-                const titleEl = document.getElementById('loading-title');
-                if(titleEl) titleEl.textContent = "Procesando...";
-
-                const formData = new FormData();
-                
-                // Lógica de carga múltiple (se mantiene igual)
-                if (els.fileInput.files.length > 1) {
-                    for (let file of els.fileInput.files) formData.append('csv_files', file);
-                    try {
-                        const res = await fetchSecure(urls.importAsync, { method: 'POST', body: formData });
-                        const data = await res.json();
-                        if (data.success && data.jobs) {
-                            const loadText = document.getElementById('loading-text');
-                            if(loadText) loadText.textContent = "Importando múltiples archivos...";
-                            await Promise.all(data.jobs.map(j => pollTask(j.job_id)));
-                            
-                            localStorage.setItem('app_toast_message', 'Importación masiva completada');
-                            window.location.reload();
-                        } else {
-                            showError(data.error || 'Error en importación masiva');
-                        }
-                    } catch (e) { showError(e.message); }
-                    return;
-                }
-
-                // Lógica de Previsualización (Un solo archivo)
-                formData.append('csv_file', els.fileInput.files[0]);
-                try {
-                    const res = await fetchSecure(urls.importPreview, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        // AQUÍ LLAMAMOS A LA NUEVA FUNCIÓN DE RENDERIZADO
-                        renderPreviewData(data);
-                        showStep('preview');
-                    } else {
-                        showError(data.error);
-                    }
-                } catch (e) { showError("Error de conexión: " + e.message); }
-            });
+          els.btnAnalyze.disabled = (count === 0);
+          els.btnAnalyze.innerHTML = count > 1
+            ? '<i class="bi bi-cloud-upload me-2"></i>Importar Todos'
+            : '<i class="bi bi-magic me-2"></i>Analizar Archivo';
         }
+        if (els.multiWarning) els.multiWarning.style.display = (count > 1) ? 'block' : 'none';
+      });
+    }
 
-        if (els.btnConfirm) {
-            els.btnConfirm.addEventListener('click', async () => {
-                showStep('loading');
-                const formData = new FormData();
-                formData.append('csv_file', els.fileInput.files[0]);
-                if (els.titleInput.value) formData.append('survey_title', els.titleInput.value);
+    // Analyze / Import-all
+    if (els.btnAnalyze) {
+      els.btnAnalyze.addEventListener('click', async () => {
+        if (!els.fileInput || !els.fileInput.files || !els.fileInput.files.length) return;
 
-                try {
-                    const res = await fetchSecure(urls.importAsync, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    if (data.success) {
-                        const jobId = data.job_id || data.import_job_id;
-                        pollTask(jobId, () => {
-                            localStorage.setItem('app_toast_message', 'Encuesta importada con éxito');
-                            window.location.reload();
-                        }, (err) => showError(err));
-                    } else {
-                        showError(data.error);
-                    }
-                } catch (e) { showError(e.message); }
-            });
-        }
-        
-        // Botones de navegación interna
-        const backBtns = document.querySelectorAll('#btn-back-to-upload, #btn-retry-upload');
-        backBtns.forEach(btn => btn.addEventListener('click', () => showStep('upload')));
-    };
-    // --- 5. SELECTION & BULK ACTIONS ---
-    const initSelectionLogic = () => {
-        const ui = {
-            toggleBtn: document.getElementById('toggleSelectionBtn'),
-            bar: document.getElementById('bulkActionsBar'),
-            countSpan: document.getElementById('selectedCountSpan'),
-            deleteBtn: document.getElementById('deleteSelectedBtn'),
-            deleteAllBtn: document.getElementById('deleteAllBtn'),
-            checkboxes: document.querySelectorAll('.js-select-survey-btn'),
-            selectAllBtn: document.getElementById('selectAllBtn'),
-            deselectAllBtn: document.getElementById('deselectAllBtn')
-        };
-        
-        if (!ui.toggleBtn) return;
-        
-        const selectedIds = new Set();
-        let modeActive = false;
+        const formData = new FormData();
+        showStep('loading');
 
-        const updateUI = () => {
-            ui.countSpan.textContent = selectedIds.size;
-            ui.bar.style.display = modeActive ? 'flex' : 'none';
-            document.querySelectorAll('.selection-checkbox').forEach(el => el.style.display = modeActive ? 'block' : 'none');
-            
-            // Toggle buttons visibility
-            if(ui.selectAllBtn) ui.selectAllBtn.style.display = (selectedIds.size < ui.checkboxes.length) ? 'inline-block' : 'none';
-            if(ui.deselectAllBtn) ui.deselectAllBtn.style.display = (selectedIds.size > 0) ? 'inline-block' : 'none';
-        };
+        // Multi: import directo sin preview
+        if (els.fileInput.files.length > 1) {
+          for (const f of els.fileInput.files) formData.append('csv_files', f);
 
-        const toggleMode = (active) => {
-            modeActive = active;
-            if (!active) {
-                selectedIds.clear();
-                ui.checkboxes.forEach(b => {
-                    b.classList.remove('selected', 'btn-primary');
-                    b.querySelector('i').className = 'bi bi-circle';
-                });
+          try {
+            const res = await fetchSecure(urls.importAsync, { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (data.success && Array.isArray(data.jobs)) {
+              for (const j of data.jobs) {
+                if (j && j.job_id) await pollImportTask(j.job_id);
+              }
+              localStorage.setItem('app_toast_message', 'Importación masiva completada');
+              window.location.reload();
+              return;
             }
-            updateUI();
-        };
 
-        ui.toggleBtn.addEventListener('click', () => toggleMode(true));
-        
-        const cancelBtn = document.getElementById('cancelSelectionBtn');
-        if(cancelBtn) cancelBtn.addEventListener('click', () => toggleMode(false));
+            showError(data.error || 'Error en importación masiva');
+          } catch (e) {
+            showError(e.message);
+          }
+          return;
+        }
 
-        // Individual Select
+        // Single: preview
+        formData.append('csv_file', els.fileInput.files[0]);
+        try {
+          const res = await fetchSecure(urls.importPreview, { method: 'POST', body: formData });
+          if (!res.ok) {
+            const txt = await res.text();
+            showError(`Error ${res.status}: ${res.statusText} ${txt.substring(0, 120)}`);
+            return;
+          }
+
+          const data = await res.json();
+          if (data.success) {
+            renderPreview(data);
+            showStep('preview');
+          } else {
+            showError(data.error || 'No se pudo generar la previsualización');
+          }
+        } catch (e) {
+          showError(e.message);
+        }
+      });
+    }
+
+    // Confirm import (single file)
+    if (els.btnConfirm) {
+      els.btnConfirm.addEventListener('click', async () => {
+        if (!els.fileInput || !els.fileInput.files || !els.fileInput.files.length) return;
+
+        const formData = new FormData();
+        formData.append('csv_file', els.fileInput.files[0]);
+
+        const title = (els.titleInput && els.titleInput.value) ? els.titleInput.value.trim() : '';
+        if (title) formData.append('survey_title', title);
+
+        showStep('loading');
+        try {
+          const res = await fetchSecure(urls.importAsync, { method: 'POST', body: formData });
+          const data = await res.json();
+
+          if (!data.success) {
+            showError(data.error || 'Error en importación');
+            return;
+          }
+
+          const jobId = data.job_id || data.import_job_id;
+          if (!jobId) {
+            showError('No se recibió job_id de importación.');
+            return;
+          }
+
+          await pollImportTask(
+            jobId,
+            () => {
+              localStorage.setItem('app_toast_message', 'Encuesta importada con éxito');
+              window.location.reload();
+            },
+            (err) => showError(err || 'Error en importación')
+          );
+
+        } catch (e) {
+          showError(e.message);
+        }
+      });
+    }
+
+    // Back buttons
+    const backBtns = document.querySelectorAll('#btn-back-to-upload, #btn-retry-upload');
+    backBtns.forEach(btn => btn.addEventListener('click', resetAll));
+
+    // Reset every time it opens
+    modalEl.addEventListener('show.bs.modal', resetAll);
+
+    // Init
+    resetAll();
+  };
+
+  // ----------------------------
+  // SELECTION LOGIC
+  // ----------------------------
+  const initSelectionLogic = () => {
+    const ui = {
+      toggleBtn: document.getElementById('toggleSelectionBtn'),
+      bar: document.getElementById('bulkActionsBar'),
+      countSpan: document.getElementById('selectedCountSpan'),
+      deleteBtn: document.getElementById('deleteSelectedBtn'),
+      deleteAllBtn: document.getElementById('deleteAllBtn'),
+      checkboxes: document.querySelectorAll('.js-select-survey-btn'),
+      selectAllBtn: document.getElementById('selectAllBtn'),
+      deselectAllBtn: document.getElementById('deselectAllBtn')
+    };
+
+    if (!ui.toggleBtn) return;
+
+    const selectedIds = new Set();
+    let modeActive = false;
+
+    const clearSelectionUI = () => {
+      selectedIds.clear();
+      ui.checkboxes.forEach(b => {
+        b.classList.remove('selected', 'btn-primary');
+        const icon = b.querySelector('i');
+        if (icon) icon.className = 'bi bi-circle';
+      });
+    };
+
+    const updateUI = () => {
+      if (ui.countSpan) ui.countSpan.textContent = selectedIds.size;
+      if (ui.bar) {
+        // Defensive: if the server rendered d-flex, remove it when inactive.
+        ui.bar.hidden = !modeActive;
+        ui.bar.classList.toggle('d-none', !modeActive);
+        ui.bar.classList.toggle('d-flex', modeActive);
+      }
+
+      document.querySelectorAll('.selection-checkbox').forEach(el => {
+        el.style.display = modeActive ? 'block' : 'none';
+      });
+
+      const allSelected = selectedIds.size === ui.checkboxes.length && ui.checkboxes.length > 0;
+      if (ui.selectAllBtn) ui.selectAllBtn.style.display = allSelected ? 'none' : 'inline-block';
+      if (ui.deselectAllBtn) ui.deselectAllBtn.style.display = (selectedIds.size > 0) ? 'inline-block' : 'none';
+    };
+
+    const toggleMode = (active) => {
+      modeActive = active;
+      // Never auto-select on enter; and clear on exit.
+      if (!active) clearSelectionUI();
+      else clearSelectionUI();
+      updateUI();
+    };
+
+    ui.toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMode(!modeActive);
+    });
+
+    const cancelBtn = document.getElementById('cancelSelectionBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => toggleMode(false));
+
+    ui.checkboxes.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.surveyId;
+        const icon = btn.querySelector('i');
+
+        if (selectedIds.has(id)) {
+          selectedIds.delete(id);
+          btn.classList.remove('selected', 'btn-primary');
+          if (icon) icon.className = 'bi bi-circle';
+        } else {
+          selectedIds.add(id);
+          btn.classList.add('selected', 'btn-primary');
+          if (icon) icon.className = 'bi bi-check-circle-fill';
+        }
+        updateUI();
+      });
+    });
+
+    document.querySelectorAll('.survey-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (!modeActive) return;
+        if (e.target.closest('.js-select-survey-btn')) return;
+
+        if (e.target.closest('a')) {
+          e.preventDefault();
+          e.stopPropagation();
+          const selectBtn = card.querySelector('.js-select-survey-btn');
+          if (selectBtn) selectBtn.click();
+          return;
+        }
+
+        if (e.target.closest('button:not(.js-select-survey-btn)')) return;
+
+        const selectBtn = card.querySelector('.js-select-survey-btn');
+        if (selectBtn) selectBtn.click();
+      });
+    });
+
+    if (ui.selectAllBtn) {
+      ui.selectAllBtn.addEventListener('click', () => {
         ui.checkboxes.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault(); e.stopPropagation();
-                const id = btn.dataset.surveyId;
-                if (selectedIds.has(id)) {
-                    selectedIds.delete(id);
-                    btn.classList.remove('selected', 'btn-primary');
-                    btn.querySelector('i').className = 'bi bi-circle';
-                } else {
-                    selectedIds.add(id);
-                    btn.classList.add('selected', 'btn-primary');
-                    btn.querySelector('i').className = 'bi bi-check-circle-fill';
-                }
-                updateUI();
-            });
+          const id = btn.dataset.surveyId;
+          selectedIds.add(id);
+          btn.classList.add('selected', 'btn-primary');
+          const icon = btn.querySelector('i');
+          if (icon) icon.className = 'bi bi-check-circle-fill';
         });
+        updateUI();
+      });
+    }
 
-        // Select All Handler
-        if(ui.selectAllBtn) {
-            ui.selectAllBtn.addEventListener('click', () => {
-                ui.checkboxes.forEach(btn => {
-                    const id = btn.dataset.surveyId;
-                    selectedIds.add(id);
-                    btn.classList.add('selected', 'btn-primary');
-                    btn.querySelector('i').className = 'bi bi-check-circle-fill';
-                });
-                updateUI();
-            });
-        }
-        
-        // Deselect All Handler
-        if(ui.deselectAllBtn) {
-            ui.deselectAllBtn.addEventListener('click', () => {
-                selectedIds.clear();
-                ui.checkboxes.forEach(btn => {
-                    btn.classList.remove('selected', 'btn-primary');
-                    btn.querySelector('i').className = 'bi bi-circle';
-                });
-                updateUI();
-            });
-        }
-
-        // --- BULK DELETE ---
-        if (ui.deleteBtn) {
-            ui.deleteBtn.addEventListener('click', () => {
-                if (!selectedIds.size) return showPageAlert('warning', 'Atención', 'Selecciona al menos una encuesta.');
-                
-                const modalEl = document.getElementById('deleteSelectedModal');
-                if (modalEl) {
-                    const modal = new bootstrap.Modal(modalEl);
-                    modal.show();
-                    const confirmBtn = document.getElementById('confirmDeleteSelectedBtn');
-                    if(confirmBtn) {
-                        confirmBtn.onclick = () => {
-                            modal.hide();
-                            executeDelete(Array.from(selectedIds), "Encuestas eliminadas correctamente");
-                        };
-                    }
-                }
-            });
-        }
-        
-        // --- DELETE ALL ---
-        if (ui.deleteAllBtn) {
-            ui.deleteAllBtn.addEventListener('click', () => {
-                const modalEl = document.getElementById('deleteAllModal');
-                if (modalEl) {
-                    const modal = new bootstrap.Modal(modalEl);
-                    modal.show();
-                    const confirmBtn = document.getElementById('confirmDeleteAllBtn');
-                    if (confirmBtn) {
-                        confirmBtn.onclick = () => {
-                            modal.hide();
-                            // Collect all IDs rendered on page
-                            const allIds = Array.from(ui.checkboxes).map(btn => btn.dataset.surveyId);
-                            executeDelete(allIds, "Todas las encuestas han sido eliminadas");
-                        };
-                    }
-                }
-            });
-        }
-    };
-
-    // --- 6. SINGLE DELETE ---
-    const initSingleDelete = () => {
-        document.addEventListener('click', (e) => {
-            // Event delegation for delete buttons
-            const btn = e.target.closest('[data-action="delete-survey"]');
-            if (!btn) return;
-            
-            const surveyId = btn.dataset.surveyId;
-            const modalEl = document.getElementById('deleteOneModal');
-            if (modalEl) {
-                const modal = new bootstrap.Modal(modalEl);
-                modal.show();
-                const confirmBtn = document.getElementById('confirmDeleteOneBtn');
-                if(confirmBtn) {
-                    confirmBtn.onclick = () => {
-                        modal.hide();
-                        // Reusing the centralized execution logic
-                        executeDelete([surveyId], "Encuesta eliminada con éxito");
-                    };
-                }
-            }
+    if (ui.deselectAllBtn) {
+      ui.deselectAllBtn.addEventListener('click', () => {
+        selectedIds.clear();
+        ui.checkboxes.forEach(btn => {
+          btn.classList.remove('selected', 'btn-primary');
+          const icon = btn.querySelector('i');
+          if (icon) icon.className = 'bi bi-circle';
         });
-    };
+        updateUI();
+      });
+    }
 
-    // --- INITIALIZATION ---
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    [...tooltipTriggerList].map(t => new bootstrap.Tooltip(t));
-    
-    initImportModal();
-    initSelectionLogic();
-    initSingleDelete();
-    
-    // Check if we need to show a success toast from a previous action (reload)
-    checkPendingNotifications();
-    
+    if (ui.deleteBtn) {
+      ui.deleteBtn.addEventListener('click', () => {
+        if (!selectedIds.size) return showToast('Selecciona al menos una encuesta.');
+
+        const modalEl = document.getElementById('deleteSelectedModal');
+        if (!modalEl) return;
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        const confirmBtn = document.getElementById('confirmDeleteSelectedBtn');
+        if (confirmBtn) {
+          confirmBtn.onclick = () => {
+            modal.hide();
+            executeDelete(Array.from(selectedIds), "Encuestas eliminadas correctamente");
+          };
+        }
+      });
+    }
+
+    if (ui.deleteAllBtn) {
+      ui.deleteAllBtn.addEventListener('click', () => {
+        const modalEl = document.getElementById('deleteAllModal');
+        if (!modalEl) return;
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        const confirmBtn = document.getElementById('confirmDeleteAllBtn');
+        if (confirmBtn) {
+          confirmBtn.onclick = () => {
+            modal.hide();
+            const allIds = Array.from(ui.checkboxes).map(btn => btn.dataset.surveyId);
+            executeDelete(allIds, "Todas las encuestas han sido eliminadas");
+          };
+        }
+      });
+    }
+
+    updateUI();
+  };
+
+  // ----------------------------
+  // SINGLE DELETE
+  // ----------------------------
+  const initSingleDelete = () => {
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action="delete-survey"]');
+      if (!btn) return;
+
+      const surveyId = btn.dataset.surveyId;
+      const modalEl = document.getElementById('deleteOneModal');
+      if (!modalEl) return;
+
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+
+      const confirmBtn = document.getElementById('confirmDeleteOneBtn');
+      if (confirmBtn) {
+        confirmBtn.onclick = () => {
+          modal.hide();
+          executeDelete([surveyId], "Encuesta eliminada con éxito");
+        };
+      }
+    });
+  };
+
+  // ----------------------------
+  // INIT
+  // ----------------------------
+  // Selection needs to work even if Bootstrap JS isn't available.
+  try { initSelectionLogic(); } catch (e) { console.error('initSelectionLogic failed', e); }
+
+  // Tooltips are optional; don't let them break the rest of the page.
+  try {
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(t => new window.bootstrap.Tooltip(t));
+    }
+  } catch (e) {
+    console.warn('Tooltip init skipped:', e);
+  }
+
+  const deletingOverlay = document.getElementById('deletingOverlay');
+  if (deletingOverlay) deletingOverlay.style.display = 'none';
+
+  try { initImportModal(); } catch (e) { console.error('initImportModal failed', e); }
+  try { initSingleDelete(); } catch (e) { console.error('initSingleDelete failed', e); }
+  try { checkPendingNotifications(); } catch (e) { console.error('checkPendingNotifications failed', e); }
 });
 </script>
 {% endblock %}
+    

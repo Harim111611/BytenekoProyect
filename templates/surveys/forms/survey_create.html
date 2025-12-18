@@ -14,7 +14,7 @@
     </div>
 
     <div class="mb-4">
-        <div class="progress bg-body-tertiary bk-progress-5" style="height: 8px;">
+        <div class="progress bk-progress-5">
             <div class="progress-bar" role="progressbar" style="width: 0%;" id="progressBar"></div>
         </div>
         <div class="d-flex justify-content-between text-muted small mt-2">
@@ -27,7 +27,7 @@
         <div class="col-md-4">
             <div class="card card-body step-card active h-100 border-0 shadow-sm" id="card-step-1">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="step-icon d-flex align-items-center justify-content-center rounded-circle bg-primary text-white fs-5 fw-bold" style="width:40px; height:40px;">1</div>
+                    <div class="step-icon step-icon-40 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white fs-5 fw-bold">1</div>
                     <div>
                         <h6 class="mb-0 fw-bold text-body-emphasis">Información Básica</h6>
                         <small class="text-muted">Título y Categoría</small>
@@ -38,7 +38,7 @@
         <div class="col-md-4">
             <div class="card card-body step-card h-100 border-0 shadow-sm" id="card-step-2">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="step-icon d-flex align-items-center justify-content-center rounded-circle bg-body-secondary text-muted fs-5 fw-bold" style="width:40px; height:40px;">2</div>
+                    <div class="step-icon step-icon-40 d-flex align-items-center justify-content-center rounded-circle bg-body-secondary text-muted fs-5 fw-bold">2</div>
                     <div>
                         <h6 class="mb-0 fw-bold text-body-emphasis">Preguntas</h6>
                         <small class="text-muted">Construye el contenido</small>
@@ -49,7 +49,7 @@
         <div class="col-md-4">
             <div class="card card-body step-card h-100 border-0 shadow-sm" id="card-step-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="step-icon d-flex align-items-center justify-content-center rounded-circle bg-body-secondary text-muted fs-5 fw-bold" style="width:40px; height:40px;">3</div>
+                    <div class="step-icon step-icon-40 d-flex align-items-center justify-content-center rounded-circle bg-body-secondary text-muted fs-5 fw-bold">3</div>
                     <div>
                         <h6 class="mb-0 fw-bold text-body-emphasis">Revisar y Publicar</h6>
                         <small class="text-muted">Lanzamiento</small>
@@ -74,12 +74,12 @@
                 <div class="row g-4">
                     <div class="col-12">
                         <label for="surveyTitle" class="form-label fw-bold text-body-secondary small text-uppercase">Título del Proyecto <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-lg bg-body-tertiary" id="surveyTitle" placeholder="Ej. Encuesta de Satisfacción Anual 2025">
+                        <input type="text" class="form-control form-control-lg" id="surveyTitle" placeholder="Ej. Encuesta de Satisfacción Anual 2025">
                     </div>
                     
                     <div class="col-md-6">
                         <label for="surveyCategory" class="form-label fw-bold text-body-secondary small text-uppercase">Categoría</label>
-                        <input type="text" class="form-control bg-body-tertiary" id="surveyCategory" placeholder="Ej. RRHH, Marketing, Producto..." list="categorySuggestions">
+                        <input type="text" class="form-control" id="surveyCategory" placeholder="Ej. RRHH, Marketing, Producto..." list="categorySuggestions">
                         <datalist id="categorySuggestions">
                             <option value="General">
                             <option value="Marketing">
@@ -93,7 +93,7 @@
 
                     <div class="col-12">
                         <label for="surveyDescription" class="form-label fw-bold text-body-secondary small text-uppercase">Descripción (Opcional)</label>
-                        <textarea class="form-control bg-body-tertiary" id="surveyDescription" rows="4" placeholder="Describe brevemente el objetivo de esta encuesta para los participantes..."></textarea>
+                        <textarea class="form-control" id="surveyDescription" rows="4" placeholder="Describe brevemente el objetivo de esta encuesta para los participantes..."></textarea>
                     </div>
                 </div>
 
@@ -154,7 +154,7 @@
 
                 <div class="row g-4 mt-4">
                     <div class="col-lg-4">
-                        <div class="card bg-body-tertiary border-0 h-100">
+                        <div class="card border-0 h-100">
                             <div class="card-body">
                                 <h6 class="text-uppercase text-muted small fw-bold mb-3">Resumen del Proyecto</h6>
                                 <div class="mb-3">
@@ -183,7 +183,7 @@
 
                     <div class="col-lg-8">
                         <div class="card border">
-                            <div class="card-header bg-body-tertiary fw-bold border-secondary-subtle">
+                            <div class="card-header fw-bold border-secondary-subtle">
                                 <i class="bi bi-eye me-2"></i>Vista Previa (Simulador)
                             </div>
                             <div class="card-body preview-device p-4">
@@ -434,7 +434,7 @@
             <div class="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
                 <span class="badge bg-secondary-subtle text-secondary-emphasis question-number">Pregunta #</span>
                 <div class="d-flex align-items-center gap-2">
-                    <select class="form-select form-select-sm question-type bg-body-tertiary text-body" style="width: 160px;">
+                    <select class="form-select form-select-sm question-type select-fixed-width">
                         <option value="text">Texto libre</option>
                         <option value="number">Número</option>
                         <option value="scale">Escala 1-10</option>
@@ -447,7 +447,7 @@
             </div>
 
             <div class="mb-3">
-                <input type="text" class="form-control question-title fw-medium bg-body-tertiary" placeholder="Escribe tu question aquí..." required>
+                <input type="text" class="form-control question-title fw-medium" placeholder="Escribe tu question aquí..." required>
             </div>
 
             <div class="form-check mb-3">
@@ -455,7 +455,7 @@
                 <label class="form-check-label small text-muted">Respuesta obligatoria</label>
             </div>
 
-            <div class="options-container d-none bg-body-tertiary p-3 rounded">
+            <div class="options-container d-none p-3 rounded">
                 <label class="small fw-bold text-muted mb-1">Opciones (separadas por coma)</label>
                 <textarea class="form-control question-options bg-body border-0" rows="2" placeholder="Ej: Rojo, Verde, Azul"></textarea>
             </div>

@@ -31,6 +31,15 @@
 
     <form method="post" novalidate id="survey-edit-form" class="animate__animated animate__fadeInUp">
         {% csrf_token %}
+
+        {% if survey.status == 'closed' %}
+        <div class="alert alert-warning shadow-sm d-flex align-items-center mb-4">
+            <i class="bi bi-lock-fill fs-4 me-3"></i>
+            <div>
+                <strong>Encuesta cerrada.</strong> Los parámetros están bloqueados; solo puedes editar el <strong>título</strong>.
+            </div>
+        </div>
+        {% endif %}
         
         {% if form.non_field_errors %}
         <div class="alert alert-danger shadow-sm d-flex align-items-center mb-4">
@@ -63,7 +72,11 @@
                             {% if form.description.errors %}
                                 <div class="invalid-feedback d-block">{{ form.description.errors.0 }}</div>
                             {% endif %}
-                            <div class="form-text">Explica brevemente el propósito de la encuesta.</div>
+                            {% if form.description.field.disabled %}
+                                <div class="form-text text-warning-emphasis"><i class="bi bi-lock-fill me-1"></i>Bloqueado porque la encuesta está cerrada.</div>
+                            {% else %}
+                                <div class="form-text">Explica brevemente el propósito de la encuesta.</div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -104,6 +117,9 @@
                                 {% if form.category.errors %}
                                     <div class="invalid-feedback d-block">{{ form.category.errors.0 }}</div>
                                 {% endif %}
+                                {% if form.category.field.disabled %}
+                                    <div class="form-text text-warning-emphasis"><i class="bi bi-lock-fill me-1"></i>Bloqueado porque la encuesta está cerrada.</div>
+                                {% endif %}
                             </div>
 
                             <div class="mb-2">
@@ -118,9 +134,13 @@
                                 {% if form.sample_goal.errors %}
                                     <div class="invalid-feedback d-block">{{ form.sample_goal.errors.0 }}</div>
                                 {% endif %}
-                                <div class="form-text small mt-2">
-                                    Si estableces un número mayor a 0, la encuesta se pausará automáticamente al alcanzarlo.
-                                </div>
+                                {% if form.sample_goal.field.disabled %}
+                                    <div class="form-text text-warning-emphasis small mt-2"><i class="bi bi-lock-fill me-1"></i>Bloqueado porque la encuesta está cerrada.</div>
+                                {% else %}
+                                    <div class="form-text small mt-2">
+                                        Si estableces un número mayor a 0, la encuesta se pausará automáticamente al alcanzarlo.
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -148,12 +168,17 @@
         <div class="modal-content border-0 shadow-lg text-center overflow-hidden">
             <div class="modal-body p-4">
                 <div class="mb-3 position-relative">
-                    <div class="position-absolute top-50 start-50 translate-middle" style="width: 60px; height: 60px; background: currentColor; opacity: 0.1; border-radius: 50%;"></div>
+                    <div class="position-absolute top-50 start-50 translate-middle modal-icon-bg"></div>
                     <i id="modal-status-icon" class="bi display-3 position-relative z-1"></i>
                 </div>
                 
                 <h5 class="fw-bold mb-2" id="modal-status-title">Confirmar</h5>
                 <p id="modal-status-msg" class="text-secondary small mb-4 lh-sm">¿Estás seguro?</p>
+                
+                <div class="alert alert-info small mb-3 border-0" role="alert">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Recuerda:</strong> Después de confirmar, debes <strong>guardar los cambios</strong> al final del formulario.
+                </div>
                 
                 <div class="d-grid gap-2">
                     <button type="button" class="btn fw-bold text-white shadow-sm" id="btn-confirm-status">Sí, cambiar estado</button>
@@ -168,12 +193,28 @@
 document.addEventListener('DOMContentLoaded', function() {
     const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
     const headerBg = document.getElementById('status-header-bg');
+    const helpText = document.getElementById('status-help-text');
+
+    const allowedStatuses = statusSelect
+        ? (statusSelect.dataset.allowedStatuses || '').split(',').filter(Boolean)
+        : [];
+    const currentStatus = statusSelect ? statusSelect.dataset.currentStatus : '';
+
+    if (statusSelect && allowedStatuses.length) {
+        Array.from(statusSelect.options).forEach((opt) => {
+            if (opt.value && !allowedStatuses.includes(opt.value)) {
+                opt.disabled = true;
+            } else if (opt.value) {
+                opt.disabled = false;
+            }
+        });
+    }
     
     // Configuración visual por estado
     const statusConfig = {
         'closed': {
             icon: 'bi-lock-fill',
-            color: 'danger', // bootstrap color name
+            color: 'danger',
             bgClass: 'bg-danger-subtle',
             title: 'Cerrar Encuesta',
             msg: 'Ya no se recibirán nuevas respuestas. ¿Confirmas el cierre?'
@@ -201,11 +242,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Función para actualizar el estilo del header de la tarjeta de estado
     function updateHeaderStyle(status) {
-        // Limpiar clases de fondo previas
         headerBg.classList.remove('bg-danger-subtle', 'bg-warning-subtle', 'bg-success-subtle', 'bg-secondary-subtle', 'bg-gradient-subtle');
-        
         const config = statusConfig[status];
         if (config) {
             headerBg.classList.add(config.bgClass);
@@ -214,8 +252,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Inicializar estilo
     if(statusSelect) updateHeaderStyle(statusSelect.value);
+
+    if (statusSelect && statusSelect.disabled && helpText) {
+        helpText.textContent = 'Este estado no se puede modificar.';
+    }
 
     // Lógica del Modal
     const statusModalEl = document.getElementById('statusChangeModal');
@@ -224,19 +265,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let previousValue = statusSelect ? statusSelect.value : '';
     let pendingValue = null;
+    let modalConfirmed = false;
+    let isUpdatingValue = false; // Flag para evitar bucles infinitos
 
     if (statusSelect) {
         statusSelect.addEventListener('change', function(e) {
+            // Si estamos actualizando el valor mediante código, ignorar el evento
+            if (isUpdatingValue) {
+                return;
+            }
+
             const newValue = this.value;
+
+            // Double-check: if status is disabled or not in allowed list, revert
+            if (this.disabled || (allowedStatuses.length && !allowedStatuses.includes(newValue))) {
+                isUpdatingValue = true;
+                this.value = previousValue;
+                isUpdatingValue = false;
+                updateHeaderStyle(previousValue);
+                return;
+            }
             
+            // If no change or no config for new status, just update visually
             if (newValue === previousValue || !statusConfig[newValue]) {
-                updateHeaderStyle(newValue); // Actualizar visualmente si no hay modal o es igual
+                updateHeaderStyle(newValue);
                 previousValue = newValue;
                 return;
             }
 
-            const config = statusConfig[newValue];
+            const config = { ...statusConfig[newValue] };
+            
+            // Special warning for draft → active transition
+            if (previousValue === 'draft' && newValue === 'active') {
+                config.msg = '<strong>⚠️ Cambio Irreversible:</strong><br>Una vez activada, ya no podrás volver al estado borrador. ¿Estás seguro de activar la encuesta?';
+            }
+            
             pendingValue = newValue;
+            modalConfirmed = false;
 
             // Configurar Modal
             const icon = document.getElementById('modal-status-icon');
@@ -244,32 +309,39 @@ document.addEventListener('DOMContentLoaded', function() {
             const msg = document.getElementById('modal-status-msg');
             const btn = document.getElementById('btn-confirm-status');
 
-            // Resetear clases
             icon.className = `bi display-3 position-relative z-1 text-${config.color}`;
             icon.classList.add(config.icon);
             
-            // Textos
             title.textContent = config.title;
             msg.innerHTML = config.msg;
 
-            // Botón
             btn.className = `btn fw-bold text-white shadow-sm btn-${config.color}`;
 
-            // Mostrar
             statusModal.show();
         });
 
         document.getElementById('btn-confirm-status').addEventListener('click', function() {
-            previousValue = pendingValue;
-            updateHeaderStyle(pendingValue);
+            modalConfirmed = true;
             statusModal.hide();
         });
 
         statusModalEl.addEventListener('hidden.bs.modal', function () {
-            if (statusSelect.value !== previousValue) {
+            isUpdatingValue = true; // Prevenir que el change event se dispare
+            
+            if (modalConfirmed) {
+                // Usuario confirmó: guardar el nuevo valor
+                statusSelect.value = pendingValue;
+                previousValue = pendingValue;
+                updateHeaderStyle(pendingValue);
+                modalConfirmed = false;
+            } else {
+                // Usuario canceló: revertir al valor anterior
                 statusSelect.value = previousValue;
-                updateHeaderStyle(previousValue); // Revertir estilo visual
+                updateHeaderStyle(previousValue);
             }
+            pendingValue = null;
+            
+            isUpdatingValue = false; // Permitir events nuevamente
         });
         
         const btnCancel = document.getElementById('btn-cancel-status');

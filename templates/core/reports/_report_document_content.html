@@ -1,0 +1,120 @@
+<div class="header">
+  <h1>{{ survey.title }}</h1>
+  <div class="meta-info">
+    Reporte Ejecutivo Generado el {{ generated_at|date:"d/m/Y H:i" }}<br>
+    {{ company_name }}
+  </div>
+</div>
+
+{% if options.include_kpis and kpi_score|default:0|add:0 > 0 %}
+  <div class="kpi-section">
+    <div class="kpi-value">{{ kpi_score|floatformat:1 }}</div>
+    <div class="kpi-label">Índice Global de Calidad</div>
+    <div class="meta-info" style="margin-top: 8px;">Escala de 0 a 10 basada en preguntas numéricas.</div>
+  </div>
+{% endif %}
+
+<div class="section-title">Detalle de Resultados</div>
+
+{% for item in analysis_items %}
+  <div class="question-block">
+    <div class="q-header">
+      <span class="q-number">#{{ item.order }}</span>
+      <span class="q-text">{{ item.text }}</span>
+    </div>
+
+    <div class="meta-info" style="margin-bottom: 8px;">Respuestas analizadas: {{ item.total_responses|default:0 }}</div>
+
+    {% if item.type == 'scale' or item.type == 'number' or item.type == 'numeric' %}
+      <table style="width: 62%;">
+        <tr>
+          <td style="width: 42%;"><strong>Promedio:</strong></td>
+          <td style="font-size: 14pt; font-weight: 800;">
+            {{ item.insight_data.avg|default:item.insight_data.average|floatformat:1 }}
+            <span class="muted" style="font-size: 10pt; font-weight: 500;">/ {{ item.insight_data.max|default:"10" }}</span>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Tendencia:</strong></td>
+          <td>
+            {% if item.insight_data.trend_delta > 0 %}
+              <span class="text-success">▲ {{ item.insight_data.trend_delta|floatformat:1 }}% (Mejora)</span>
+            {% elif item.insight_data.trend_delta < 0 %}
+              <span class="text-danger">▼ {{ item.insight_data.trend_delta|floatformat:1 }}% (Caída)</span>
+            {% else %}
+              <span class="muted">Estable</span>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+
+    {% elif item.type == 'single' or item.type == 'multi' or item.type == 'radio' or item.type == 'select' %}
+      {% if options.include_table %}
+        <table>
+          <thead>
+            <tr>
+              <th>Opción</th>
+              <th style="width: 12%;">Votos</th>
+              <th style="width: 12%;">%</th>
+              <th style="width: 26%;">Distribución</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dist in item.insight_data.distribution|slice:":8" %}
+              <tr>
+                <td>{{ dist.option }}</td>
+                <td>{{ dist.count }}</td>
+                <td>
+                  {% if item.total_responses|default:0|add:0 > 0 %}
+                    {% widthratio dist.count item.total_responses 100 %}%
+                  {% else %}
+                    0%
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="bar-container">
+                    {% if item.total_responses|default:0|add:0 > 0 %}
+                      <div class="bar-fill" style="width: {% widthratio dist.count item.total_responses 100 %}%;"></div>
+                    {% else %}
+                      <div class="bar-fill" style="width: 0%;"></div>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+    {% elif item.type == 'text' %}
+      <div class="insight-box">
+        <strong>Temas Frecuentes Detectados:</strong>
+        <ul style="margin-top: 6px; margin-bottom: 0; padding-left: 18px;">
+          {% for topic in item.insight_data.topics %}
+            <li>{{ topic|capfirst }}</li>
+          {% empty %}
+            <li class="muted">No se encontraron patrones claros.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if options.include_charts and item.chart_image_base64 %}
+      <div class="chart-img">
+        <img src="data:image/png;base64,{{ item.chart_image_base64 }}" alt="Gráfico">
+      </div>
+    {% endif %}
+
+    {% if item.insight_data.narrative %}
+      <div class="insight-box">
+        <strong>Análisis Automático:</strong> {{ item.insight_data.narrative }}
+      </div>
+    {% endif %}
+  </div>
+{% empty %}
+  <div class="muted" style="padding: 18px 0; text-align: center;">
+    No hay datos suficientes para generar el reporte en este periodo.
+  </div>
+{% endfor %}
+
+<div class="muted" style="text-align: center; font-size: 9pt; margin-top: 22px;">Fin del Reporte • Byteneko</div>

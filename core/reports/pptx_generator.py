@@ -1,12 +1,105 @@
 """core/reports/pptx_generator.py"""
+import base64
 import io
 import logging
+from dataclasses import dataclass
+from typing import Tuple, Optional
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class PPTXStyleConfig:
+    """Configuración mínima de estilos para PPTX (compat y extensibilidad)."""
+
+    title_max_len: int = 80
+
+
+class PPTXSlideBuilder:
+    """Wrapper liviano para compatibilidad con tests/uso previo."""
+
+    def __init__(self, prs: Presentation):
+        self.prs = prs
+
+
+class PPTXReportGenerator:
+    """API de compatibilidad.
+
+    El proyecto exporta vía `generate_full_pptx_report`, pero algunos tests
+    esperan estas utilidades.
+    """
+
+    @staticmethod
+    def _clean_title(title: str) -> str:
+        return (title or "").strip()
+
+    @staticmethod
+    def _split_question_title(title: str) -> Tuple[str, str]:
+        title = (title or "").strip()
+        if not title:
+            return "", ""
+        if '(' in title and title.endswith(')'):
+            base, extra = title.rsplit('(', 1)
+            base = base.strip()
+            extra = '(' + extra
+            return base, extra
+        return title, ""
+
+    @staticmethod
+    def _is_text_like_question(item: dict) -> bool:
+        q_type = (item or {}).get('type')
+        return q_type == 'text'
+
+    @classmethod
+    def generate(
+        cls,
+        survey,
+        analysis_data,
+        kpi_satisfaction_avg: float = 0,
+        **kwargs,
+    ):
+        return generate_full_pptx_report(
+            survey=survey,
+            analysis_data=analysis_data,
+            kpi_satisfaction_avg=kpi_satisfaction_avg,
+            **kwargs,
+        )
+
+
+def _add_chart_image(slide, left, top, width, chart_b64: str) -> None:
+    if not chart_b64:
+        return
+    try:
+        img_bytes = base64.b64decode(chart_b64)
+        slide.shapes.add_picture(io.BytesIO(img_bytes), left, top, width=width)
+    except Exception:
+        # Si falla la imagen, preferimos un PPTX sin gráfico antes que romper export.
+        logger.exception("No se pudo incrustar imagen de gráfico en PPTX")
+
+
+def _metric_display_for_item(item: dict) -> str:
+    q_type = item.get('type')
+    insight = item.get('insight_data') or {}
+    if q_type in ['scale', 'number', 'numeric']:
+        avg = insight.get('avg') if insight.get('avg') is not None else insight.get('average')
+        if avg is None:
+            return "Promedio: N/A"
+        return f"Promedio: {float(avg):.1f}"
+    if q_type in ['single', 'multi', 'radio', 'select']:
+        top = insight.get('top_option')
+        if top and top.get('option') is not None:
+            return f"Top: {top.get('option')} ({top.get('count', 0)})"
+        return "Top: N/A"
+    if q_type == 'text':
+        topics = insight.get('topics') or []
+        if topics:
+            return "Temas: " + ", ".join([str(t) for t in topics[:3]])
+        return "Temas: N/A"
+    return ""
 
 def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **kwargs):
     """
@@ -31,6 +124,9 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
         period_info = f"Periodo: {start_date} al {end_date}"
     else:
         period_info = f"Generado el: {date_str}"
+
+    include_charts = kwargs.get('include_charts', True)
+    include_table = kwargs.get('include_table', True)
 
     # --- DIAPOSITIVA 1: PORTADA ---
     title_slide_layout = prs.slide_layouts[0]
@@ -80,12 +176,27 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
             insight = item.get('insight_data', {})
             mood = insight.get('mood', 'NEUTRO')
             score = insight.get('avg', 0)
-            
-            icon = "🚨" if mood == 'CRITICO' else "⭐"
-            
+
             sub_p = tf.add_paragraph()
-            sub_p.text = f"{icon} {item['text']} (Score: {score:.1f})"
+            sub_p.text = f"{mood}: {item.get('text', '')} (Score: {float(score):.1f})"
             sub_p.level = 1
+
+    # --- DIAPOSITIVA 3 (OPCIONAL): TABLA RESUMEN ---
+    if include_table:
+        slide = prs.slides.add_slide(bullet_slide_layout)
+        slide.shapes.title.text = "Tabla Resumen"
+        body_shape = slide.shapes.placeholders[1]
+        tf = body_shape.text_frame
+        tf.clear()
+        p0 = tf.paragraphs[0]
+        p0.text = "Métricas clave por pregunta (top 15)"
+        p0.font.bold = True
+        p0.font.size = Pt(18)
+
+        for item in (analysis_data or [])[:15]:
+            p = tf.add_paragraph()
+            p.text = f"{item.get('order', '')}. {_metric_display_for_item(item)}"
+            p.level = 1
 
     # --- DIAPOSITIVAS DETALLE (Por Pregunta) ---
     chart_layout = prs.slide_layouts[5] # Layout "Title Only" para flexibilidad
@@ -101,7 +212,7 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
         title.text = clean_title
         
         # Contenedor de Métricas (Izquierda)
-        left_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(4.5), Inches(4.5))
+        left_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(4.4), Inches(3.8))
         tf = left_box.text_frame
         tf.word_wrap = True
         
@@ -109,9 +220,10 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
         q_type = item.get('type')
         
         # Lógica de renderizado según tipo de pregunta
-        if q_type in ['scale', 'number']:
+        if q_type in ['scale', 'number', 'numeric']:
             p = tf.add_paragraph()
-            p.text = f"Promedio: {insight.get('avg', 0):.1f}"
+            avg_val = insight.get('avg') if insight.get('avg') is not None else insight.get('average', 0)
+            p.text = f"Promedio: {float(avg_val):.1f}"
             p.font.size = Pt(36)
             p.font.bold = True
             p.font.color.rgb = RGBColor(0, 80, 158) # Azul Byteneko
@@ -126,7 +238,7 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
                 p2.font.size = Pt(14)
                 p2.font.color.rgb = color
 
-        elif q_type in ['single', 'multi']:
+        elif q_type in ['single', 'multi', 'radio', 'select']:
             top = insight.get('top_option')
             if top:
                 p = tf.add_paragraph()
@@ -160,9 +272,31 @@ def generate_full_pptx_report(survey, analysis_data, kpi_satisfaction_avg=0, **k
             else:
                 tf.add_paragraph().text = "No se detectaron temas claros."
 
+        # Contenedor de gráfico (Derecha) - imagen estática
+        if include_charts:
+            try:
+                from core.utils.charts import ChartGenerator
+
+                labels = item.get('chart_labels') or []
+                counts = item.get('chart_data') or []
+                chart_b64 = None
+                if labels and counts:
+                    if q_type in ['single', 'multi', 'radio', 'select']:
+                        if (item.get('tipo_display') == 'doughnut') or (len(labels) <= 4):
+                            chart_b64 = ChartGenerator.generate_pie_chart(labels, counts, title='', dark_mode=False)
+                        else:
+                            chart_b64 = ChartGenerator.generate_horizontal_bar_chart(labels, counts, title='', dark_mode=False)
+                    elif q_type in ['scale', 'number', 'numeric']:
+                        chart_b64 = ChartGenerator.generate_horizontal_bar_chart(labels, counts, title='', dark_mode=False)
+
+                if chart_b64:
+                    _add_chart_image(slide, Inches(5.1), Inches(1.5), Inches(4.4), chart_b64)
+            except Exception:
+                logger.exception("No se pudo generar/incrustar gráfico para una diapositiva")
+
         # Contenedor de Narrativa Automática (Abajo)
         if insight.get('narrative'):
-            nar_box = slide.shapes.add_textbox(Inches(0.5), Inches(5.5), Inches(9.0), Inches(1.5))
+            nar_box = slide.shapes.add_textbox(Inches(0.5), Inches(5.4), Inches(9.0), Inches(1.6))
             nf = nar_box.text_frame
             nf.word_wrap = True
             

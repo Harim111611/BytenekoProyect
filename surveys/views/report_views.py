@@ -13,8 +13,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, JsonResponse, Http404
 from django.contrib import messages
 from django.template.loader import render_to_string
-from django.db.models import Q
+from django.db.models import Q, Count, Max
 from django.core.cache import cache
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
 from django_ratelimit.decorators import ratelimit
 from asgiref.sync import sync_to_async
@@ -22,6 +23,7 @@ from asgiref.sync import sync_to_async
 from django.contrib.auth.views import redirect_to_login
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob
+from surveys.models_analytics import AnalysisSegment
 from core.utils.logging_utils import StructuredLogger
 from core.utils.helpers import PermissionHelper, DateFilterHelper
 from core.services.survey_analysis import SurveyAnalysisService
@@ -31,6 +33,14 @@ logger = StructuredLogger('surveys')
 # Cache timeout constants
 CACHE_TIMEOUT_STATS = 300
 CACHE_TIMEOUT_ANALYSIS = 1800
+
+
+def _resolve_request_user(request):
+    user = request.user
+    # Force evaluation of Django's SimpleLazyObject in a sync/thread context
+    _ = getattr(user, 'is_authenticated', False)
+    _ = getattr(user, 'id', None)
+    return user
 
 def _has_date_fields(survey_id):
     """Check if survey has date fields from the CSV import."""
@@ -197,7 +207,8 @@ async def survey_results_view(request, public_id):
     except Http404:
         render_async = sync_to_async(render, thread_sensitive=True)
         return await render_async(request, 'surveys/crud/not_found.html', {'survey_id': public_id}, status=404)
-    await PermissionHelper.verify_survey_access(survey, request.user)
+    user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+    await PermissionHelper.verify_survey_access(survey, user)
 
     # --- 1. Filtros ---
     start = request.GET.get('start')
@@ -205,7 +216,8 @@ async def survey_results_view(request, public_id):
     segment_col = request.GET.get('segment_col', '').strip()
     segment_val = request.GET.get('segment_val', '').strip()
     segment_demo = request.GET.get('segment_demo', '').strip()
-    crosstab_col = request.GET.get('crosstab_col', '').strip() # Nuevo Filtro
+    crosstab_row = request.GET.get('crosstab_row', '').strip()  # NUEVO
+    crosstab_col = request.GET.get('crosstab_col', '').strip()  # Ya existente
 
     has_filters = bool(start or end or segment_col)
 
@@ -229,11 +241,20 @@ async def survey_results_view(request, public_id):
             respuestas_qs = maybe_coroutine
 
     # --- 2. Obtener Análisis General ---
-    cache_key = f"analysis_view_v17_{survey.id}_{start}_{end}_{segment_col}_{segment_val}"
+    # OPT: calcular total + last_id una sola vez y usarlo para key de caché.
+    # Esto evita hacer múltiples .count() y reduce recomputación tras restart.
+    totals = await sync_to_async(
+        lambda: respuestas_qs.aggregate(total=Count('id'), last_id=Max('id')),
+        thread_sensitive=True,
+    )()
+    total_respuestas = int(totals.get('total') or 0)
+    last_response_id = int(totals.get('last_id') or 0)
+    cache_key = f"analysis_view_v17_{survey.id}_{start}_{end}_{segment_col}_{segment_val}:{total_respuestas}:{last_response_id}"
 
     analysis_result = await SurveyAnalysisService.get_analysis_data(
         survey,
         respuestas_qs,
+        cache_key=cache_key,
         config={'tone': 'FORMAL', 'include_quotes': True}
     )
 
@@ -260,20 +281,24 @@ async def survey_results_view(request, public_id):
     crosstab_data = None
     crosstab_chart_json = None
 
-    if crosstab_col:
-        row_id = segment_col
-        col_id = crosstab_col
-
-        if not row_id:
-            first_q = await sync_to_async(lambda: survey.questions.exclude(id=col_id).filter(type__in=['single', 'multi', 'select']).first(), thread_sensitive=True)()
-            if first_q:
-                row_id = str(first_q.id)
-
-        if row_id and col_id and row_id != col_id:
+    if crosstab_row and crosstab_col and crosstab_row != crosstab_col:
+        logger.info(f"Generando tabla cruzada. crosstab_row={crosstab_row}, crosstab_col={crosstab_col}")
+        
+        try:
             raw_crosstab = await sync_to_async(SurveyAnalysisService.generate_crosstab, thread_sensitive=True)(
-                survey, row_id, col_id, queryset=respuestas_qs
+                survey, crosstab_row, crosstab_col, queryset=respuestas_qs
             )
-            crosstab_data, crosstab_chart_json = await sync_to_async(_process_crosstab_for_template, thread_sensitive=True)(raw_crosstab)
+            logger.info(f"Crosstab generado: {list(raw_crosstab.keys()) if raw_crosstab else 'None'}")
+            
+            if raw_crosstab and 'error' not in raw_crosstab:
+                crosstab_data, crosstab_chart_json = await sync_to_async(_process_crosstab_for_template, thread_sensitive=True)(raw_crosstab)
+                logger.info(f"Crosstab procesado para template. Headers: {crosstab_data.get('headers') if crosstab_data else 'None'}")
+            else:
+                logger.error(f"Error en crosstab: {raw_crosstab.get('error') if raw_crosstab else 'raw_crosstab es None'}")
+        except Exception as e:
+            logger.error(f"Excepción generando crosstab: {str(e)}", exc_info=True)
+    elif crosstab_row or crosstab_col:
+        logger.warning(f"Crosstab incompleto. crosstab_row={crosstab_row}, crosstab_col={crosstab_col}, iguales={crosstab_row == crosstab_col}")
 
     preguntas_filtro = await sync_to_async(lambda: list(
         survey.questions.values('id', 'text', 'type', 'is_demographic').order_by('order')
@@ -281,7 +306,7 @@ async def survey_results_view(request, public_id):
 
     context = {
         'survey': survey,
-        'total_respuestas': await sync_to_async(respuestas_qs.count, thread_sensitive=True)(),
+        'total_respuestas': total_respuestas,
         'analysis_data': insights_list,
         'evolution_chart': json.dumps(evolution, cls=DjangoJSONEncoder),
         'kpi_score': round(float(kpi_score), 1),
@@ -308,8 +333,12 @@ async def report_preview(request, public_id):
     if not is_authenticated:
         return redirect_to_login(request.get_full_path())
     try:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
-        await PermissionHelper.verify_survey_access(survey, request.user)
+        survey = await sync_to_async(
+              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+            thread_sensitive=True
+        )()
+        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+        await PermissionHelper.verify_survey_access(survey, user)
         start = request.POST.get('start_date') or request.GET.get('start_date')
         end = request.POST.get('end_date') or request.GET.get('end_date')
         window = request.POST.get('window_days')
@@ -392,10 +421,14 @@ async def export_survey_csv_view(request, public_id):
 async def survey_analysis_ajax(request, public_id):
     """API para obtener datos JSON puros (útil para recargar gráficas)."""
     try:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
-        await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
+        survey = await sync_to_async(
+              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+            thread_sensitive=True
+        )()
+        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+        await PermissionHelper.verify_survey_access(survey, user)
         respuestas_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)()
-        analysis = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(survey, respuestas_qs, include_charts=True)
+        analysis = await SurveyAnalysisService.get_analysis_data(survey, respuestas_qs, include_charts=True)
         return JsonResponse({'success': True, 'analysis_data': analysis['analysis_data']}, encoder=DjangoJSONEncoder)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
@@ -403,8 +436,12 @@ async def survey_analysis_ajax(request, public_id):
 async def api_crosstab_view(request, public_id):
     """API dedicada para cargar cruces de variables vía AJAX."""
     try:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
-        await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
+        survey = await sync_to_async(
+              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+            thread_sensitive=True
+        )()
+        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+        await PermissionHelper.verify_survey_access(survey, user)
         row_id = request.GET.get('row')
         col_id = request.GET.get('col')
         if not row_id or not col_id:
@@ -425,28 +462,138 @@ async def api_crosstab_view(request, public_id):
 
 async def debug_analysis_view(request, public_id):
     """Vista de depuración para verificar qué está viendo el sistema."""
-    survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id)
-    await sync_to_async(PermissionHelper.verify_survey_access, thread_sensitive=True)(survey, request.user)
+    survey = await sync_to_async(
+        lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+        thread_sensitive=True
+    )()
+    user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+    await PermissionHelper.verify_survey_access(survey, user)
     analysis = await SurveyAnalysisService.get_analysis_data(survey, await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)())
     return JsonResponse(analysis, encoder=DjangoJSONEncoder)
 
 async def survey_thanks_view(request):
-    """Vista pública de agradecimiento."""
-    render_async = sync_to_async(render, thread_sensitive=True)
-    return await render_async(request, 'surveys/responses/thanks.html', {
-        'status': request.GET.get('status', 'active'),
+    """Vista pública de agradecimiento con mensajes diferentes según estado."""
+    status = request.GET.get('status', 'active')
+    public_id = request.GET.get('public_id', '')
+    
+    # Configuración de UI según estado
+    status_config = {
+        'active': {
+            'icon': 'check-circle-fill',
+            'color': 'success',
+            'title': '¡Gracias por tu respuesta!',
+            'text': 'Tu respuesta ha sido registrada correctamente. Tu feedback es muy valioso para nosotros.'
+        },
+        'paused': {
+            'icon': 'pause-circle-fill',
+            'color': 'warning',
+            'title': 'Encuesta Pausada',
+            'text': 'Esta encuesta está temporalmente pausada. Por favor, intenta más tarde.'
+        },
+        'closed': {
+            'icon': 'lock-fill',
+            'color': 'danger',
+            'title': 'Encuesta Cerrada',
+            'text': 'Esta encuesta ha terminado y no está aceptando más respuestas. ¡Gracias por tu interés!'
+        },
+        'draft': {
+            'icon': 'exclamation-triangle-fill',
+            'color': 'secondary',
+            'title': 'Encuesta en Borrador',
+            'text': 'Esta encuesta aún está en preparación y no está disponible.'
+        }
+    }
+    
+    ui = status_config.get(status, status_config['active'])
+    
+    context = {
+        'status': status,
+        'public_id': public_id,
+        'ui': ui,
         'success': request.GET.get('success') == '1'
-    })
+    }
+    
+    render_async = sync_to_async(render, thread_sensitive=True)
+    return await render_async(request, 'surveys/responses/thanks.html', context)
 
 async def change_survey_status(request, public_id):
     """Endpoint para cambiar estado (Active/Pause/Closed)."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author=request.user)
     try:
+        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+        survey = await sync_to_async(
+            lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+            thread_sensitive=True
+        )()
+        await PermissionHelper.verify_survey_access(survey, user)
+
         data = json.loads(request.body)
-        survey.status = data.get('status')
+        new_status = (data.get('status') or '').strip()
+        if not new_status:
+            return JsonResponse({'error': 'Missing status'}, status=400)
+
+        await sync_to_async(lambda: survey.validate_status_transition(new_status), thread_sensitive=True)()
+        survey.status = new_status
         await sync_to_async(survey.save, thread_sensitive=True)()
-        return JsonResponse({'success': True})
+
+        return JsonResponse({'success': True, 'status': survey.status})
+    except ValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    except PermissionDenied as e:
+        return JsonResponse({'error': str(e)}, status=403)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+async def save_analysis_segment_view(request, public_id):
+    """Endpoint AJAX para guardar un segmento de análisis."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    
+    try:
+        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+        survey = await sync_to_async(
+            lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+            thread_sensitive=True
+        )()
+        await PermissionHelper.verify_survey_access(survey, user)
+        
+        data = json.loads(request.body)
+        segment_name = data.get('name', '').strip()
+        
+        if not segment_name:
+            return JsonResponse({'error': 'El nombre del segmento es obligatorio'}, status=400)
+        
+        if len(segment_name) > 100:
+            return JsonResponse({'error': 'El nombre del segmento no puede exceder 100 caracteres'}, status=400)
+        
+        # Construir criterios de filtro desde los parámetros de la URL/request
+        filters_criteria = {
+            'start': data.get('start', ''),
+            'end': data.get('end', ''),
+            'segment_col': data.get('segment_col', ''),
+            'segment_val': data.get('segment_val', ''),
+        }
+        
+        # Crear el segmento
+        segment = await sync_to_async(AnalysisSegment.objects.create, thread_sensitive=True)(
+            name=segment_name,
+            survey=survey,
+            user=user,
+            filters_criteria=filters_criteria
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'segment_id': segment.id,
+            'segment_name': segment.name,
+            'message': f'Segmento "{segment_name}" guardado exitosamente'
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        logger.error(f"Error saving segment: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)

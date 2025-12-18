@@ -42,16 +42,62 @@ app.conf.beat_schedule = {
     },
 }
 
-# Celery task priorities
+# ============================================================
+# OPTIMIZACIONES PARA 4GB RAM Y MÚLTIPLES USUARIOS
+# ============================================================
+
+# Task priorities
 app.conf.task_default_priority = 5
 app.conf.task_inherit_parent_priority = True
 
-# Queue routing - TODAS las tareas van a la cola por defecto
-# Si quieres usar colas específicas, debes iniciar workers con -Q nombre_cola
-app.conf.task_routes = {
-    # Por ahora comentadas para que todas vayan a la cola por defecto
-    # 'surveys.tasks.generate_pdf_report': {'queue': 'reports'},
-    # 'surveys.tasks.generate_pptx_report': {'queue': 'reports'},
-    # 'surveys.tasks.generate_chart_*': {'queue': 'charts'},
-    # 'surveys.tasks.process_survey_import': {'queue': 'imports'},
+# Optimizaciones de memoria y concurrencia
+app.conf.worker_prefetch_multiplier = 2  # Prefetch 2 tareas por worker
+app.conf.worker_max_tasks_per_child = 100  # Reciclar workers después de 100 tareas
+app.conf.task_acks_late = True  # Ack después de completar, no al recibir
+app.conf.worker_disable_rate_limits = True  # Sin rate limits para máximo throughput
+
+# Timeouts optimizados para importaciones grandes
+app.conf.task_soft_time_limit = 1500  # 25 minutos soft limit
+app.conf.task_time_limit = 1800  # 30 minutos hard limit
+app.conf.task_reject_on_worker_lost = True
+
+# Compresión y serialización optimizada
+app.conf.task_compression = 'gzip'
+app.conf.result_compression = 'gzip'
+app.conf.task_serializer = 'json'
+app.conf.result_serializer = 'json'
+app.conf.accept_content = ['json']
+
+# Optimización de resultados
+app.conf.result_expires = 3600  # Resultados expiran en 1 hora
+app.conf.result_backend_transport_options = {
+    'master_name': 'mymaster',
+    'socket_keepalive': True,
+    'socket_keepalive_options': {
+        1: 1,  # TCP_KEEPIDLE
+        2: 1,  # TCP_KEEPINTVL
+        3: 3,  # TCP_KEEPCNT
+    },
 }
+
+# Queue routing para múltiples importaciones simultáneas
+app.conf.task_routes = {
+    'surveys.tasks.process_survey_import': {
+        'queue': 'celery',
+        'routing_key': 'import',
+        'priority': 8,  # Alta prioridad
+    },
+    'surveys.tasks.delete_surveys_task': {
+        'queue': 'celery',
+        'routing_key': 'delete',
+        'priority': 5,
+    },
+    'surveys.tasks.generate_pdf_report': {
+        'queue': 'celery',
+        'routing_key': 'reports',
+        'priority': 3,
+    },
+}
+
+# Alinear la cola por defecto con el worker actual
+app.conf.task_default_queue = 'celery'

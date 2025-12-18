@@ -1,0 +1,110 @@
+/* SIMPLIFIED ANIMATIONS - Removed problematic epic styles */
+@keyframes kaiokenPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(88, 166, 255, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(88, 166, 255, 0.6); }
+}
+
+@keyframes godBlueGlow {
+    0% { text-shadow: 0 0 10px rgba(88, 166, 255, 0.5); }
+    50% { text-shadow: 0 0 20px rgba(88, 166, 255, 0.8); }
+    100% { text-shadow: 0 0 10px rgba(88, 166, 255, 0.5); }
+}
+
+/* Clean table and card styling without breaking animations */
+.hover-card {
+    transition: all 0.3s ease;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+}
+
+.hover-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(88, 166, 255, 0.2);
+}
+
+/* Import modal exception - no epic effects */
+#importModalPreview .modal-content,
+#importModalPreview .modal-header,
+#importModalPreview .modal-body {
+    background: auto !important;
+    border: 1px solid #dee2e6 !important;
+    box-shadow: auto !important;
+    animation: none !important;
+}
+
+/* Guide modal - clean styling */
+#guideModal .modal-content {
+    background: var(--bk-card-bg);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+}
+
+.modal-content {
+    background-color: var(--bk-card-bg) !important;
+    color: var(--bk-text-primary) !important;
+}
+
+.modal-header {
+    background-color: var(--bk-hover-bg) !important;
+    border-color: rgba(88, 166, 255, 0.2) !important;
+}
+
+.modal-body {
+    color: var(--bk-text-primary) !important;
+}
+
+/* Table styling */
+.table {
+    color: var(--bk-text-primary) !important;
+}
+
+.table thead th {
+    background-color: var(--bk-hover-bg) !important;
+    color: var(--bk-primary) !important;
+    border-color: rgba(88, 166, 255, 0.2) !important;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(88, 166, 255, 0.08) !important;
+}
+
+/* Card and badge styling */
+.badge {
+    transition: all 0.3s ease;
+}
+
+.badge:hover {
+    transform: scale(1.05);
+}
+
+/* Form controls */
+.form-control,
+.form-select {
+    background-color: var(--bk-input-bg) !important;
+    color: var(--bk-text-primary) !important;
+    border-color: rgba(88, 166, 255, 0.2) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bk-card-bg) !important;
+    color: var(--bk-text-primary) !important;
+    border-color: var(--bk-primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(88, 166, 255, 0.25) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hover-card:hover {
+        transform: translateY(-3px);
+    }
+    
+    .table thead th {
+        padding: 12px 8px !important;
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .hover-card {
+        box-shadow: 0 4px 8px rgba(88, 166, 255, 0.1) !important;
+    }
+}

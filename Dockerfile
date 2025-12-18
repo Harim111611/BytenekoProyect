@@ -41,20 +41,27 @@ COPY requirements.txt /usr/src/app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# --- Copiar y compilar el módulo cpp_csv ---
+# --- Copiar y compilar el módulo cpp_csv (opcional) ---
 COPY tools/cpp_csv /usr/src/app/tools/cpp_csv
 WORKDIR /usr/src/app/tools/cpp_csv
-RUN pip install .
+RUN pip install . || echo "Warning: cpp_csv module could not be installed"
 WORKDIR /usr/src/app
 
 # Copiar el código de la aplicación
 COPY . /usr/src/app/
 
+# Copiar y dar permisos al script de entrada
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Instalar netcat para verificar conexiones
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+
 # Exponer el puerto de Django
 EXPOSE 8000
 
-# Recopilar archivos estáticos para producción
-RUN python manage.py collectstatic --noinput
+# Usar el script de entrada
+ENTRYPOINT ["docker-entrypoint.sh"]
 
-# Comando por defecto (no se ejecutará directamente, docker-compose lo sobrescribe)
-CMD ["gunicorn", "byteneko.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Comando por defecto
+CMD ["gunicorn", "byteneko.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

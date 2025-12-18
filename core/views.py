@@ -12,13 +12,14 @@ from django.http import HttpResponse, Http404, JsonResponse, HttpRequest
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.dateparse import parse_date
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.template.loader import render_to_string
 from django.core.cache import cache
 from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Max
 from django_ratelimit.decorators import ratelimit
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, Question
+from surveys.models_analytics import AnalysisSegment
 from core.services.survey_analysis import SurveyAnalysisService
 from core.reports.pdf_generator import PDFReportGenerator, DataNormalizer
 from core.reports.pptx_generator import generate_full_pptx_report
@@ -31,6 +32,36 @@ CACHE_TIMEOUT_DASHBOARD = 300
 DEFAULT_CHART_DAYS = 14
 ALERT_THRESHOLD_DAYS = 7
 ALERT_PROGRESS_MIN = 30.0
+
+
+def _redirect_to_login_if_needed(request: HttpRequest) -> HttpResponse | None:
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return redirect_to_login(request.get_full_path())
+    return None
+
+
+async def _redirect_to_login_if_needed_async(request: HttpRequest) -> HttpResponse | None:
+    """Async-safe auth guard.
+
+    Accessing request.user (SimpleLazyObject) can trigger DB work; do it in a
+    thread via sync_to_async to avoid SynchronousOnlyOperation in async views.
+    """
+    is_authenticated = await sync_to_async(
+        lambda: bool(getattr(getattr(request, 'user', None), 'is_authenticated', False)),
+        thread_sensitive=True,
+    )()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    return None
+
+
+async def _get_authenticated_user_id_and_username(request: HttpRequest) -> tuple[int, str]:
+    """Return (user_id, username) for an authenticated request, async-safe."""
+    return await sync_to_async(
+        lambda: (int(request.user.id), str(request.user.username)),
+        thread_sensitive=True,
+    )()
 
 def _get_filtered_responses(survey: Survey, data: Dict[str, Any]):
     """Helper centralizado para filtros de fecha."""
@@ -64,15 +95,18 @@ def _get_filtered_responses(survey: Survey, data: Dict[str, Any]):
 # DASHBOARD PRINCIPAL
 # ==========================================
 
-@login_required
 async def dashboard_view(request: HttpRequest) -> HttpResponse:
-    user = request.user
-    cache_key = f"dashboard_data_user_{user.id}"
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
+    user_id, username = await _get_authenticated_user_id_and_username(request)
+    cache_key = f"dashboard_data_user_{user_id}"
     context = await sync_to_async(cache.get, thread_sensitive=True)(cache_key)
 
     if not context:
-        logger.info(f"Generando dashboard cache para usuario {user.id}")
-        user_surveys = await sync_to_async(lambda: Survey.objects.filter(author=user), thread_sensitive=True)()
+        logger.info(f"Generando dashboard cache para usuario {user_id}")
+        user_surveys = await sync_to_async(lambda: Survey.objects.filter(author_id=user_id), thread_sensitive=True)()
         survey_stats = await sync_to_async(lambda: user_surveys.aggregate(
             total=Count('id'),
             active=Count('id', filter=Q(status='active'))
@@ -80,7 +114,7 @@ async def dashboard_view(request: HttpRequest) -> HttpResponse:
         total_surveys = survey_stats['total']
         active_count = survey_stats['active']
 
-        responses_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey__author=user).select_related('survey'), thread_sensitive=True)()
+        responses_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey__author_id=user_id).select_related('survey'), thread_sensitive=True)()
         total_responses = await sync_to_async(responses_qs.count, thread_sensitive=True)()
         today = timezone.now().date()
         responses_today = await sync_to_async(lambda: responses_qs.filter(created_at__date=today).count(), thread_sensitive=True)()
@@ -115,7 +149,7 @@ async def dashboard_view(request: HttpRequest) -> HttpResponse:
             'page_name': 'dashboard', 'kpis': kpis,
             'chart_labels': json.dumps(chart_labels), 'chart_data': json.dumps(chart_data),
             'pie_data': json.dumps(pie_data), 'recent_activity': recent_activity,
-            'alertas': alerts, 'user_name': user.username,
+            'alertas': alerts, 'user_name': username,
             'total_encuestas_count': total_surveys, 'total_respuestas_count': total_responses,
         }
         await sync_to_async(cache.set, thread_sensitive=True)(cache_key, context, CACHE_TIMEOUT_DASHBOARD)
@@ -127,15 +161,57 @@ async def dashboard_view(request: HttpRequest) -> HttpResponse:
 # DASHBOARD DE RESULTADOS (ANALÍTICAS) - RESTAURADO
 # ==========================================
 
-@login_required
 async def dashboard_results_view(request: HttpRequest) -> HttpResponse:
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
     """
     Vista para el panel de analíticas globales.
     """
     filters = {
         'periodo': request.GET.get('periodo', '30')
     }
-    summary_data = await _get_analytics_summary(request.user, filters)
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+    summary_data = await _get_analytics_summary(user_id, filters)
+
+    # Completar selects opcionales del template (evita listas vacías)
+    try:
+        analysis_segments = await sync_to_async(lambda: list(
+            AnalysisSegment.objects.filter(user_id=user_id)
+            .select_related('survey')
+            .only('id', 'name', 'survey_id')
+            .order_by('-created_at')[:50]
+        ), thread_sensitive=True)()
+    except Exception:
+        analysis_segments = []
+
+    try:
+        latest_survey = await sync_to_async(lambda: Survey.objects.filter(author_id=user_id)
+                                            .only('id', 'title')
+                                            .order_by('-created_at')
+                                            .first(), thread_sensitive=True)()
+        if latest_survey:
+            survey_questions = await sync_to_async(lambda: list(
+                latest_survey.questions
+                .filter(type__in=['single', 'multi', 'scale', 'select'])
+                .values('id', 'text')
+                .order_by('order')
+            ), thread_sensitive=True)()
+        else:
+            survey_questions = []
+        if not survey_questions:
+            survey_questions = await sync_to_async(lambda: list(
+                Question.objects.filter(
+                    survey__author_id=user_id,
+                    type__in=['single', 'multi', 'scale', 'select']
+                ).values('id', 'text').order_by('survey_id', 'order')[:50]
+            ), thread_sensitive=True)()
+    except Exception:
+        survey_questions = []
+
+    summary_data['analysis_segments'] = analysis_segments
+    summary_data['survey_questions'] = survey_questions
     
     # Contexto adicional para la plantilla
     summary_data['page_name'] = 'analytics'
@@ -143,15 +219,19 @@ async def dashboard_results_view(request: HttpRequest) -> HttpResponse:
     render_async = sync_to_async(render, thread_sensitive=True)
     return await render_async(request, 'core/dashboard/results_dashboard.html', summary_data)
 
-@login_required
 async def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
     """
     Genera un PDF con las analíticas globales.
     """
     filters = {
         'periodo': request.GET.get('periodo', '30')
     }
-    data = await _get_analytics_summary(request.user, filters)
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+    data = await _get_analytics_summary(user_id, filters)
     
     pdf_file = await sync_to_async(PDFReportGenerator.generate_global_report, thread_sensitive=True)(data)
     
@@ -166,24 +246,35 @@ async def global_results_pdf_view(request: HttpRequest) -> HttpResponse:
 # REPORTES Y EXPORTACIÓN POR ENCUESTA
 # ==========================================
 
-@login_required
 async def reports_page_view(request: HttpRequest) -> HttpResponse:
-    surveys = await sync_to_async(lambda: Survey.objects.filter(author=request.user).only('id', 'public_id', 'title', 'created_at', 'status').order_by('-created_at'), thread_sensitive=True)()
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+    surveys = await sync_to_async(lambda: Survey.objects.filter(author_id=user_id).only('id', 'public_id', 'title', 'created_at', 'status').order_by('-created_at'), thread_sensitive=True)()
     render_async = sync_to_async(render, thread_sensitive=True)
     return await render_async(request, 'core/reports/reports_page.html', {'page_name': 'reportes', 'surveys': surveys})
 
 @ratelimit(key='user', rate='60/m', block=True)
-@login_required
 async def report_preview_ajax(request: HttpRequest, public_id: str) -> JsonResponse:
-    survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author=request.user)
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+    survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author_id=user_id)
     try:
         responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.GET)
         total_respuestas = await sync_to_async(responses_queryset.count, thread_sensitive=True)()
         show_charts = request.GET.get('include_charts') in ['on', 'true']
         show_kpis = request.GET.get('include_kpis') in ['on', 'true']
         show_table = request.GET.get('include_table') in ['on', 'true']
-        analysis_result = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
-            survey=survey, responses_queryset=responses_queryset, include_charts=show_charts
+        # SurveyAnalysisService.get_analysis_data es async; no envolver en sync_to_async.
+        analysis_result = await SurveyAnalysisService.get_analysis_data(
+            survey=survey,
+            responses_queryset=responses_queryset,
+            include_charts=show_charts,
         )
         nps_safe = analysis_result.get('nps_data', {})
         last_date = None
@@ -193,39 +284,74 @@ async def report_preview_ajax(request: HttpRequest, public_id: str) -> JsonRespo
         if survey.sample_goal > 0:
             pct = int((total_respuestas / survey.sample_goal) * 100)
             completion_text = f"{pct}%"
-        context = {
-            'survey': survey, 'total_respuestas': total_respuestas,
-            'last_response_date': last_date, 'completion_rate': completion_text,
-            'analysis_data': analysis_result.get('analysis_data', []),
-            'kpi_prom_satisfaccion': analysis_result.get('kpi_prom_satisfaccion', 0),
-            'nps_score': nps_safe.get('score'), 'nps_chart_image': nps_safe.get('chart_image'),
-            'heatmap_image': analysis_result.get('heatmap_image'),
-            'include_kpis': show_kpis, 'include_charts': show_charts, 'include_table': show_table,
-            'is_pdf': False,
-            'consolidated_table_rows_limited': DataNormalizer.prepare_consolidated_rows(analysis_result.get('analysis_data', []))[:20]
+        analysis_items = analysis_result.get('analysis_data', [])
+        options = {
+            'include_kpis': show_kpis,
+            'include_charts': show_charts,
+            'include_table': show_table,
         }
+        context = {
+            'survey': survey,
+            'generated_at': timezone.now(),
+            'company_name': getattr(settings, 'COMPANY_NAME', 'Byteneko SaaS'),
+
+            # Documento compartido (preview + PDF)
+            'analysis_items': analysis_items,
+            'options': options,
+            'kpi_score': analysis_result.get('kpi_prom_satisfaccion', 0),
+
+            # Extras (si los necesitamos en el futuro)
+            'total_respuestas': total_respuestas,
+            'last_response_date': last_date,
+            'completion_rate': completion_text,
+            'analysis_data': analysis_items,
+            'kpi_prom_satisfaccion': analysis_result.get('kpi_prom_satisfaccion', 0),
+            'nps_score': nps_safe.get('score'),
+            'nps_chart_image': nps_safe.get('chart_image'),
+            'heatmap_image': analysis_result.get('heatmap_image'),
+            'include_kpis': show_kpis,
+            'include_charts': show_charts,
+            'include_table': show_table,
+            'is_pdf': False,
+            'consolidated_table_rows_limited': DataNormalizer.prepare_consolidated_rows(analysis_items)[:20],
+        }
+
+        # Para que el preview se vea igual al PDF: convertir charts a imágenes estáticas.
+        try:
+            from core.reports.pdf_generator import add_static_chart_images
+            add_static_chart_images(analysis_items, include_charts=show_charts)
+        except Exception:
+            logger.exception("No se pudo enriquecer el preview con gráficos estáticos")
+
         html = await sync_to_async(render_to_string, thread_sensitive=True)('core/reports/_report_preview_content.html', context)
         return JsonResponse({'html': html, 'success': True})
     except Exception as e:
         logger.error(f"Error preview survey {public_id}: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e), 'success': False}, status=500)
 
-@login_required
 async def report_pdf_view(request: HttpRequest) -> HttpResponse:
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+
     survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
     if not survey_id:
         raise Http404("Survey ID required")
     if str(survey_id).isdigit():
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author=request.user)
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author_id=user_id)
     else:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author=request.user)
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author_id=user_id)
     try:
         responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
         include_charts = request.POST.get('include_charts') == 'on'
         include_table = request.POST.get('include_table') == 'on'
         include_kpis = request.POST.get('include_kpis') == 'on'
-        data = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
-            survey=survey, responses_queryset=responses_queryset, include_charts=include_charts
+        data = await SurveyAnalysisService.get_analysis_data(
+            survey=survey,
+            responses_queryset=responses_queryset,
+            include_charts=include_charts,
         )
         pdf_file = await sync_to_async(PDFReportGenerator.generate_report, thread_sensitive=True)(
             survey=survey,
@@ -250,21 +376,28 @@ async def report_pdf_view(request: HttpRequest) -> HttpResponse:
         logger.error(f"Error generando PDF: {str(e)}", exc_info=True)
         return HttpResponse(f"Error: {str(e)}", status=500)
 
-@login_required
 async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
+    user_id, _username = await _get_authenticated_user_id_and_username(request)
+
     survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
     if not survey_id:
         raise Http404("Survey ID required")
     if str(survey_id).isdigit():
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author=request.user)
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author_id=user_id)
     else:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author=request.user)
+        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author_id=user_id)
     try:
         responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
         include_charts = request.POST.get('include_charts') == 'on'
         include_table = request.POST.get('include_table') == 'on'
-        data = await sync_to_async(SurveyAnalysisService.get_analysis_data, thread_sensitive=True)(
-            survey=survey, responses_queryset=responses_queryset, include_charts=include_charts
+        data = await SurveyAnalysisService.get_analysis_data(
+            survey=survey,
+            responses_queryset=responses_queryset,
+            include_charts=include_charts,
         )
         pptx_file = await sync_to_async(generate_full_pptx_report, thread_sensitive=True)(
             survey=survey,
@@ -275,7 +408,8 @@ async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
             total_responses=await sync_to_async(responses_queryset.count, thread_sensitive=True)(),
             kpi_satisfaction_avg=data.get('kpi_prom_satisfaccion', 0),
             heatmap_image=data.get('heatmap_image'),
-            include_table=include_table
+            include_table=include_table,
+            include_charts=include_charts,
         )
         response = HttpResponse(pptx_file, content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
         safe_title = slugify(survey.title)[:50]
@@ -285,8 +419,11 @@ async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
         logger.error(f"Error PPTX: {str(e)}", exc_info=True)
         return HttpResponse("Error generando PowerPoint.", status=500)
 
-@login_required
 async def settings_view(request: HttpRequest) -> HttpResponse:
+    redirect_response = await _redirect_to_login_if_needed_async(request)
+    if redirect_response:
+        return redirect_response
+
     render_async = sync_to_async(render, thread_sensitive=True)
     return await render_async(request, 'core/dashboard/settings.html', {'page_name': 'configuracion', 'user': request.user})
 
@@ -310,15 +447,15 @@ def _generate_performance_alerts_optimized(user_surveys) -> List[Dict[str, Any]]
         })
     return alerts
 
-async def _get_analytics_summary(user, filters: Optional[Dict] = None) -> Dict[str, Any]:
+async def _get_analytics_summary(user_id: int, filters: Optional[Dict] = None) -> Dict[str, Any]:
     """
     Calcula TODAS las métricas analíticas. Helper para dashboard_results_view y global_results_pdf_view.
     """
     if filters is None:
         filters = {}
 
-    surveys = Survey.objects.filter(author=user)
-    responses_qs = SurveyResponse.objects.filter(survey__in=surveys)
+    surveys = Survey.objects.filter(author_id=user_id)
+    responses_qs = SurveyResponse.objects.filter(survey__author_id=user_id)
     
     periodo = filters.get('periodo', '30')
     if periodo != 'all':

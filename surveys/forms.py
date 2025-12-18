@@ -48,9 +48,40 @@ class SurveyUpdateForm(SurveyForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        if self.instance and self.instance.pk:
+            allowed = sorted(self.instance.get_allowed_status_transitions())
+            self.fields['status'].widget.attrs['data-allowed-statuses'] = ','.join(allowed)
+            self.fields['status'].widget.attrs['data-current-status'] = self.instance.status
+
         if self.instance and self.instance.is_imported:
             self.fields['status'].disabled = True
             self.fields['status'].help_text = _("El estado no se puede cambiar en encuestas importadas.")
+
+        if self.instance and self.instance.status == Survey.STATUS_CLOSED:
+            # Si está cerrada, se bloquean todos los parámetros salvo el título.
+            for name, field in self.fields.items():
+                if name == 'title':
+                    continue
+                field.disabled = True
+                # Mensaje explícito para UI (si el template renderiza help_text)
+                field.help_text = field.help_text or _("Bloqueado porque la encuesta está cerrada.")
+            if 'status' in self.fields:
+                self.fields['status'].help_text = _("La encuesta está cerrada. El estado es definitivo.")
+
+    def clean(self):
+        cleaned = super().clean()
+
+        # Refuerzo backend: en encuestas cerradas solo se permite cambiar el título.
+        if self.instance and self.instance.pk and self.instance.status == Survey.STATUS_CLOSED:
+            for field_name in list(cleaned.keys()):
+                if field_name == 'title':
+                    continue
+                # Revertir cualquier intento de modificación.
+                if hasattr(self.instance, field_name):
+                    cleaned[field_name] = getattr(self.instance, field_name)
+
+        return cleaned
 
     def clean_status(self):
         new_status = self.cleaned_data.get('status')
@@ -62,7 +93,16 @@ class SurveyUpdateForm(SurveyForm):
         try:
             self.instance.validate_status_transition(new_status, from_status=current_status)
         except ValidationError as e:
-            raise forms.ValidationError(e.message)
+            # Extract error message properly from ValidationError
+            if hasattr(e, 'messages'):
+                error_msg = ' '.join(e.messages)
+            elif hasattr(e, 'message'):
+                error_msg = e.message
+            else:
+                error_msg = str(e)
+            import sys
+            print(f"[FORM VALIDATION ERROR] Status transition failed: {error_msg}", file=sys.stderr)
+            raise forms.ValidationError(error_msg)
 
         return new_status
 
