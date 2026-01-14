@@ -1,0 +1,45 @@
+[tool.ruff]
+# Ruff is used as a fast linter to catch common bugs and "smell code".
+# Keep rules conservative to avoid noisy style churn.
+target-version = "py310"
+line-length = 100
+
+# Exclude common generated/artifact folders.
+exclude = [
+  ".git",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+  "staticfiles",
+  "media",
+  "tmp",
+]
+
+[tool.ruff.lint]
+# A focused, high-signal set:
+# - F: Pyflakes (unused imports/vars, undefined names)
+# - E9: Syntax errors
+# - W: Warnings (pycodestyle)
+# - B: Bugbear (likely bugs / footguns)
+# - C4: Comprehension optimizations
+# - SIM: Simplifications
+select = ["E9", "F", "W", "B", "C4", "SIM"]
+
+# The codebase currently has lots of whitespace-only warnings; treat them as noise for now.
+ignore = ["W291", "W292", "W293"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"**/migrations/*.py" = ["F401", "F841"]
+"tests/**/*.py" = ["F401", "F811", "F841", "F541"]
+"surveys/tests/**/*.py" = ["F401", "F811", "F841", "F541"]
+"byteneko/settings/*.py" = ["F403", "F405"]
+"core/models.py" = ["F403"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["byteneko", "core", "surveys", "tools"]
+
+[tool.ruff.format]
+# We won't run formatting automatically; config is here for future use.
+line-ending = "auto"

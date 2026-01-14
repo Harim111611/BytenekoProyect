@@ -1,0 +1,551 @@
+/*
+  Report styles (WeasyPrint)
+  Importante: este CSS NO referencia archivos externos (TTF/JPG/SVG)
+  para evitar errores de WhiteNoise/collectstatic en producción.
+*/
+
+@page {
+  margin: 18mm 16mm 18mm 16mm;
+
+  @top-left {
+    background: #4F46E5;
+    content: counter(page);
+    height: 10mm;
+    text-align: center;
+    width: 10mm;
+  }
+
+  @top-center {
+    background: #4F46E5;
+    content: '';
+    display: block;
+    height: 0.6mm;
+    opacity: .5;
+    width: 100%;
+  }
+
+  @top-right {
+    content: string(heading);
+    font-size: 9pt;
+    height: 10mm;
+    vertical-align: middle;
+    width: 100%;
+  }
+}
+
+@page :blank {
+  @top-left { background: none; content: '' }
+  @top-center { content: none }
+  @top-right { content: none }
+}
+
+@page no-chapter {
+  @top-left { background: none; content: none }
+  @top-center { content: none }
+  @top-right { content: none }
+}
+
+/* Portada sin imagen para evitar dependencias de archivos */
+@page :first {
+  /* Portada full-bleed (sin márgenes blancos) */
+  margin: 0;
+
+  /* Evitar encabezados/paginación en la portada */
+  @top-left { background: none; content: none }
+  @top-center { content: none }
+  @top-right { content: none }
+}
+
+html {
+  color: #111827;
+  font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+  font-size: 11pt;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+body {
+  margin: 0;
+}
+
+h1 {
+  color: #111827;
+  font-size: 34pt;
+  margin: 0;
+  page: no-chapter;
+  width: 100%;
+}
+
+h2, h3, h4 {
+  color: #000;
+  font-weight: 400;
+}
+
+h2 {
+  break-before: always;
+  font-size: 28pt;
+  string-set: heading content();
+}
+
+h3 {
+  font-weight: 300;
+  font-size: 15pt;
+}
+
+h4 {
+  font-size: 13pt;
+}
+
+/* Cover */
+#cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  /* Portada full-bleed: alto completo A4 */
+  min-height: 297mm;
+  box-sizing: border-box;
+  background: #F5F7FA;
+  background-image:
+    radial-gradient(circle at 92% 10%, rgba(79, 70, 229, 0.16) 0%, rgba(79, 70, 229, 0.00) 52%),
+    radial-gradient(circle at 10% 78%, rgba(79, 70, 229, 0.12) 0%, rgba(79, 70, 229, 0.00) 48%),
+    linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(79, 70, 229, 0.00) 42%),
+    linear-gradient(rgba(79, 70, 229, 0.06) 0.25pt, transparent 0.25pt),
+    linear-gradient(90deg, rgba(79, 70, 229, 0.06) 0.25pt, transparent 0.25pt);
+  background-size: auto, auto, auto, 6mm 6mm, 6mm 6mm;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0 0;
+  position: relative;
+  overflow: hidden;
+  padding: 16mm 14mm;
+  page: no-chapter;
+}
+
+#cover::after {
+  content: '';
+  position: absolute;
+  top: -18mm;
+  right: -22mm;
+  width: 88mm;
+  height: 88mm;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.10);
+  z-index: 0;
+}
+
+#cover .cover-title {
+  width: 100%;
+}
+
+#cover .cover-title {
+  position: relative;
+}
+
+#cover .cover-title > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Extra decor (within title block) */
+#cover .cover-title::before {
+  content: '';
+  position: absolute;
+  bottom: -18mm;
+  left: -22mm;
+  width: 78mm;
+  height: 78mm;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.08);
+  z-index: 1;
+}
+
+#cover .cover-title::after {
+  content: '';
+  position: absolute;
+  top: 44mm;
+  right: 10mm;
+  width: 78mm;
+  height: 46mm;
+  border-radius: 3mm;
+  background-image:
+    linear-gradient(rgba(79, 70, 229, 0.08) 0.25pt, transparent 0.25pt),
+    linear-gradient(90deg, rgba(79, 70, 229, 0.08) 0.25pt, transparent 0.25pt);
+  background-size: 4mm 4mm;
+  opacity: 0.55;
+  z-index: 1;
+}
+
+#cover .cover-title,
+#cover .cover-meta {
+  position: relative;
+  z-index: 2;
+}
+
+#cover .cover-brand {
+  color: #4F46E5;
+  font-weight: 700;
+  font-size: 12pt;
+  margin: 0 0 4mm 0;
+  display: inline-block;
+  padding: 2mm 3mm;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.10);
+}
+
+#cover .cover-kicker {
+  color: #6B7281;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 2mm 0;
+}
+
+#cover .cover-kicker::after {
+  content: '';
+  display: block;
+  width: 28mm;
+  height: 0.8mm;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.45);
+  margin-top: 2.5mm;
+}
+
+#cover h1.cover-h1 {
+  width: 100%;
+  color: #111827;
+  font-weight: 800;
+  margin: 0;
+  font-size: 28pt;
+  line-height: 1.06;
+  overflow-wrap: anywhere;
+}
+
+#cover h1.cover-h1--long {
+  font-size: 22pt;
+  line-height: 1.1;
+}
+
+#cover h1.cover-h1--xlong {
+  font-size: 19pt;
+  line-height: 1.12;
+}
+
+#cover h1.cover-h1--xxlong {
+  font-size: 17pt;
+  line-height: 1.14;
+}
+
+#cover .cover-date {
+  color: #6B7281;
+  font-size: 10pt;
+  margin-top: 3mm;
+}
+
+#cover .cover-summary {
+  display: flex;
+  gap: 6mm;
+  width: 100%;
+  flex-wrap: wrap;
+  margin-top: 10mm;
+}
+
+#cover .cover-card {
+  background: #FFFFFF;
+  border: 0.25pt solid rgba(0, 0, 0, 0.08);
+  border-radius: 3mm;
+  padding: 5.5mm 5.5mm;
+  flex: 1;
+  min-width: 0;
+  border-top: 1mm solid rgba(79, 70, 229, 0.20);
+}
+
+#cover .cover-label {
+  font-size: 8.5pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6B7281;
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+
+#cover .cover-value {
+  color: #111827;
+  font-weight: 800;
+  font-size: 15pt;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+#cover .cover-hint {
+  color: #6B7281;
+  font-size: 9pt;
+  margin-top: 2mm;
+}
+
+#cover .cover-meta {
+  display: flex;
+  gap: 6mm;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+#cover .cover-meta address {
+  background: #FFFFFF;
+  border: 0.25pt solid rgba(0, 0, 0, 0.08);
+  border-radius: 3mm;
+  flex: 0 1 90mm;
+  min-width: 0;
+  margin: 0;
+  padding: 6mm 6mm;
+  white-space: pre-wrap;
+  color: #111827;
+  font-size: 10pt;
+  line-height: 1.45;
+  border-top: 1mm solid rgba(79, 70, 229, 0.16);
+}
+
+/* Contents */
+#contents {
+  /* Evita páginas en blanco: `right/left` fuerza páginas pares/impares */
+  break-before: always;
+  break-after: auto;
+  page: no-chapter;
+}
+
+#contents h2 {
+  font-size: 20pt;
+  font-weight: 400;
+  margin-bottom: 30mm;
+}
+
+#contents h3 {
+  font-weight: 500;
+  margin: 3em 0 1em;
+}
+
+#contents h3::before {
+  background: #4F46E5;
+  content: '';
+  display: block;
+  height: 0.8mm;
+  margin-bottom: 2.5mm;
+  width: 20mm;
+}
+
+#contents ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+#contents ul li {
+  border-top: 0.25pt solid #c1c1c1;
+  margin: 2.5mm 0;
+  padding-top: 2.5mm;
+}
+
+#contents ul li::before {
+  color: #4F46E5;
+  content: '• ';
+  font-size: 40pt;
+  line-height: 16pt;
+  vertical-align: bottom;
+}
+
+#contents ul li a {
+  color: inherit;
+  text-decoration-line: inherit;
+}
+
+/* WeasyPrint: usamos target-text y target-counter */
+#contents ul li a::after {
+  color: #4F46E5;
+  content: target-counter(attr(href), page);
+  float: right;
+}
+
+/* Columns section */
+#columns section {
+  /* Para paginación predecible: 1 columna y saltos de página cada 2 preguntas */
+  columns: 1;
+  column-gap: 0;
+  padding-top: 10mm;
+}
+
+#columns section .qa {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 6mm 0;
+  padding: 0 0 6mm 0;
+  border-bottom: 0.25pt solid rgba(0, 0, 0, 0.08);
+}
+
+/* Consolidated data table at the end */
+#data-table {
+  break-before: always;
+  page: no-chapter;
+}
+
+#data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6mm;
+  table-layout: fixed;
+}
+
+#data-table th,
+#data-table td {
+  border-bottom: 0.25pt solid rgba(0, 0, 0, 0.12);
+  padding: 2.2mm 2mm;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+#data-table thead th {
+  background: #F5F7FA;
+  color: #111827;
+  font-weight: 600;
+}
+
+#data-table tbody tr:nth-child(even) td {
+  background: rgba(245, 247, 250, 0.7);
+}
+
+/* Máximo 2 preguntas por hoja */
+#columns section .qa:nth-of-type(2n):not(:last-child) {
+  break-after: page;
+  page-break-after: always;
+}
+
+#columns section .qa .question {
+  margin: 0;
+}
+
+#columns section .qa .answer {
+  margin: 1.5mm 0 0 0;
+  text-align: justify;
+}
+
+#columns section .qa .insight {
+  margin: 2mm 0 0 0;
+  color: #6B7281;
+  font-size: 10pt;
+}
+
+#columns section .qa img.chart {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 3mm;
+  border: 0.25pt solid rgba(0, 0, 0, 0.08);
+  background: #FFFFFF;
+  padding: 2mm;
+}
+
+/* Offers */
+#offers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+#offers h2, #offers h3 {
+  width: 100%;
+}
+
+#offers section {
+  width: 30%;
+}
+
+#offers section h4 {
+  margin-bottom: 0;
+}
+
+#offers section ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+#offers section ul li:not(:last-of-type) {
+  margin: 5mm 0;
+}
+
+#offers section p {
+  background: #fbc847;
+  display: block;
+  font-size: 15pt;
+  font-weight: 700;
+  margin-bottom: 0;
+  padding: 2.5mm 0;
+  text-align: center;
+}
+
+/* Chapter */
+#chapter {
+  align-items: center;
+  display: flex;
+  height: 297mm;
+  justify-content: center;
+  background: #4F46E5;
+  page: no-chapter;
+}
+
+/* Typography showcase */
+#typography section {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 10mm 0;
+}
+
+#typography section h4 {
+  border-top: 1pt solid;
+  flex: 1 25%;
+  margin: 0;
+}
+
+#typography section h4 + * {
+  flex: 1 75%;
+  margin: 0;
+  padding-left: 5mm;
+}
+
+#typography section p {
+  text-align: justify;
+}
+
+#typography section ul {
+  line-height: 2;
+  list-style: none;
+}
+
+#typography section#ligatures dl,
+#typography section#numbers dl {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+#typography section#ligatures dl dt,
+#typography section#numbers dl dt {
+  font-weight: 400;
+  width: 30%;
+}
+
+#typography section#ligatures dl dd,
+#typography section#numbers dl dd {
+  flex: 1 70%;
+  margin: 0;
+  padding: 0;
+}
+
+.none { font-variant-ligatures: none; }
+.common { font-variant-ligatures: common-ligatures; }
+.discretionary { font-variant-ligatures: discretionary-ligatures; }
+.contextual { font-variant-ligatures: contextual; }
+
+#fractions { font-variant-numeric: diagonal-fractions; }
+#ordinals { font-variant-numeric: ordinal; }
+#slashed { font-variant-numeric: slashed-zero; }
+#super { font-variant-position: super; }
+#sub { font-variant-position: sub; }
+

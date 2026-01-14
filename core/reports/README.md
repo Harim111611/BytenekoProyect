@@ -40,7 +40,7 @@ pptx_bytes = generate_pptx(survey_id, user=request.user)
 ## Templates Utilizados
 
 Los generadores usan templates HTML que se renderean:
-- `core/reports/report_pdf_template.html`
+- `core/reports/report_document.html`
 - `core/reports/_report_preview_content.html`
 - `core/reports/_global_results_pdf.html`
 

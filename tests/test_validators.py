@@ -3,6 +3,7 @@ Tests unitarios para core/validators.py
 Verifica que todas las validaciones funcionen correctamente con datos válidos e inválidos
 """
 import pytest
+import pandas as pd
 from django.core.exceptions import ValidationError
 from datetime import date
 

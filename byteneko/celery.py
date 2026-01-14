@@ -9,7 +9,7 @@ from celery.schedules import crontab
 
 # Set default Django settings module / environment
 os.environ.setdefault('DJANGO_ENV', os.environ.get('DJANGO_ENV', 'local'))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.base')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
 
 app = Celery('byteneko')
 

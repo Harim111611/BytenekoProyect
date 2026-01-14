@@ -4,7 +4,6 @@ import json
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse

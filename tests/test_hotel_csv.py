@@ -1,5 +1,7 @@
 import re
 
+import pandas as pd
+
 df = pd.read_csv("data/samples/encuesta_hotel_huespedes.csv", encoding="utf-8-sig")
 print("\n=== ANÁLISIS DETALLADO: encuesta_hotel_huespedes.csv ===")
 print(f"Total columnas: {len(df.columns)}\n")

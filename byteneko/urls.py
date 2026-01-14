@@ -5,7 +5,6 @@ from django.contrib.auth import views as auth_views
 from django.views.generic.base import RedirectView
 
 from core import views as core_views
-from asgiref.sync import async_to_sync
 from . import views_checkout
 
 urlpatterns = [
@@ -24,28 +23,28 @@ urlpatterns = [
 
     # Apps (Core)
 
-    path("dashboard/", async_to_sync(core_views.dashboard_view), name="dashboard"),
-    path("results/", async_to_sync(core_views.dashboard_results_view), name="dashboard_results"),
-    path("results/pdf/", async_to_sync(core_views.global_results_pdf_view), name="global_results_pdf"),
-    path("reports/", async_to_sync(core_views.reports_page_view), name="reports"),
+    path("dashboard/", core_views.dashboard_view, name="dashboard"),
+    path("results/", core_views.dashboard_results_view, name="dashboard_results"),
+    path("results/pdf/", core_views.global_results_pdf_view, name="global_results_pdf"),
+    path("reports/", core_views.reports_page_view, name="reports"),
 
     # --- NEW ROUTE ADDED HERE ---
-    path("settings/", async_to_sync(core_views.settings_view), name="settings"),
+    path("settings/", core_views.settings_view, name="settings"),
 
     # Specific Reports
     path(
         "report/pdf/",
-        async_to_sync(core_views.report_pdf_view),
+        core_views.report_pdf_view,
         name="report_pdf",
     ),
     path(
         "reports/powerpoint/",
-        async_to_sync(core_views.report_powerpoint_view),
+        core_views.report_powerpoint_view,
         name="report_pptx",
     ),
     path(
         "reports/preview/<str:public_id>/",
-        async_to_sync(core_views.report_preview_ajax),
+        core_views.report_preview_ajax,
         name="report_preview",
     ),
 

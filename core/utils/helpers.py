@@ -7,6 +7,7 @@ from datetime import timedelta, datetime
 import logging
 
 from core.validators import DateFilterValidator
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -189,13 +190,15 @@ class PermissionHelper:
         if survey_author_id != user_id:
             # Log security event without accessing related objects
             log_security = get_log_security_event()
-            await log_security(
+            result = log_security(
                 'unauthorized_survey_access',
                 severity='WARNING',
                 user_id=user_id,
                 survey_id=getattr(survey, 'id', None),
                 survey_author_id=survey_author_id
             )
+            if inspect.isawaitable(result):
+                await result
             logger.warning(
                 f"User {user_id} tried to access survey {getattr(survey, 'id', None)} without permission"
             )

@@ -54,8 +54,8 @@ class ChartGenerator:
 
     # AJUSTE 1: Fuentes más grandes por defecto para mejor lectura
     BASE_STYLE = {
-        'font.family': 'sans-serif',
-        'font.sans-serif': ['Inter', 'system-ui', 'Segoe UI', 'sans-serif'],
+        'font.family': 'DejaVu Sans',
+        'font.sans-serif': ['DejaVu Sans', 'Liberation Sans', 'Arial', 'sans-serif'],
         'font.size': 12,           # Aumentado de 11 a 12
         'axes.labelsize': 12,      # Etiquetas ejes
         'axes.titlesize': 14,      # Títulos más grandes
@@ -99,10 +99,13 @@ class ChartGenerator:
     
     @classmethod
     def _fig_to_base64(cls, fig):
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', transparent=True)
-        buf.seek(0)
-        return base64.b64encode(buf.read()).decode('utf-8')
+        try:
+            with io.BytesIO() as buf:
+                fig.savefig(buf, format='png', bbox_inches='tight', transparent=True)
+                buf.seek(0)
+                return base64.b64encode(buf.read()).decode('utf-8')
+        finally:
+            plt.close(fig)
 
     @staticmethod
     def _fig_to_html(fig):

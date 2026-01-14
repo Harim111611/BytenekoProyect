@@ -1,10 +1,8 @@
 # surveys/admin.py
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.db.models import Count
 from django.urls import reverse
-from django.utils.safestring import mark_safe
-from django.utils.translation import gettext_lazy as _
 from .models import Survey, Question, AnswerOption, SurveyResponse, QuestionResponse, ImportJob
 
 # --- 1. CONFIGURACIÓN DE BRANDING (Identidad Visual) ---
@@ -186,11 +184,11 @@ class SurveyAdmin(admin.ModelAdmin):
 
         # Obtenemos las primeras 5 preguntas para no saturar
         questions = obj.questions.all()[:5]
-        
-        html_rows = ""
+
+        rows = []
         for q in questions:
             # Lógica simple de visualización según tipo
-            preview_data = "Texto libre / Numérico"
+            preview_html = "Texto libre / Numérico"
             if q.type in ['single', 'multi']:
                 # Calcular top opción
                 # CORRECCIÓN: Usamos 'questionresponse' en lugar de 'questionresponse_set'
@@ -199,19 +197,29 @@ class SurveyAdmin(admin.ModelAdmin):
                     .order_by('-num_answers').first()
                 if top_opt and top_opt.num_answers > 0:
                     pct = int((top_opt.num_answers / total_responses) * 100)
-                    preview_data = f"Top: <strong>{top_opt.text}</strong> ({pct}%)"
+                    preview_html = format_html("Top: <strong>{}</strong> ({}%)", top_opt.text, pct)
                 else:
-                    preview_data = "Sin selecciones"
-            
-            html_rows += f"""
-                <tr>
-                    <td style="padding: 5px; border-bottom: 1px solid #eee;">{q.text[:40]}...</td>
-                    <td style="padding: 5px; border-bottom: 1px solid #eee;">
-                        <span class="badge" style="background:#eee; padding:2px 5px;">{q.get_type_display()}</span>
-                    </td>
-                    <td style="padding: 5px; border-bottom: 1px solid #eee;">{preview_data}</td>
-                </tr>
-            """
+                    preview_html = "Sin selecciones"
+
+            question_text = (q.text[:40] + "...") if len(q.text) > 40 else q.text
+            type_badge = format_html(
+                '<span class="badge" style="background:#eee; padding:2px 5px;">{}</span>',
+                q.get_type_display(),
+            )
+            rows.append(
+                format_html(
+                    "<tr>"
+                    '<td style="padding: 5px; border-bottom: 1px solid #eee;">{}</td>'
+                    '<td style="padding: 5px; border-bottom: 1px solid #eee;">{}</td>'
+                    '<td style="padding: 5px; border-bottom: 1px solid #eee;">{}</td>'
+                    "</tr>",
+                    question_text,
+                    type_badge,
+                    preview_html,
+                )
+            )
+
+        html_rows = format_html_join("", "{}", ((row,) for row in rows))
 
         return format_html(
             '''
@@ -235,7 +243,7 @@ class SurveyAdmin(admin.ModelAdmin):
             </div>
             ''',
             total_responses,
-            mark_safe(html_rows)
+            html_rows
         )
 
 
@@ -351,3 +359,15 @@ class AnswerOptionAdmin(admin.ModelAdmin):
         manager = getattr(obj, 'questionresponse', None) or getattr(obj, 'questionresponse_set', None)
         count = manager.count() if manager else 0
         return format_html('<strong>{}</strong> times selected', count)
+
+
+@admin.register(QuestionResponse)
+class QuestionResponseAdmin(admin.ModelAdmin):
+    list_display = ('id', 'question', 'survey_response', 'selected_option', 'numeric_value', 'text_value')
+    search_fields = (
+        'question__text',
+        'survey_response__survey__title',
+        'text_value',
+    )
+    list_filter = ('question__type',)
+    readonly_fields = ('question', 'survey_response', 'selected_option', 'numeric_value', 'text_value')

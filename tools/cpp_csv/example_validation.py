@@ -7,6 +7,8 @@ para procesar archivos CSV con validación de tipos y rangos.
 
 ## Código relacionado con cpp_csv eliminado (código muerto)
 
+from tools.cpp_csv import pybind_csv
+
 
 def example_basic_validation():
     """Ejemplo básico de validación"""

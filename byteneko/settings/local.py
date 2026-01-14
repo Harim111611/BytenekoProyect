@@ -33,6 +33,10 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False 
 SECURE_SSL_REDIRECT = False  
 
+# Evitar colisiones con cookies previas (p.ej. si antes corriste settings de producción en el mismo host)
+SESSION_COOKIE_NAME = 'byteneko_session_local'
+CSRF_COOKIE_NAME = 'byteneko_csrftoken_local'
+
 # AUTORIZAR HTTP LOCAL (para runserver)
 CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',
@@ -163,7 +167,7 @@ LOGGING = {
         },
         'django.request': {
             'handlers': ['console', 'file_error'],
-            'level': 'ERROR',
+            'level': 'WARNING',
             'propagate': False,
         },
         'django.security': {
@@ -174,6 +178,21 @@ LOGGING = {
         'django.db.backends': {
             'handlers': ['console'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        'fontTools': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'matplotlib': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'matplotlib.font_manager': {
+            'handlers': ['console'],
+            'level': 'WARNING',
             'propagate': False,
         },
         'core': {
@@ -272,8 +291,9 @@ SESSION_CACHE_ALIAS = 'default'
 # ============================================================
 
 # Reducir DATA_UPLOAD_MAX_MEMORY_SIZE para controlar picos
-DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+# Permitir override por env (útil para docker-compose y pruebas con CSV grandes)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config('DATA_UPLOAD_MAX_MEMORY_SIZE', default=52428800, cast=int)  # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = config('FILE_UPLOAD_MAX_MEMORY_SIZE', default=10485760, cast=int)  # 10MB
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',  # Usar disco, no memoria
 ]

@@ -1,0 +1,14 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>{{ survey.title }}</title>
+    <meta name="description" content="Reporte de encuesta">
+  </head>
+  <body>
+    {% include "core/reports/_report_pdf_body.html" %}
+
+  </body>
+</html>

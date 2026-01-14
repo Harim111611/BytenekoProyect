@@ -1,7 +1,9 @@
-{% include "core/reports/_report_document_styles.html" %}
+{% load static %}
 
-<div class="report-preview-page shadow-sm">
-  <div class="report-doc">
-    {% include "core/reports/_report_document_content.html" %}
+<link rel="stylesheet" href="{% static 'core/reports/report_preview.css' %}">
+
+<div class="report-preview">
+  <div class="report-preview-page">
+    {% include "core/reports/_report_pdf_body.html" %}
   </div>
 </div>

@@ -4,7 +4,6 @@ Monitoreo de recursos optimizado para 4GB RAM
 import psutil
 import logging
 from functools import wraps
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

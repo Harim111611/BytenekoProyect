@@ -14,8 +14,12 @@ echo "PostgreSQL está listo!"
 echo "Verificando estado de las migraciones..."
 python manage.py showmigrations --list
 
-echo "Creando migraciones si es necesario..."
-python manage.py makemigrations --noinput || true
+if [ "${RUN_MAKEMIGRATIONS:-0}" = "1" ]; then
+  echo "Creando migraciones (RUN_MAKEMIGRATIONS=1)..."
+  python manage.py makemigrations --noinput
+else
+  echo "Omitiendo makemigrations (producción segura)."
+fi
 
 echo "Aplicando migraciones..."
 python manage.py migrate --noinput

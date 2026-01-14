@@ -2,18 +2,17 @@
 Tests unitarios para TextAnalyzer, DataFrameBuilder, QuestionAnalyzer y NPSCalculator
 """
 import pytest
-import collections
-from unittest.mock import Mock, patch, MagicMock
-from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from surveys.models import (
     Survey, Question, AnswerOption, SurveyResponse, QuestionResponse
 )
+from core.services.analysis_service import (
     TextAnalyzer,
     DataFrameBuilder,
     QuestionAnalyzer,
-    NPSCalculator
+    NPSCalculator,
 )
 
 

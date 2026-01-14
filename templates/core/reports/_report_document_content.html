@@ -6,6 +6,25 @@
   </div>
 </div>
 
+<div class="meta-grid">
+  <div class="meta-card">
+    <div class="meta-label">Periodo</div>
+    <div class="meta-value">
+      {% if options.start_date and options.end_date %}
+        {{ options.start_date }} — {{ options.end_date }}
+      {% elif options.window_days and options.window_days != 'all' and options.window_days != 'custom' %}
+        Últimos {{ options.window_days }} días
+      {% else %}
+        Todo el histórico
+      {% endif %}
+    </div>
+  </div>
+  <div class="meta-card">
+    <div class="meta-label">Respuestas analizadas</div>
+    <div class="meta-value">{{ options.total_responses|default:0 }}</div>
+  </div>
+</div>
+
 {% if options.include_kpis and kpi_score|default:0|add:0 > 0 %}
   <div class="kpi-section">
     <div class="kpi-value">{{ kpi_score|floatformat:1 }}</div>

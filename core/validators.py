@@ -19,10 +19,10 @@ class DateFilterValidator:
         try:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
             return date_obj
-        except ValueError:
+        except ValueError as err:
             raise ValidationError(
                 f"Formato de {field_name} inválido. Use YYYY-MM-DD (ej: 2024-12-31)"
-            )
+            ) from err
     
     @staticmethod
     def validate_window_days(window_str):
@@ -154,12 +154,18 @@ class CSVImportValidator:
         if len(df.columns) == 0:
             raise ValidationError("El archivo CSV no tiene columnas")
 
+        if len(df) == 0:
+            raise ValidationError("El archivo CSV no tiene filas de datos")
+
+        # Validar que no haya demasiadas filas (verificación temprana antes de columnas mínimas)
+        if len(df) > 10000:
+            raise ValidationError(
+                f"El CSV tiene demasiadas filas ({len(df)}). Máximo permitido: 10,000"
+            )
+
         # 🚩 Nueva regla: mínimo 2 columnas para ser válido
         if len(df.columns) < 2:
             raise ValidationError("El archivo CSV debe tener al menos 2 columnas (preguntas)")
-
-        if len(df) == 0:
-            raise ValidationError("El archivo CSV no tiene filas de datos")
 
         # Detectar si es un CSV de resumen/agregados en lugar de respuestas individuales
         suspicious_columns = ['indicador', 'valor', 'tipo', 'formato', 'métrica', 'promedio', 'total']
@@ -180,12 +186,6 @@ class CSVImportValidator:
         if len(df.columns) > 100:
             raise ValidationError(
                 f"El CSV tiene demasiadas columnas ({len(df.columns)}). Máximo permitido: 100"
-            )
-
-        # Validar que no haya demasiadas filas
-        if len(df) > 10000:
-            raise ValidationError(
-                f"El CSV tiene demasiadas filas ({len(df)}). Máximo permitido: 10,000"
             )
 
         return df
@@ -212,10 +212,10 @@ class ResponseValidator:
         """Valida que una respuesta numérica esté en rango."""
         try:
             num_value = float(value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as err:
             raise ValidationError(
                 f"Valor numérico inválido: '{value}'"
-            )
+            ) from err
         
         if min_val is not None and num_value < min_val:
             raise ValidationError(

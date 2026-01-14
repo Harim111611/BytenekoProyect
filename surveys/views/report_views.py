@@ -4,7 +4,6 @@ Optimized report views for survey results.
 """
 import csv
 import json
-import os
 from datetime import datetime
 
 
@@ -17,10 +16,9 @@ from django.db.models import Q, Count, Max
 from django.core.cache import cache
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
+from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from asgiref.sync import sync_to_async
-
-from django.contrib.auth.views import redirect_to_login
 
 from surveys.models import Survey, SurveyResponse, QuestionResponse, ImportJob
 from surveys.models_analytics import AnalysisSegment
@@ -350,18 +348,77 @@ async def report_preview(request, public_id):
             respuestas_qs = await sync_to_async(lambda: respuestas_qs.filter(created_at__gte=start_dt), thread_sensitive=True)()
         elif start or end:
             respuestas_qs, _ = await sync_to_async(DateFilterHelper.apply_filters, thread_sensitive=True)(respuestas_qs, start, end)
+        include_charts = str(request.POST.get('include_charts') or request.GET.get('include_charts') or '').strip().lower() in {'1', 'true', 'on', 'yes'}
+        include_kpis = str(request.POST.get('include_kpis') or request.GET.get('include_kpis') or '').strip().lower() in {'1', 'true', 'on', 'yes'}
+        include_table = str(request.POST.get('include_table') or request.GET.get('include_table') or '').strip().lower() in {'1', 'true', 'on', 'yes'}
+
         analysis = await SurveyAnalysisService.get_analysis_data(
-            survey, respuestas_qs, include_charts=True
+            survey, respuestas_qs, include_charts=include_charts
         )
-        for item in analysis.get('analysis_data', []):
-            if 'chart' in item:
-                item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
+
+        analysis_items = analysis.get('analysis_data', [])
+        for item in analysis_items or []:
+            if 'total_responses' not in item and 'total_respuestas' in item:
+                item['total_responses'] = item.get('total_respuestas', 0)
+
+        # Enriquecer items (charts base64 + metric_display) igual que en PDF
+        consolidated_table_rows = []
+        try:
+            from core.reports.pdf_generator import add_static_chart_images, DataNormalizer
+            add_static_chart_images(analysis_items, include_charts=include_charts)
+
+            consolidated_rows = DataNormalizer.prepare_consolidated_rows(analysis_items or [])
+            consolidated_table_rows = consolidated_rows
+            metric_by_text = {
+                row.get('question'): row.get('metric_display')
+                for row in consolidated_rows
+                if row.get('question')
+            }
+            for item in analysis_items or []:
+                q_text = item.get('text')
+                if q_text and 'metric_display' not in item:
+                    item['metric_display'] = metric_by_text.get(q_text)
+        except Exception:
+            logger.exception("No se pudo enriquecer el preview (charts/metric_display)")
         render_to_string_async = sync_to_async(render_to_string, thread_sensitive=True)
+        survey_dict = {
+            'id': survey.id,
+            'title': survey.title,
+            'organization': getattr(getattr(survey, 'author', None), 'organization', '') or '',
+            'address': getattr(getattr(survey, 'author', None), 'address', '') or '',
+            'contact_email': getattr(getattr(survey, 'author', None), 'email', '') or '',
+            'contact_website': getattr(getattr(survey, 'author', None), 'website', '') or '',
+            'sections': [
+                {
+                    'id': 1,
+                    'title': survey.title,
+                    'subtitle': getattr(survey, 'description', '') or '',
+                    'questions': [],
+                }
+            ],
+            'offers': [],
+        }
+
+        options = {
+            'include_kpis': include_kpis,
+            'include_charts': include_charts,
+            'include_table': include_table,
+            'start_date': start,
+            'end_date': end,
+            'window_days': window or request.GET.get('window_days', 'all'),
+            'total_responses': await sync_to_async(respuestas_qs.count, thread_sensitive=True)(),
+        }
+
         html = await render_to_string_async('core/reports/_report_preview_content.html', {
-            'survey': survey,
-            'analysis': analysis,
-            'kpi_score': analysis.get('kpi_score', 0),
-            'generated_at': datetime.now()
+            'survey': survey_dict,
+            'analysis_items': analysis_items,
+            'analysis': analysis_items,
+            'options': options,
+            'kpi_score': analysis.get('kpi_prom_satisfaccion', 0),
+            'generated_at': datetime.now(),
+            'generated_by_name': (user.get_full_name() or '').strip() or getattr(user, 'username', ''),
+            'company_name': getattr(settings, 'COMPANY_NAME', 'Byteneko SaaS'),
+            'consolidated_table_rows': consolidated_table_rows,
         }, request=request)
         return JsonResponse({'success': True, 'html': html})
         

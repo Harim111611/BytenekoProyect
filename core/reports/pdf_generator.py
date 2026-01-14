@@ -1,6 +1,8 @@
 """core/reports/pdf_generator.py"""
 import json
 import logging
+import os
+import re
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.conf import settings
@@ -10,6 +12,7 @@ try:
     from weasyprint import HTML, CSS
 except ImportError:
     HTML = None
+    CSS = None
 
 logger = logging.getLogger(__name__)
 
@@ -137,31 +140,99 @@ class PDFReportGenerator:
                 item['total_responses'] = item.get('total_respuestas', 0)
         add_static_chart_images(analysis_data, include_charts=bool(options.get('include_charts')))
 
+        # Añadir una métrica resumen por pregunta para el template (útil para portada/secciones)
+        try:
+            consolidated_rows = DataNormalizer.prepare_consolidated_rows(analysis_data or [])
+            metric_by_text = {
+                row.get('question'): row.get('metric_display')
+                for row in consolidated_rows
+                if row.get('question')
+            }
+            for item in analysis_data or []:
+                q_text = item.get('text')
+                if q_text and 'metric_display' not in item:
+                    item['metric_display'] = metric_by_text.get(q_text)
+        except Exception:
+            logger.exception("No se pudo calcular metric_display para analysis_items")
+
+        # Filas planas para una sola tabla consolidada al final del PDF
+        consolidated_table_rows = []
+        try:
+            consolidated_table_rows = DataNormalizer.prepare_consolidated_rows(analysis_data or [])
+        except Exception:
+            consolidated_table_rows = []
+
+        # Sanitizar títulos para portada (evitar underscores/símbolos raros en nombre de archivos)
+        try:
+            if isinstance(survey, dict):
+                raw_title = survey.get('title')
+                if not isinstance(raw_title, str) or not raw_title:
+                    raw_title = None
+            else:
+                raw_title = None
+
+            if raw_title:
+                # Reemplazar caracteres especiales por espacios, mantener letras unicode.
+                cleaned = raw_title.replace('_', ' ')
+                cleaned = re.sub(r"[^\w\s]+", " ", cleaned, flags=re.UNICODE)
+                cleaned = re.sub(r"\s+", " ", cleaned, flags=re.UNICODE).strip()
+                survey['title'] = cleaned or raw_title
+        except Exception:
+            logger.exception("No se pudo sanitizar el título del reporte")
+
         # Contexto completo para el template
+        generated_by_name = None
+        try:
+            request = kwargs.get('request')
+            user = getattr(request, 'user', None) if request is not None else None
+            if user is not None and getattr(user, 'is_authenticated', False):
+                full_name = (user.get_full_name() or '').strip() if hasattr(user, 'get_full_name') else ''
+                generated_by_name = full_name or getattr(user, 'username', None)
+        except Exception:
+            generated_by_name = None
+
         context = {
             'survey': survey,
             'analysis': analysis_data,
             'analysis_items': analysis_data,
             'kpi_score': kpi_satisfaction_avg,
             'generated_at': timezone.now(),
+            'generated_by_name': generated_by_name,
             'options': options,
             'company_name': getattr(settings, 'COMPANY_NAME', 'Byteneko SaaS'),
             'nps_data': kwargs.get('nps_data', {}),
-            'heatmap_image': kwargs.get('heatmap_image')
+            'heatmap_image': kwargs.get('heatmap_image'),
+            'consolidated_table_rows': consolidated_table_rows,
         }
 
         try:
-            # Renderizar HTML usando el template corregido
-            html_string = render_to_string('core/reports/report_pdf_template.html', context)
-            
+            # Renderizar HTML usando el nuevo template adaptado
+            html_string = render_to_string('core/reports/report_document.html', context)
+
+            # Ruta absoluta al CSS adaptado
+            css_path = os.path.join(settings.BASE_DIR, 'static', 'core', 'reports', 'report.css')
+            if CSS is None:
+                raise RuntimeError("WeasyPrint CSS no disponible (weasyprint no instalado en este entorno).")
+            css = CSS(filename=css_path)
+
             # Generar PDF en memoria
-            # base_url es crítico para cargar imágenes estáticas (logo, gráficos)
-            pdf_file = HTML(string=html_string, base_url=settings.BASE_DIR).write_pdf()
-            
+            pdf_file = HTML(string=html_string, base_url=settings.BASE_DIR).write_pdf(stylesheets=[css])
+
             return pdf_file
-            
+
         except Exception as e:
-            logger.exception(f"Error crítico generando PDF para encuesta {survey.id}: {e}")
+            survey_id = None
+            try:
+                if isinstance(survey, dict):
+                    survey_id = survey.get('id')
+                else:
+                    survey_id = getattr(survey, 'id', None)
+            except Exception:
+                survey_id = None
+
+            logger.exception(f"Error crítico generando PDF para encuesta {survey_id}: {e}")
+            if getattr(settings, "DEBUG", False):
+                raise
             return None
 
     @staticmethod
@@ -207,4 +278,6 @@ class PDFReportGenerator:
             
         except Exception as e:
             logger.exception(f"Error generando reporte global PDF: {e}")
+            if getattr(settings, "DEBUG", False):
+                raise
             return None

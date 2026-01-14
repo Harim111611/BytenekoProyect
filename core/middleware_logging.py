@@ -32,7 +32,7 @@ class RequestLoggingMiddleware:
             log_method = getattr(self.logger, log_level.lower(), self.logger.info)
             
             log_method(
-                f"{emoji} {method:6} {status_code} | {path:40} | {elapsed_time:.3f}s | {user}"
+                f"{emoji} {method:6} {status_code} | {path:40} | {elapsed_time:.3f}s | {user} | {client_ip}"
             )
         
         return response

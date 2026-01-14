@@ -100,9 +100,7 @@ class SurveyUpdateForm(SurveyForm):
                 error_msg = e.message
             else:
                 error_msg = str(e)
-            import sys
-            print(f"[FORM VALIDATION ERROR] Status transition failed: {error_msg}", file=sys.stderr)
-            raise forms.ValidationError(error_msg)
+            raise forms.ValidationError(error_msg) from e
 
         return new_status
 

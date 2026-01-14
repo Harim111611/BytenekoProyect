@@ -7,4 +7,4 @@ class SurveysConfig(AppConfig):
 
     def ready(self):
         # Importar señales cuando la app esté lista
-        import surveys.signals
+        import surveys.signals  # noqa: F401

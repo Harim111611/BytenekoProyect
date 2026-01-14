@@ -30,6 +30,7 @@ from .import_views import (
     get_task_status_view,     # <-- Nueva función para polling
     csv_preview_view,         
     import_responses_view,    
+    import_new_view,
 )
 
 # Re-export function-based views from report_views
@@ -67,6 +68,7 @@ __all__ = [
     'get_task_status_view',
     'csv_preview_view',
     'import_responses_view',
+    'import_new_view',
     
     # Report views
     'survey_results_view',

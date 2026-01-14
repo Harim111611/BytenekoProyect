@@ -1,13 +1,17 @@
 """core/services/survey_analysis.py"""
+import logging
 import random
 import unicodedata
 import re
 from collections import defaultdict, Counter
+from django.core.exceptions import FieldError
 from django.core.cache import cache
 from django.db.models import Avg, Max, Min, Count
 from django.db.models.functions import TruncDate
 from surveys.models import QuestionResponse
 from asgiref.sync import sync_to_async
+
+logger = logging.getLogger(__name__)
 
 # --- 1. MOTOR DE ENSAMBLAJE DE NARRATIVA ---
 
@@ -101,7 +105,8 @@ class TimelineEngine:
                     labels.append(entry['date'].strftime('%d/%m'))
                     counts.append(entry['count'])
             return {'labels': labels, 'data': counts}
-        except Exception:
+        except Exception as exc:
+            logger.exception("TimelineEngine.analyze_evolution failed: %s", exc)
             return {'labels': [], 'data': []}
 
 class NumericNarrative:
@@ -601,7 +606,8 @@ class SurveyAnalysisService:
         if cache_key is None:
             # OPT: usar una sola query (aggregate) para total + last_id.
             agg = await sync_to_async(
-                lambda: responses_queryset.aggregate(total=Count('id'), last_id=Max('id'))
+                lambda: responses_queryset.aggregate(total=Count('id'), last_id=Max('id')),
+                thread_sensitive=True,
             )()
             total = int(agg.get('total') or 0)
             last_id = int(agg.get('last_id') or 0)
@@ -610,7 +616,10 @@ class SurveyAnalysisService:
         cached = cache.get(cache_key)
         if cached: return cached
 
-        questions = await sync_to_async(lambda: list(survey.questions.prefetch_related('options').order_by('order')))()
+        questions = await sync_to_async(
+            lambda: list(survey.questions.prefetch_related('options').order_by('order')),
+            thread_sensitive=True,
+        )()
         analyzable_q = [q for q in questions if q.type != 'section']
 
         numeric_stats, numeric_dist = await SurveyAnalysisService._fetch_numeric_stats(analyzable_q, responses_queryset)
@@ -740,49 +749,61 @@ class SurveyAnalysisService:
             analysis_data.append(item)
 
         kpi = round((satisfaction_sum / satisfaction_count), 1) if satisfaction_count > 0 else 0
-        evolution = await sync_to_async(TimelineEngine.analyze_evolution)(responses_queryset)
+        evolution = await sync_to_async(TimelineEngine.analyze_evolution, thread_sensitive=True)(responses_queryset)
         result = {
             'analysis_data': analysis_data, 'kpi_prom_satisfaccion': kpi,
-            'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': await sync_to_async(responses_queryset.count)(),
+            'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': await sync_to_async(responses_queryset.count, thread_sensitive=True)(),
             'evolution': evolution
         }
         cache.set(cache_key, result, 3600)
         return result
 
     @staticmethod
-    @staticmethod
     async def _fetch_numeric_stats(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type in ['scale', 'number']]
         if not ids: return {}, {}
         valid = QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs, numeric_value__isnull=False)
-        stats_qs = await sync_to_async(lambda: list(valid.values('question_id').annotate(cnt=Count('id'), avg=Avg('numeric_value'), max_val=Max('numeric_value'), min_val=Min('numeric_value'))))()
+        stats_qs = await sync_to_async(
+            lambda: list(valid.values('question_id').annotate(cnt=Count('id'), avg=Avg('numeric_value'), max_val=Max('numeric_value'), min_val=Min('numeric_value'))),
+            thread_sensitive=True,
+        )()
         stats = {x['question_id']: {'count': x['cnt'], 'avg': float(x['avg']), 'max': x['max_val'], 'min': x['min_val']} for x in stats_qs}
         dist = defaultdict(list)
-        dist_qs = await sync_to_async(lambda: list(valid.values('question_id', 'numeric_value').annotate(cnt=Count('id'))))()
+        dist_qs = await sync_to_async(
+            lambda: list(valid.values('question_id', 'numeric_value').annotate(cnt=Count('id'))),
+            thread_sensitive=True,
+        )()
         for x in dist_qs: dist[x['question_id']].append({'value': x['numeric_value'], 'count': x['cnt']})
         return stats, dist
 
-    @staticmethod
     @staticmethod
     async def _fetch_choice_stats(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type in ['single', 'multi', 'radio', 'select']]
         if not ids: return {}
         dist = defaultdict(list)
-        dist_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).values('question_id', 'selected_option__text').annotate(cnt=Count('id'))))()
+        dist_qs = await sync_to_async(
+            lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).values('question_id', 'selected_option__text').annotate(cnt=Count('id'))),
+            thread_sensitive=True,
+        )()
         for x in dist_qs:
             if x['selected_option__text']: dist[x['question_id']].append({'option': x['selected_option__text'], 'count': x['cnt']})
         return dist
 
-    @staticmethod
     @staticmethod
     async def _fetch_text_responses(analyzable_q, qs):
         ids = [q.id for q in analyzable_q if q.type == 'text']
         if not ids: return {}
         res = defaultdict(list)
         try:
-            res_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:200]))()
-        except Exception:
-            res_qs = await sync_to_async(lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:200]))()
+            res_qs = await sync_to_async(
+                lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value').order_by('-created_at')[:200]),
+                thread_sensitive=True,
+            )()
+        except FieldError:
+            res_qs = await sync_to_async(
+                lambda: list(QuestionResponse.objects.filter(question_id__in=ids, survey_response__in=qs).exclude(text_value='').values('question_id', 'text_value')[:200]),
+                thread_sensitive=True,
+            )()
         for x in res_qs: res[x['question_id']].append(x['text_value'])
         return res
     
@@ -824,26 +845,26 @@ class SurveyAnalysisService:
             if queryset is None:
                 from surveys.models import SurveyResponse
                 queryset = SurveyResponse.objects.filter(survey=survey)
-            
-            response_ids = list(queryset.values_list('id', flat=True))
-            
-            if not response_ids:
-                return {'error': 'No hay respuestas para analizar.'}
-            
+
+            # Importante: no materializar todos los IDs a una lista (puede ser enorme)
+            # y evitar IN (...) gigantes en SQL.
+            # En su lugar, filtramos QuestionResponse por subquery (survey_response__in=queryset)
+            # y recorremos los ids con iterator().
+
             # Obtener respuestas para ambas preguntas
             row_responses = QuestionResponse.objects.filter(
                 question=row_question,
-                survey_response_id__in=response_ids
+                survey_response__in=queryset,
             ).select_related('selected_option').values(
                 'survey_response_id',
                 'selected_option__text',
                 'text_value',
                 'numeric_value'
             )
-            
+
             col_responses = QuestionResponse.objects.filter(
                 question=col_question,
-                survey_response_id__in=response_ids
+                survey_response__in=queryset,
             ).select_related('selected_option').values(
                 'survey_response_id',
                 'selected_option__text',
@@ -864,13 +885,12 @@ class SurveyAnalysisService:
             
             # Crear DataFrame
             df_list = []
-            for resp_id in response_ids:
+            total_responses = 0
+            for resp_id in queryset.values_list('id', flat=True).iterator(chunk_size=5000):
+                total_responses += 1
                 row_val = row_data.get(resp_id, 'Sin respuesta')
                 col_val = col_data.get(resp_id, 'Sin respuesta')
-                df_list.append({
-                    'row': row_val,
-                    'col': col_val
-                })
+                df_list.append({'row': row_val, 'col': col_val})
             
             if not df_list:
                 return {'error': 'No hay datos suficientes para cruzar.'}
@@ -911,7 +931,7 @@ class SurveyAnalysisService:
                 'data': crosstab.to_dict('split'),
                 'row_label': row_question.text[:50],
                 'col_label': col_question.text[:50],
-                'total_responses': len(df),
+                'total_responses': total_responses,
                 'row_categories': len(crosstab.index) - 1,  # Sin contar Total
                 'col_categories': len(crosstab.columns) - 1  # Sin contar Total
             }

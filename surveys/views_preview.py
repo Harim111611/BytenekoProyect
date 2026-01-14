@@ -1,32 +1,22 @@
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
-from django.conf import settings
+import os
 import tempfile
 
-try:
-    import cpp_csv
-except ModuleNotFoundError:  # pragma: no cover
-    cpp_csv = None
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 
-@csrf_exempt
+# cpp_csv es obligatorio para importación/preview
+from tools.cpp_csv import pybind_csv as cpp_csv
+
 @login_required
 def import_csv_preview_view(request):
     """Vista AJAX para generar preview del CSV antes de importar (usando cpp_csv)."""
-    if cpp_csv is None:
-        return JsonResponse(
-            {
-                'success': False,
-                'error': 'cpp_csv no está instalado. Esta función requiere el módulo opcional cpp_csv.'
-            },
-            status=501,
-        )
     if request.method == 'POST' and request.FILES.get('csv_file'):
         try:
             csv_file = request.FILES['csv_file']
             
             # Guardar archivo temporalmente
+            tmp_path = None
             with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
                 csv_file.seek(0)
                 for chunk in csv_file.chunks():
@@ -79,8 +69,14 @@ def import_csv_preview_view(request):
                 'columns': columns,
                 'sample_rows': sample_rows
             })
-            
         except Exception as e:
+            # En producción conviene no filtrar detalles; mantenemos el mensaje por compat.
             return JsonResponse({'success': False, 'error': f'Error inesperado: {str(e)}'}, status=500)
+        finally:
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
     
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)

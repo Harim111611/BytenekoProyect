@@ -4,6 +4,7 @@ correctamente con todos los archivos CSV de ejemplo.
 """
 import os
 from pathlib import Path
+import pandas as pd
 
 def analyze_csv_structure(csv_path):
     """Analiza la estructura de un CSV y simula la lógica de detección de contextos."""

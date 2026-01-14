@@ -1,0 +1,147 @@
+<!-- Portada -->
+<article id="cover">
+  <div class="cover-title">
+    <div class="cover-brand">{{ company_name }}</div>
+    <div class="cover-kicker">Reporte Ejecutivo</div>
+    <h1 class="cover-h1{% if survey.title|length > 70 %} cover-h1--xxlong{% elif survey.title|length > 45 %} cover-h1--xlong{% elif survey.title|length > 30 %} cover-h1--long{% endif %}">{{ survey.title }}</h1>
+    <div class="cover-date">Generado: {{ generated_at|date:"Y-m-d H:i" }}</div>
+
+    <div class="cover-summary">
+      <div class="cover-card">
+        <div class="cover-label">Periodo</div>
+        <div class="cover-value">
+          {% if options.start_date or options.end_date %}
+            {{ options.start_date|default:"" }}{% if options.start_date and options.end_date %} — {% endif %}{{ options.end_date|default:"" }}
+          {% elif options.window_days and options.window_days != 'all' and options.window_days != 'custom' %}
+            Últimos {{ options.window_days }} días
+          {% else %}
+            Todo el histórico
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="cover-card">
+        <div class="cover-label">Respuestas</div>
+        <div class="cover-value">
+          {% if options.total_responses %}{{ options.total_responses }}{% elif total_respuestas %}{{ total_respuestas }}{% else %}—{% endif %}
+        </div>
+        <div class="cover-hint">Total consideradas en el análisis</div>
+      </div>
+
+      {% if options.include_kpis %}
+        <div class="cover-card">
+          <div class="cover-label">Satisfacción</div>
+          <div class="cover-value">{{ kpi_score|floatformat:1 }}</div>
+          <div class="cover-hint">Promedio</div>
+        </div>
+      {% endif %}
+
+      {% if nps_data.score or nps_score %}
+        <div class="cover-card">
+          <div class="cover-label">NPS</div>
+          <div class="cover-value">{{ nps_data.score|default:nps_score }}</div>
+          <div class="cover-hint">Net Promoter Score</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="cover-meta">
+    {% if generated_by_name %}
+      <address>
+        Generado por: {{ generated_by_name }}
+      </address>
+    {% endif %}
+  </div>
+</article>
+
+<!-- Tabla de contenidos -->
+<article id="contents">
+  <h2>Tabla de contenidos</h2>
+  <h3>Preguntas</h3>
+  <ul>
+    {% for item in analysis_items %}
+      <li><a href="#q-{{ item.id }}">{{ item.text }}</a></li>
+    {% endfor %}
+  </ul>
+  {% if survey.offers %}
+    <h3>Ofertas</h3>
+    <ul>
+      <li><a href="#offers-title">Ofertas</a></li>
+    </ul>
+  {% endif %}
+</article>
+
+<!-- Secciones de la encuesta -->
+{% for section in survey.sections %}
+  <article id="columns">
+    <h2 id="section-{{ section.id }}">{{ section.title }}</h2>
+    <h3>{{ section.subtitle }}</h3>
+    <section>
+      {% for item in analysis_items %}
+        <div class="qa" id="question-{{ item.id }}">
+          <p class="question" id="q-{{ item.id }}"><strong>{{ item.text }}</strong></p>
+
+          {% if item.metric_display %}
+            <p class="answer"><strong>Resumen:</strong> {{ item.metric_display }}</p>
+          {% endif %}
+
+          {% if item.insight %}
+            <p class="insight">{{ item.insight }}</p>
+          {% endif %}
+
+          {% if options.include_charts and item.chart_image_base64 %}
+            <img class="chart" src="data:image/png;base64,{{ item.chart_image_base64 }}" alt="Gráfico" />
+          {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+  </article>
+{% endfor %}
+
+<!-- Ofertas -->
+{% if survey.offers %}
+  <article id="offers">
+    <h2 id="offers-title">Ofertas</h2>
+    <h3>Ofertas de la encuesta</h3>
+    {% for offer in survey.offers %}
+      <section>
+        <h4>{{ offer.title }}</h4>
+        <p>{{ offer.price }}</p>
+        <ul>
+          {% for item in offer.items %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  </article>
+{% endif %}
+
+{% if options.include_table and consolidated_table_rows %}
+  <article id="data-table">
+    <h2>Tabla de datos</h2>
+    <h3>Resumen consolidado</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 8%;">#</th>
+          <th>Pregunta</th>
+          <th style="width: 18%;">Tipo</th>
+          <th style="width: 14%;">Respuestas</th>
+          <th style="width: 22%;">Métrica</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in consolidated_table_rows %}
+          <tr>
+            <td>{{ row.order|default:"" }}</td>
+            <td>{{ row.question }}</td>
+            <td>{{ row.type }}</td>
+            <td>{{ row.total_responses|default:0 }}</td>
+            <td>{{ row.metric_display }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+{% endif %}

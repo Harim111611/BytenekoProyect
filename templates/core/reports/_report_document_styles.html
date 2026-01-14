@@ -1,81 +1,192 @@
 <style>
-  @page { size: A4; margin: 12mm 12mm; }
+  :root {
+    --ink: #111827;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --surface: #ffffff;
+    --surface-muted: #f9fafb;
+    --bar-bg: #f3f4f6;
+    --accent: #6366f1;
+    --success: #16a34a;
+    --danger: #dc2626;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm 12mm;
+    @bottom-right {
+      content: "Página " counter(page) " / " counter(pages);
+      font-size: 8pt;
+      color: var(--muted);
+    }
+  }
+
+  /* PDF-only layout (preview puede ser continuo) */
+  .report-doc.pdf-mode .pdf-layout {
+    max-width: 182mm;
+    margin: 0 auto;
+    padding: 0 2mm;
+  }
+
+  .report-doc.pdf-mode .header {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  .report-doc.pdf-mode .header h1 {
+    font-size: 20pt;
+    margin-bottom: 6px;
+  }
+
+  .report-doc.pdf-mode .meta-info {
+    font-size: 9pt;
+    color: var(--muted);
+  }
+
+  .report-doc.pdf-mode .meta-grid {
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+
+  .report-doc.pdf-mode .meta-card {
+    max-width: 88mm;
+  }
+
+  .report-doc.pdf-mode .section-title {
+    margin-top: 20px;
+  }
+
+  .report-doc.pdf-mode .question-block {
+    margin-bottom: 14px;
+  }
 
   .report-doc,
   body.report-doc {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     font-size: 10.5pt;
     line-height: 1.35;
-    color: #111827;
+    color: var(--ink);
   }
 
   .report-doc * { box-sizing: border-box; }
   .report-doc img { max-width: 100%; height: auto; }
-  .report-doc .muted { color: #6b7280; }
+  .report-doc .muted { color: var(--muted); }
 
   .report-doc .header {
     margin-bottom: 14px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
   }
   .report-doc .header h1 {
     font-size: 18pt;
     margin: 0 0 4px 0;
     overflow-wrap: anywhere;
   }
-  .report-doc .meta-info { font-size: 9pt; color: #6b7280; }
+  .report-doc .meta-info { font-size: 9pt; color: var(--muted); }
+
+  .report-doc .meta-grid {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0 14px;
+    flex-wrap: wrap;
+  }
+
+  .report-doc .meta-card {
+    flex: 1 1 220px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+
+  .report-doc .meta-label {
+    font-size: 8.5pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+
+  .report-doc .meta-value {
+    font-size: 11pt;
+    font-weight: 800;
+    color: var(--ink);
+  }
 
   .report-doc .kpi-section {
     margin: 12px 0 16px;
     padding: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border);
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--surface);
+    position: relative;
+  }
+  .report-doc .kpi-section:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 10px 0 0 10px;
+    background: var(--accent);
   }
   .report-doc .kpi-value { font-size: 28pt; font-weight: 800; line-height: 1; }
   .report-doc .kpi-label {
     font-size: 8.5pt;
     letter-spacing: 0.08em;
-    color: #6b7280;
+    color: var(--muted);
     text-transform: uppercase;
     margin-top: 4px;
   }
 
-  .report-doc .section-title { font-size: 12pt; font-weight: 800; margin: 16px 0 10px; }
+  .report-doc .section-title {
+    font-size: 12pt;
+    font-weight: 800;
+    margin: 16px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
 
   .report-doc .question-block {
     padding: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border);
     border-radius: 10px;
     margin-bottom: 12px;
     break-inside: avoid;
     page-break-inside: avoid;
-    background: #ffffff;
+    background: var(--surface);
   }
   .report-doc .q-header { margin-bottom: 6px; }
-  .report-doc .q-number { display: inline-block; min-width: 34px; font-weight: 800; color: #6b7280; }
+  .report-doc .q-number { display: inline-block; min-width: 34px; font-weight: 800; color: var(--muted); }
   .report-doc .q-text { font-weight: 700; overflow-wrap: anywhere; }
 
   .report-doc table { width: 100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
   .report-doc th,
   .report-doc td {
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
     padding: 6px 6px;
     vertical-align: top;
     overflow-wrap: anywhere;
-    word-break: break-word;
   }
-  .report-doc th { text-align: left; font-size: 9pt; color: #6b7280; font-weight: 700; }
+  .report-doc thead th {
+    background: var(--surface-muted);
+  }
+  .report-doc th { text-align: left; font-size: 9pt; color: var(--muted); font-weight: 700; }
+  .report-doc tbody tr:nth-child(even) td {
+    background: var(--surface-muted);
+  }
 
-  .report-doc .bar-container { width: 100%; height: 7px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
-  .report-doc .bar-fill { height: 7px; background: #6366f1; }
+  .report-doc .bar-container { width: 100%; height: 7px; background: var(--bar-bg); border-radius: 999px; overflow: hidden; }
+  .report-doc .bar-fill { height: 7px; background: var(--accent); }
 
-  .report-doc .insight-box { margin-top: 10px; padding: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; }
-  .report-doc .chart-img { margin-top: 10px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; background: #ffffff; }
+  .report-doc .insight-box { margin-top: 10px; padding: 10px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 10px; }
+  .report-doc .chart-img { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface); }
   .report-doc .chart-img img { width: 100%; height: auto; }
 
-  .report-doc .text-success { color: #16a34a; font-weight: 700; }
-  .report-doc .text-danger { color: #dc2626; font-weight: 700; }
+  .report-doc .text-success { color: var(--success); font-weight: 700; }
+  .report-doc .text-danger { color: var(--danger); font-weight: 700; }
 
   /* Preview-only helpers (no afectan a PDF) */
   .report-preview-page {
@@ -84,8 +195,8 @@
     max-width: 100%;
     margin: 0 auto;
     padding: 12mm 12mm;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 10px;
   }
 </style>

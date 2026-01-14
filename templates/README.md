@@ -19,7 +19,7 @@ templates/
 │   │
 │   └── reports/                # Generación de reportes
 │       ├── reports_page.html   # Página de reportes
-│       ├── report_pdf_template.html  # Template para PDF
+│       ├── report_document.html  # Template para PDF
 │       ├── _global_results_pdf.html  # Componente de resultados PDF
 │       └── _report_preview_content.html  # Preview de reportes
 │

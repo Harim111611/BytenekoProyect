@@ -2,6 +2,17 @@
 
 Módulo optimizado para lectura y validación de archivos CSV usando C++ y pybind11.
 
+## ⚠️ ESTADO ACTUAL: COMPILADO Y ACTIVO
+
+El módulo C++ está **compilado y listo para usar** en `cpp_csv.cp313-win_amd64.pyd`.
+
+**Importancia**: Este módulo es **OBLIGATORIO** para el funcionamiento de:
+- Importaciones masivas de CSV (10k+ datos)
+- Validación rápida de esquemas
+- Procesos Celery de importación en producción
+
+Si el módulo no se carga, las importaciones **fallarán completamente**.
+
 ## 🚀 Características
 
 - **Alto rendimiento**: 25-35% más rápido que csv.DictReader de Python

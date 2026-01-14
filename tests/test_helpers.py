@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
+from asgiref.sync import async_to_sync
 from core.utils.helpers import DateFilterHelper, ResponseDataBuilder, PermissionHelper
 from surveys.models import Survey
 from datetime import timedelta
@@ -38,10 +39,10 @@ def test_permission_helper_verify_survey_access():
     user = User.objects.create_user(username='user', password='123')
     survey = Survey.objects.create(title='Test', author=user)
     # Should not raise
-    PermissionHelper.verify_survey_access(survey, user)
+    async_to_sync(PermissionHelper.verify_survey_access)(survey, user)
     other = User.objects.create_user(username='other', password='123')
     with pytest.raises(PermissionDenied):
-        PermissionHelper.verify_survey_access(survey, other)
+        async_to_sync(PermissionHelper.verify_survey_access)(survey, other)
 
 @pytest.mark.django_db
 def test_permission_helper_verify_survey_is_active():

@@ -1,5 +1,4 @@
 from asgiref.sync import sync_to_async
-import asyncio
 async def log_user_action_async(action: str, success: bool = True, **extra_data):
     await sync_to_async(log_user_action)(action, success, **extra_data)
 
@@ -140,13 +139,77 @@ class StructuredLogger:
     
     def __init__(self, name: str):
         self.logger = logging.getLogger(name)
+
+        self._max_value_len = getattr(settings, 'STRUCTURED_LOGGER_MAX_VALUE_LEN', 500)
+        self._max_items = getattr(settings, 'STRUCTURED_LOGGER_MAX_ITEMS', 20)
+        self._max_message_len = getattr(settings, 'STRUCTURED_LOGGER_MAX_MESSAGE_LEN', 8000)
+
+    def _is_heavy_key(self, key: str) -> bool:
+        lowered = key.lower()
+        return any(token in lowered for token in (
+            'base64',
+            'chart_image',
+            'chart',
+            'plotly',
+            'html',
+            'svg',
+        ))
+
+    def _truncate(self, text: str, limit: int) -> str:
+        if limit <= 0:
+            return ''
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}…(+{len(text) - limit} chars)"
+
+    def _safe_value_repr(self, key: str, value: Any) -> str:
+        try:
+            if self._is_heavy_key(key):
+                if value is None:
+                    return 'None'
+                if isinstance(value, (str, bytes, bytearray)):
+                    length = len(value)
+                else:
+                    try:
+                        length = len(value)  # type: ignore[arg-type]
+                    except Exception:
+                        length = None
+                suffix = f" (len={length})" if length is not None else ''
+                return f"<omitted>{suffix}"
+
+            if isinstance(value, str):
+                return self._truncate(value, self._max_value_len)
+
+            if isinstance(value, (bytes, bytearray)):
+                return f"<bytes len={len(value)}>"
+
+            if isinstance(value, dict):
+                keys = list(value.keys())
+                shown = keys[: self._max_items]
+                more = len(keys) - len(shown)
+                extra = f", …(+{more} keys)" if more > 0 else ''
+                return f"<dict keys={shown}{extra}>"
+
+            if isinstance(value, (list, tuple, set)):
+                length = len(value)
+                return f"<{type(value).__name__} len={length}>"
+
+            return self._truncate(repr(value), self._max_value_len)
+        except Exception:
+            return '<unrepr>'
     
     def _format_message(self, message: str, **context) -> str:
         if context:
             # Convertimos el contexto a string para agregarlo al mensaje
-            context_str = ' | '.join(f"{k}={v}" for k, v in context.items())
-            return f"{message} | {context_str}"
-        return message
+            parts = []
+            for k, v in context.items():
+                parts.append(f"{k}={self._safe_value_repr(k, v)}")
+            context_str = ' | '.join(parts)
+            full = f"{message} | {context_str}"
+        else:
+            full = message
+
+        return self._truncate(full, self._max_message_len)
 
     def _log(self, level_func, message, args, kwargs):
         # Extraer argumentos reservados de logging estándar
@@ -156,9 +219,18 @@ class StructuredLogger:
         
         # El resto de kwargs son contexto para el mensaje visual
         formatted_msg = self._format_message(str(message), **kwargs)
-        
-        # Llamar al logger nativo con los argumentos correctos
-        level_func(formatted_msg, *args, exc_info=exc_info, stack_info=stack_info, extra=extra)
+
+        # Llamar al logger nativo con los argumentos correctos.
+        # Importante: NO pasar exc_info=None explícitamente porque rompe logger.exception().
+        log_kwargs = {}
+        if exc_info is not None:
+            log_kwargs['exc_info'] = exc_info
+        if stack_info is not None:
+            log_kwargs['stack_info'] = stack_info
+        if extra is not None:
+            log_kwargs['extra'] = extra
+
+        level_func(formatted_msg, *args, **log_kwargs)
 
     def debug(self, message: str, *args, **context):
         self._log(self.logger.debug, message, args, context)

@@ -1,9 +1,13 @@
 # surveys/migrations/0021_fix_db_schema.py
 
-from django.db import migrations, connection
+from django.db import migrations
 
 def fix_columns(apps, schema_editor):
-    with connection.cursor() as cursor:
+    if schema_editor.connection.vendor != "postgresql":
+        # Skip PostgreSQL-only adjustment when running tests on SQLite
+        return
+
+    with schema_editor.connection.cursor() as cursor:
         # 1. Verificar qué columnas existen realmente
         cursor.execute("""
             SELECT column_name 

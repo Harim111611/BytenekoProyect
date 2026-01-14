@@ -11,8 +11,8 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-# Default to base settings; allow environment to override via DJANGO_SETTINGS_MODULE
+# Default to production; settings are dynamically selected by `byteneko.settings`
 os.environ.setdefault('DJANGO_ENV', os.environ.get('DJANGO_ENV', 'production'))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings.base')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'byteneko.settings')
 
 application = get_wsgi_application()

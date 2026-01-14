@@ -14,6 +14,9 @@ RUN apt-get update && \
     build-essential \
     libpq-dev \
     gcc \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-liberation \
     libcairo2 \
     pango1.0-tools \
     gdk-pixbuf2.0-0 \

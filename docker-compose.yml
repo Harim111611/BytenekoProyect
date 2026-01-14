@@ -68,6 +68,8 @@ services:
     env_file:
       - .env.docker
     environment:
+      DJANGO_ENV: local
+      DATA_UPLOAD_MAX_MEMORY_SIZE: 524288000  # 500MB (override local default 50MB)
       PYTHONHASHSEED: random
       PYTHONMALLOC: malloc
       TMPDIR: /tmp
@@ -95,6 +97,7 @@ services:
     env_file:
       - .env.docker
     environment:
+      DJANGO_ENV: local
       PYTHONHASHSEED: random
       CELERYD_MAX_TASKS_PER_CHILD: 100
       CELERYD_TASK_TIME_LIMIT: 1800

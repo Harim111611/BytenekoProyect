@@ -28,8 +28,8 @@ class Command(BaseCommand):
         # Validar que existe la encuesta
         try:
             survey = Survey.objects.get(id=survey_id)
-        except Survey.DoesNotExist:
-            raise CommandError(f'Survey con ID {survey_id} no existe')
+        except Survey.DoesNotExist as err:
+            raise CommandError(f'Survey con ID {survey_id} no existe') from err
         
         self.stdout.write(f'Importando CSV para encuesta: {survey.title}')
         

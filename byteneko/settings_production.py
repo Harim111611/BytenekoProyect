@@ -20,7 +20,8 @@ try:
             globals()[attr] = getattr(production, attr)
 except Exception as exc:
     warnings.warn(
-        "No se pudo cargar byteneko.settings.production desde settings_production shim: %s" % exc
+        "No se pudo cargar byteneko.settings.production desde settings_production shim: %s" % exc,
+        stacklevel=2,
     )
     # Fallback: intentar cargar base para evitar fallo completo
     try:

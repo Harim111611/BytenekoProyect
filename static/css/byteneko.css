@@ -1,5 +1,5 @@
 ﻿.text-accent-pink {
-    color: #ec4899 !important;
+    color: var(--bk-accent) !important;
 }
 
 .badge-circle-md {
@@ -8,7 +8,7 @@
 }
 /* GLOBAL LOADER MODAL */
 .loading-modal-content {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--bk-gradient-brand);
 }
 
 .spinner-64 {
@@ -86,25 +86,15 @@
     color: var(--bk-primary);
 }
 
-.data-bar-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background: linear-gradient(90deg, var(--bk-primary) 0%, #ec4899 100%);
-    opacity: 0.15;
-    border-radius: 4px;
-}
-
 /* Badge with gradient */
 .bk-badge-gradient {
-    background: linear-gradient(135deg, var(--bk-primary) 0%, #ec4899 100%);
+    background: var(--bk-gradient-badge);
     color: white !important;
     border: none;
 }
 
 [data-bs-theme="dark"] .bk-badge-gradient {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--bk-gradient-badge);
     color: white !important;
 }
 
@@ -116,7 +106,7 @@
 
 /* THANKS PAGE STYLES (Moved from inline styles) */
 body.thanks-page {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--bk-gradient-brand);
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -124,7 +114,7 @@ body.thanks-page {
 }
 
 [data-bs-theme="dark"] body.thanks-page {
-    background: linear-gradient(135deg, #3d3659 0%, #1f1428 100%);
+    background: var(--bk-gradient-brand);
 }
 
 .thanks-wrapper {
@@ -182,47 +172,6 @@ body.thanks-page {
         border-end: none !important;
         border-bottom: 1px solid var(--bk-card-border);
     }
-}
-/* Preguntas en vista previa (modo dÃ­a) */
-.preview-device .form-control,
-.preview-device textarea,
-.preview-device input[type="text"],
-.preview-device input[type="number"],
-.preview-device select {
-    background: #f5f7fa !important;
-    border: 1.5px solid #d1d5db !important;
-    color: #181a1b !important;
-    font-weight: 500;
-    box-shadow: none;
-    transition: border 0.2s;
-}
-.preview-device .form-control:focus,
-.preview-device textarea:focus,
-.preview-device input[type="text"]:focus,
-.preview-device input[type="number"]:focus,
-.preview-device select:focus {
-    border-color: #6366f1;
-    outline: none;
-    box-shadow: 0 0 0 2px #6366f122;
-}
-.preview-device input[type="radio"],
-.preview-device input[type="checkbox"] {
-    accent-color: #6366f1;
-    width: 1.1em;
-    height: 1.1em;
-    margin-right: 0.4em;
-    vertical-align: middle;
-}
-.preview-device label,
-.preview-device .form-check-label {
-    color: #181a1b;
-    font-weight: 500;
-}
-.preview-device .options-container {
-    background: #f5f7fa;
-    border-radius: 0.5rem;
-    border: 1.5px solid #d1d5db;
-    color: #181a1b;
 }
 /* Centrado perfecto para iconos cuadrados */
 .icon-square {
@@ -380,7 +329,7 @@ body.thanks-page {
     margin-bottom: 0.5rem;
 }
 .bk-progress-5 .progress-bar {
-    background: linear-gradient(90deg, #6366f1 0%, #ec4899 100%);
+    background: var(--bk-gradient-primary-accent-90);
     border-radius: 6px;
     transition: width 0.4s cubic-bezier(.4,1.3,.6,1);
     box-shadow: 0 1px 6px 0 rgba(99,102,241,0.10);
@@ -397,24 +346,24 @@ body.thanks-page {
 }
 /* Ajuste visual para botones de acciones en modo oscuro */
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light {
-    background-color: #23272e !important;
-    color: #e6e6e6 !important;
-    border-color: #30363d !important;
+    background-color: var(--bk-input-bg) !important;
+    color: var(--bk-text-primary) !important;
+    border-color: var(--bk-card-border) !important;
 }
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light:hover,
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light:focus {
-    background-color: #30363d !important;
-    color: #58A6FF !important;
-    border-color: #58A6FF !important;
+    background-color: var(--bk-hover-bg) !important;
+    color: var(--bk-primary) !important;
+    border-color: var(--bk-primary) !important;
 }
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger {
-    color: #ff6b6b !important;
+    color: var(--bk-danger) !important;
 }
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger:hover,
 [data-bs-theme="dark"] .d-flex.gap-2.position-relative .btn-light.text-danger:focus {
-    background-color: #2d1517 !important;
-    color: #ff6b6b !important;
-    border-color: #ff6b6b !important;
+    background-color: var(--bk-hover-bg) !important;
+    color: var(--bk-danger) !important;
+    border-color: var(--bk-danger) !important;
 }
 /* ============================================================
    BYTENEKO DESIGN SYSTEM â€” DEFINITIVE EDITION
@@ -438,11 +387,11 @@ body.thanks-page {
     --z-modal: 1070;
 
     /* Colores Base (Modo Claro) */
-    --bk-body-bg: #F5F7FA;
-    --bk-card-bg: #FFFFFF;
-    --bk-card-border: rgba(0, 0, 0, 0.08);
-    --bk-input-bg: #F9FAFB;
-    --bk-hover-bg: #F3F4F6;
+    --bk-body-bg: #EEF2F6;
+    --bk-card-bg: color-mix(in srgb, #FFFFFF, var(--bk-body-bg) 6%);
+    --bk-card-border: rgba(17, 24, 39, 0.10);
+    --bk-input-bg: color-mix(in srgb, #FFFFFF, var(--bk-body-bg) 12%);
+    --bk-hover-bg: #E9EEF5;
 
     /* Texto */
     --bk-text-primary: #111827;
@@ -450,9 +399,9 @@ body.thanks-page {
     --bk-text-muted: #9CA3AF;
 
     /* Sidebar & Nav */
-    --sidebar-bg: #FFFFFF;
-    --sidebar-border: #E5E7EB;
-    --sidebar-item-hover: #F3F4F6;
+    --sidebar-bg: #F8FAFC;
+    --sidebar-border: rgba(17, 24, 39, 0.10);
+    --sidebar-item-hover: #EEF2F6;
     --sidebar-item-active-bg: rgba(79, 70, 229, 0.08);
     --sidebar-item-active-text: #4F46E5;
 
@@ -460,7 +409,17 @@ body.thanks-page {
     --bk-primary: #4F46E5;
     --bk-primary-hover: #4338CA;
     --bk-primary-subtle: rgba(79, 70, 229, 0.1);
-    
+
+    /* Accent (Pink) */
+    --bk-accent: #ec4899;
+
+    /* Gradients */
+    --bk-gradient-brand: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --bk-gradient-primary-accent-90: linear-gradient(90deg, var(--bk-primary) 0%, var(--bk-accent) 100%);
+    --bk-gradient-primary-accent-135: linear-gradient(135deg, var(--bk-primary) 0%, var(--bk-accent) 100%);
+    --bk-gradient-primary-accent-vertical: linear-gradient(to bottom, var(--bk-primary), var(--bk-accent));
+    --bk-gradient-badge: var(--bk-gradient-primary-accent-135);
+
     /* Status Colors */
     --bk-success: #10B981;
     --bk-success-subtle: rgba(16, 185, 129, 0.1);
@@ -468,16 +427,46 @@ body.thanks-page {
     --bk-warning-subtle: rgba(245, 158, 11, 0.1);
     --bk-danger: #EF4444;
     --bk-info: #3B82F6;
+
+    /* Bootstrap Overrides para consistencia */
+    --bs-body-bg: var(--bk-body-bg);
+    --bs-body-color: var(--bk-text-primary);
+    --bs-border-color: var(--bk-card-border);
+    --bs-primary: var(--bk-primary);
+    --bs-card-bg: var(--bk-card-bg);
+    --bs-link-color: var(--bk-primary);
+    --bs-link-hover-color: var(--bk-primary-hover);
+    --bs-emphasis-color: var(--bk-text-primary);
+    --bs-secondary-color: var(--bk-text-secondary);
+    --bs-tertiary-color: var(--bk-text-muted);
+    --bs-secondary-bg: var(--bk-input-bg);
+    --bs-tertiary-bg: var(--bk-hover-bg);
+    --bs-card-cap-bg: var(--bk-hover-bg);
+
+    /* Tables (Bootstrap vars) */
+    --bs-table-bg: var(--bk-card-bg);
+    --bs-table-color: var(--bk-text-primary);
+    --bs-table-border-color: var(--bk-card-border);
+    --bs-table-hover-bg: var(--bk-hover-bg);
+    --bs-table-striped-bg: color-mix(in srgb, var(--bk-hover-bg), var(--bk-card-bg) 50%);
+
+    /* Elevation (Day): more noticeable separation */
+    --bs-box-shadow-sm: 0 2px 6px rgba(17, 24, 39, 0.12), 0 14px 34px rgba(17, 24, 39, 0.10);
+    --bs-box-shadow: 0 6px 22px rgba(17, 24, 39, 0.18), 0 28px 70px rgba(17, 24, 39, 0.14);
+
+    /* App elevation tokens (used outside Bootstrap helpers too) */
+    --bk-elev-1: var(--bs-box-shadow-sm);
+    --bk-elev-2: var(--bs-box-shadow);
 }
 
 /* Modo Oscuro */
 [data-bs-theme="dark"] {
     /* Base Dark */
     --bk-body-bg: #0D1117;
-    --bk-card-bg: #161B22;
-    --bk-card-border: #30363D;
+    --bk-card-bg: color-mix(in srgb, #161B22, white 4%);
+    --bk-card-border: color-mix(in srgb, #30363D, white 14%);
     --bk-input-bg: #21262D;
-    --bk-hover-bg: #21262D;
+    --bk-hover-bg: color-mix(in srgb, #21262D, white 6%);
 
     /* Texto Dark */
     --bk-text-primary: #F0F6FC;
@@ -494,27 +483,73 @@ body.thanks-page {
     /* Brand Colors Dark Override */
     --bk-primary: #58A6FF;
     --bk-primary-subtle: rgba(88, 166, 255, 0.15);
-    
+    --bk-primary-hover: color-mix(in srgb, var(--bk-primary), white 15%);
+
+    /* Gradients Dark */
+    --bk-gradient-brand: linear-gradient(135deg, #3d3659 0%, #1f1428 100%);
+    --bk-gradient-badge: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
     /* Bootstrap Overrides para consistencia */
     --bs-body-bg: var(--bk-body-bg);
     --bs-body-color: var(--bk-text-primary);
     --bs-border-color: var(--bk-card-border);
-    --bs-primary: #58A6FF;
+    --bs-primary: var(--bk-primary);
     --bs-card-bg: var(--bk-card-bg);
-    
-    /* Ajustes especÃ­ficos dark (Bootstrap Utilities) */
-    .bg-light { background-color: #21262D !important; }
-    .text-dark { color: #F0F6FC !important; }
-    .border-light { border-color: #30363D !important; }
-    .bg-white { background-color: #161B22 !important; }
-    .text-muted { color: #8B949E !important; }
+    --bs-link-color: var(--bk-primary);
+    --bs-link-hover-color: var(--bk-primary-hover);
+    --bs-emphasis-color: var(--bk-text-primary);
+    --bs-secondary-color: var(--bk-text-secondary);
+    --bs-tertiary-color: var(--bk-text-muted);
+    --bs-secondary-bg: var(--bk-input-bg);
+    --bs-tertiary-bg: var(--bk-hover-bg);
+    --bs-card-cap-bg: var(--bk-hover-bg);
+
+    /* Tables (Bootstrap vars) */
+    --bs-table-bg: var(--bk-card-bg);
+    --bs-table-color: var(--bk-text-primary);
+    --bs-table-border-color: var(--bk-card-border);
+    --bs-table-hover-bg: var(--bk-hover-bg);
+    --bs-table-striped-bg: color-mix(in srgb, var(--bk-hover-bg), var(--bk-card-bg) 55%);
+
+    /* Elevation in dark mode */
+    --bs-box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.45);
+    --bs-box-shadow: 0 2px 10px rgba(0, 0, 0, 0.50), 0 18px 44px rgba(0, 0, 0, 0.55);
+
+    --bk-elev-1: var(--bs-box-shadow-sm);
+    --bk-elev-2: var(--bs-box-shadow);
 }
+
+/* Dark-mode: headers/caps use standard surfaces */
+[data-bs-theme="dark"] .card .card-header,
+[data-bs-theme="dark"] .card .card-footer,
+[data-bs-theme="dark"] .modal-header,
+[data-bs-theme="dark"] .offcanvas-header {
+    background: var(--bk-hover-bg);
+}
+
+/* Make Bootstrap shadow utility classes match our elevation consistently */
+.shadow-sm { box-shadow: var(--bs-box-shadow-sm) !important; }
+.shadow { box-shadow: var(--bs-box-shadow) !important; }
+.shadow-lg { box-shadow: var(--bs-box-shadow) !important; }
+
+/* Ajustes especÃ­ficos dark (Bootstrap Utilities) */
+[data-bs-theme="dark"] .bg-light { background-color: var(--bk-hover-bg) !important; }
+[data-bs-theme="dark"] .text-dark { color: var(--bk-text-primary) !important; }
+[data-bs-theme="dark"] .border-light { border-color: var(--bk-card-border) !important; }
+[data-bs-theme="dark"] .bg-white { background-color: var(--bk-card-bg) !important; }
+[data-bs-theme="dark"] .text-muted { color: var(--bk-text-secondary) !important; }
 
 /* ------------------------------------------------------------
    2. RESET & ESTILOS GLOBALES
    ------------------------------------------------------------ */
 body {
     background-color: var(--bk-body-bg);
+    background-image: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--bk-body-bg), var(--bk-card-bg) 18%) 0%,
+        var(--bk-body-bg) 42%,
+        var(--bk-body-bg) 100%
+    );
     color: var(--bk-text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
@@ -572,6 +607,7 @@ a:hover { color: var(--bk-primary); }
     width: var(--sidebar-width);
     background: var(--sidebar-bg);
     border-right: 1px solid var(--sidebar-border);
+    box-shadow: var(--bk-elev-1);
     height: 100vh;
     position: fixed;
     top: 0;
@@ -660,7 +696,39 @@ a:hover { color: var(--bk-primary); }
     background-color: var(--bk-card-bg);
     border: 1px solid var(--bk-card-border);
     border-radius: 1rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: var(--bk-elev-1);
+}
+
+/* Give life: cards feel interactive when they are links/buttons */
+a .card:hover,
+button .card:hover,
+.card.hover-lift:hover,
+.quick-action-card:hover {
+    box-shadow: var(--bk-elev-2);
+}
+
+/* Many templates use bg-transparent card headers; still give a soft separation */
+.card-header.bg-transparent,
+.card-footer.bg-transparent {
+    background-color: var(--bk-hover-bg) !important;
+}
+
+.card-header:not(.bg-transparent),
+.card-footer:not(.bg-transparent) {
+    background-color: var(--bs-card-cap-bg);
+}
+
+.card-header {
+    border-bottom: 1px solid var(--bk-card-border);
+}
+
+.card-footer {
+    border-top: 1px solid var(--bk-card-border);
+}
+
+/* Some templates use `border-0` on cards; keep a subtle boundary anyway */
+.card.border-0 {
+    border: 1px solid var(--bk-card-border) !important;
 }
 
 .hover-lift {
@@ -668,24 +736,35 @@ a:hover { color: var(--bk-primary); }
 }
 .hover-lift:hover, .hover-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: var(--bk-elev-2) !important;
+    border-color: var(--bk-primary) !important;
+}
+
+/* Quick actions: slight lift to feel "alive" */
+.quick-action-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-3px);
     border-color: var(--bk-primary) !important;
 }
 
 /* KPI Cards */
 .mini-stat-card, .kpi-card-modern {
     background-color: var(--bk-card-bg);
-    border-left: 3px solid transparent;
+    border: 1px solid var(--bk-card-border) !important;
+    border-left: 3px solid transparent !important;
     transition: transform 0.2s;
 }
 .mini-stat-card:hover { transform: translateY(-2px); }
 
 /* Bordes de KPI */
-.bk-kpi-border-success { border-color: var(--bk-success) !important; }
-.bk-kpi-border-primary { border-color: var(--bk-primary) !important; }
-.bk-kpi-border-warning { border-color: var(--bk-warning) !important; }
-.bk-kpi-border-danger { border-color: var(--bk-danger) !important; }
-.bk-kpi-border-info { border-color: var(--bk-info) !important; }
+.mini-stat-card.bk-kpi-border-success, .kpi-card-modern.bk-kpi-border-success { border-left-color: var(--bk-success) !important; }
+.mini-stat-card.bk-kpi-border-primary, .kpi-card-modern.bk-kpi-border-primary { border-left-color: var(--bk-primary) !important; }
+.mini-stat-card.bk-kpi-border-warning, .kpi-card-modern.bk-kpi-border-warning { border-left-color: var(--bk-warning) !important; }
+.mini-stat-card.bk-kpi-border-danger, .kpi-card-modern.bk-kpi-border-danger { border-left-color: var(--bk-danger) !important; }
+.mini-stat-card.bk-kpi-border-info, .kpi-card-modern.bk-kpi-border-info { border-left-color: var(--bk-info) !important; }
 
 /* ------------------------------------------------------------
    5. COMPONENTES: ENCUESTAS Y LISTAS
@@ -762,6 +841,8 @@ a:hover { color: var(--bk-primary); }
     min-height: 400px !important;
     max-height: 600px !important;
     background: var(--bk-hover-bg);
+    border: 1px solid var(--bk-card-border);
+    box-shadow: var(--bk-elev-1);
     border-radius: 12px;
     padding: 1.5rem;
 }
@@ -807,7 +888,7 @@ a:hover { color: var(--bk-primary); }
     top: 0;
     bottom: 0;
     left: 0;
-    background: linear-gradient(90deg, var(--bk-primary) 0%, #ec4899 100%);
+    background: var(--bk-gradient-primary-accent-90);
     opacity: 0.12;
     border-radius: 4px;
     z-index: 0;
@@ -870,6 +951,8 @@ a:hover { color: var(--bk-primary); }
 /* Chart surface con shadow elegante */
 .chart-surface {
     background: var(--bk-card-bg);
+    border: 1px solid var(--bk-card-border);
+    box-shadow: var(--bk-elev-1);
     border-radius: 12px;
     overflow: hidden;
 }
@@ -939,7 +1022,7 @@ a:hover { color: var(--bk-primary); }
     transition: box-shadow 0.2s;
 }
 .insight-card:hover {
-    box-shadow: 0 8px 16px rgba(0,0,0,0.06) !important;
+    box-shadow: var(--bk-elev-2) !important;
 }
 
 /* Header */
@@ -1034,7 +1117,7 @@ a:hover { color: var(--bk-primary); }
 }
 .card-login-form {
     border: none;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    box-shadow: var(--bk-elev-2);
     background-color: var(--bk-card-bg);
     border-radius: 1.5rem;
     padding: 2rem;
@@ -1054,7 +1137,7 @@ a:hover { color: var(--bk-primary); }
 }
 
 .bk-gradient-text {
-    background: linear-gradient(45deg, #4F46E5, #EC4899);
+    background: linear-gradient(45deg, var(--bk-primary), var(--bk-accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -1062,13 +1145,13 @@ a:hover { color: var(--bk-primary); }
 }
 
 .bk-progress-bar-gradient {
-     background: linear-gradient(90deg, #6366f1 0%, #ec4899 100%) !important;
+     background: var(--bk-gradient-primary-accent-90) !important;
 }
 
 .bk-vertical-gradient-bar {
      width: 5px !important;
      height: 32px !important;
-     background: linear-gradient(to bottom, #6366f1, #ec4899) !important;
+    background: var(--bk-gradient-primary-accent-vertical) !important;
      border-radius: 4px;
 }
 
@@ -1100,7 +1183,6 @@ a:hover { color: var(--bk-primary); }
     z-index: var(--z-overlay);
     opacity: 0; visibility: hidden;
     transition: all 0.3s ease;
-    backdrop-filter: blur(2px);
 }
 
 /* ============================================================
@@ -1280,7 +1362,7 @@ a:hover { color: var(--bk-primary); }
 }
 
 .progress-bar {
-    background: linear-gradient(90deg, var(--bk-primary) 0%, #ec4899 100%) !important;
+    background: var(--bk-gradient-primary-accent-90) !important;
     transition: width 0.6s ease;
 }
 
@@ -1326,6 +1408,17 @@ a:hover { color: var(--bk-primary); }
 .table {
     background-color: var(--bk-card-bg);
     color: var(--bk-text-primary);
+}
+
+/* Bootstrap tables often rely on CSS variables; enforce consistent surfaces */
+.table > :not(caption) > * > * {
+    background-color: var(--bs-table-bg) !important;
+    color: var(--bs-table-color) !important;
+    border-color: var(--bs-table-border-color) !important;
+}
+
+.table.table-hover > tbody > tr:hover > * {
+    background-color: var(--bs-table-hover-bg) !important;
 }
 
 .table thead {
@@ -1697,13 +1790,13 @@ a:hover { color: var(--bk-primary); }
 
 @media (prefers-color-scheme: light) {
     :root:not([data-bs-theme]) {
-        --bk-body-bg: #F5F7FA;
+        --bk-body-bg: #EEF2F6;
         --bk-card-bg: #FFFFFF;
         --bk-text-primary: #111827;
-        --bk-text-secondary: #6B7280;
-        --bk-card-border: #E5E7EB;
-        --bk-input-bg: #F9FAFB;
-        --bk-hover-bg: #F3F4F6;
+        --bk-text-secondary: #6B7281;
+        --bk-card-border: rgba(17, 24, 39, 0.10);
+        --bk-input-bg: #F6F8FB;
+        --bk-hover-bg: #E9EEF5;
     }
 }
 
@@ -1834,12 +1927,12 @@ a:hover { color: var(--bk-primary); }
 /* Clean table and card styling without breaking animations */
 .hover-card {
     transition: all 0.3s ease;
-    border: 1px solid rgba(88, 166, 255, 0.2);
+    border: 1px solid var(--bk-card-border);
 }
 
 .hover-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(88, 166, 255, 0.2);
+    box-shadow: var(--bk-elev-2);
 }
 
 /* Import modal exception - no epic effects */
@@ -1858,36 +1951,7 @@ a:hover { color: var(--bk-primary); }
 /* Guide modal - clean styling */
 #guideModal .modal-content {
     background: var(--bk-card-bg);
-    border: 1px solid rgba(88, 166, 255, 0.2);
-}
-
-.modal-content {
-    background-color: var(--bk-card-bg) !important;
-    color: var(--bk-text-primary) !important;
-}
-
-.modal-header {
-    background-color: var(--bk-hover-bg) !important;
-    border-color: rgba(88, 166, 255, 0.2) !important;
-}
-
-.modal-body {
-    color: var(--bk-text-primary) !important;
-}
-
-/* Table styling */
-.table {
-    color: var(--bk-text-primary) !important;
-}
-
-.table thead th {
-    background-color: var(--bk-hover-bg) !important;
-    color: var(--bk-primary) !important;
-    border-color: rgba(88, 166, 255, 0.2) !important;
-}
-
-.table tbody tr:hover {
-    background-color: rgba(88, 166, 255, 0.08) !important;
+    border: 1px solid var(--bk-card-border);
 }
 
 /* Card and badge styling */
@@ -1904,7 +1968,7 @@ a:hover { color: var(--bk-primary); }
 .form-select {
     background-color: var(--bk-input-bg) !important;
     color: var(--bk-text-primary) !important;
-    border-color: rgba(88, 166, 255, 0.2) !important;
+    border-color: var(--bk-card-border) !important;
 }
 
 .form-control:focus,
@@ -1912,7 +1976,7 @@ a:hover { color: var(--bk-primary); }
     background-color: var(--bk-card-bg) !important;
     color: var(--bk-text-primary) !important;
     border-color: var(--bk-primary) !important;
-    box-shadow: 0 0 0 0.25rem rgba(88, 166, 255, 0.25) !important;
+    box-shadow: 0 0 0 0.25rem var(--bk-primary-subtle) !important;
 }
 
 /* Responsive adjustments */
@@ -1929,7 +1993,7 @@ a:hover { color: var(--bk-primary); }
 
 @media (max-width: 576px) {
     .hover-card {
-        box-shadow: 0 4px 8px rgba(88, 166, 255, 0.1) !important;
+        box-shadow: var(--bk-elev-1) !important;
     }
 }
 

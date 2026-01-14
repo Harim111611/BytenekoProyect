@@ -1,6 +1,7 @@
 import pytest
 from core.utils.charts import ChartGenerator
 import numpy as np
+import pandas as pd
 
 def test_generate_heatmap_runs():
     df = pd.DataFrame(np.random.rand(5, 5))

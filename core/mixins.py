@@ -2,7 +2,7 @@
 Mixins reutilizables para vistas de Django.
 Evita duplicación de código y centraliza lógica común.
 """
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import UserPassesTestMixin
 from django.shortcuts import get_object_or_404, render
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -41,12 +41,18 @@ class OwnerRequiredMixin(UserPassesTestMixin):
     
     def test_func(self):
         """Verifica si el usuario es el creador de la encuesta."""
-        # Para vistas basadas en clases con pk
         identifier = self.kwargs.get('public_id') or self.kwargs.get('pk')
+        lookup_field = 'public_id' if self.kwargs.get('public_id') else 'pk'
+
+        if identifier and not hasattr(self, 'survey_object'):
+            try:
+                self.survey_object = Survey.objects.get(**{lookup_field: identifier})
+            except Survey.DoesNotExist:
+                return False
+
         if identifier and hasattr(self, 'survey_object'):
-            is_owner = self.survey_object.author == self.request.user
-            return is_owner
-        return True
+            return self.survey_object.author == self.request.user
+        return False
     
     def handle_no_permission(self):
         """Maneja el caso de usuario sin permiso."""

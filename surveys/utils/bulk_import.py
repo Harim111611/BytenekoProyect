@@ -4,8 +4,17 @@ import re
 import logging
 from typing import Optional, Tuple, List, Any, Dict
 
-# Importación del módulo C++ (Requerido)
-import cpp_csv
+logger = logging.getLogger(__name__)
+
+# Importación del módulo C++ - DEBE funcionar siempre
+try:
+    from tools.cpp_csv import pybind_csv as cpp_csv
+except ImportError as e:
+    logger.error(f"CRÍTICO: No se pudo cargar cpp_csv: {e}")
+    raise RuntimeError(
+        "cpp_csv es requerido para importaciones. "
+        "Asegúrate de que esté compilado en tools/cpp_csv/"
+    ) from e
 
 from django.conf import settings
 from django.db import connection, transaction
@@ -13,8 +22,6 @@ from django.utils import timezone
 from dateutil import parser
 
 from surveys.models import SurveyResponse, QuestionResponse, Question, AnswerOption
-
-logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Helpers de Limpieza y Detección
@@ -36,10 +43,11 @@ def _is_metadata_column(header: str) -> bool:
 
 def parse_date_safe(value: str) -> Optional[Any]:
     """Intenta parsear una fecha desde string."""
-    if not value: return None
+    if not value:
+        return None
     try:
         return parser.parse(value)
-    except:
+    except (ValueError, OverflowError, TypeError):
         return None
 
 def _infer_column_type(header: str, sample_values: List[str]) -> str:
@@ -70,7 +78,7 @@ def _infer_column_type(header: str, sample_values: List[str]) -> str:
                 num = float(v.replace(',', '.'))
                 if num < 0 or num > 10:
                     is_scale = False
-            except:
+            except (ValueError, TypeError):
                 is_scale = False
 
     if is_scale: return 'scale'
@@ -207,7 +215,6 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     try:
         # Primero leer solo una muestra para analizar estructura
         sample_size = min(getattr(settings, "SURVEY_IMPORT_SAMPLE_SIZE", 5000), 5000)
-        # La versión actual de cpp_csv no soporta max_rows, leemos y truncamos en Python
         sample_rows = cpp_csv.read_csv_dicts(file_path)[:sample_size]
         
         if not sample_rows:
@@ -329,7 +336,7 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
                                 num_val = int(float(clean_num_str))
                             else:
                                 text_val = val_str.replace("\n", " ").replace("\r", "")[:2000]
-                        except:
+                        except (ValueError, TypeError):
                             text_val = val_str.replace("\n", " ").replace("\r", "")[:2000]
                             
                     else: # Texto

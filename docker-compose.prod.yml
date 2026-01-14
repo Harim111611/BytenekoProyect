@@ -1,0 +1,102 @@
+# Producción (EC2): stack autocontenido con Postgres + Redis + Django + Celery
+# Uso:
+#   1) Copia .env.prod.example -> .env.prod y ajusta valores
+#   2) docker compose -f docker-compose.prod.yml up -d --build
+
+name: byteneko_prod
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: byteneko_db_prod
+    env_file:
+      - .env.prod
+    environment:
+      # Usar las mismas variables que Django (DB_*) para evitar inconsistencias
+      POSTGRES_DB: ${DB_NAME:-byteneko_db}
+      POSTGRES_USER: ${DB_USER:-byteneko_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-CHANGE_ME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-byteneko_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: byteneko_redis_prod
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  django:
+    build: .
+    container_name: byteneko_app_prod
+    env_file:
+      - .env.prod
+    environment:
+      # Seguridad: no crear migraciones automáticamente en prod
+      RUN_MAKEMIGRATIONS: "0"
+    command: gunicorn byteneko.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+    ports:
+      - "8000:8000"
+    volumes:
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery_worker:
+    build: .
+    container_name: byteneko_celery_worker_prod
+    env_file:
+      - .env.prod
+    environment:
+      RUN_MAKEMIGRATIONS: "0"
+    command: celery -A byteneko worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-4} --prefetch-multiplier=1 --max-tasks-per-child=100 -O fair
+    volumes:
+      - media_volume:/usr/src/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery_beat:
+    build: .
+    container_name: byteneko_celery_beat_prod
+    env_file:
+      - .env.prod
+    environment:
+      RUN_MAKEMIGRATIONS: "0"
+    command: celery -A byteneko beat --loglevel=info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: byteneko_postgres_data_prod
+  redis_data:
+    name: byteneko_redis_data_prod
+  static_volume:
+    name: byteneko_static_volume_prod
+  media_volume:
+    name: byteneko_media_volume_prod
