@@ -1,7 +1,7 @@
 // Example frontend JS to enqueue fast delete and poll task status
 
 async function enqueueDeleteSurvey(surveyId) {
-  if (!confirm('This will permanently delete the survey and all responses. Type OK to proceed.')) return;
+  if (!confirm('Esto eliminará permanentemente la encuesta y todas sus respuestas. Escribe OK para continuar.')) return;
 
   const resp = await fetch(`/surveys/api/${surveyId}/delete-enqueue/`, {
     method: 'POST',
@@ -27,10 +27,10 @@ async function enqueueDeleteSurvey(surveyId) {
     if (sd.state === 'SUCCESS' || sd.state === 'FAILURE' || sd.state === 'REVOKED') {
       clearInterval(interval);
       if (sd.result && sd.result.success) {
-        alert('Survey deleted successfully');
+        alert('Encuesta eliminada correctamente');
         window.location.href = '/surveys/';
       } else {
-        alert('Delete finished with error: ' + JSON.stringify(sd.result));
+        alert('La eliminación finalizó con error: ' + JSON.stringify(sd.result));
       }
     }
   }, 2000);

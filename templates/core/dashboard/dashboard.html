@@ -175,7 +175,7 @@
                         <div class="text-center text-muted py-5">
                             <div class="mb-3 opacity-25"><i class="bi bi-activity fs-1"></i></div>
                             <h6 class="fw-bold">Sin actividad reciente</h6>
-                            <p class="small mb-0">Comparte tus surveys para ver datos aquí.</p>
+                            <p class="small mb-0">Comparte tus encuestas para ver datos aquí.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -265,7 +265,7 @@
                                 <td colspan="4" class="text-center py-5 text-muted">
                                     <div class="mb-3 opacity-25"><i class="bi bi-inbox fs-1"></i></div>
                                     <h6 class="fw-bold">No hay proyectos</h6>
-                                    <p class="small mb-3">Comienza creando tu primera survey</p>
+                                    <p class="small mb-3">Comienza creando tu primera encuesta</p>
                                     <a href="{% url 'surveys:create' %}" class="btn btn-sm btn-primary">
                                         <i class="bi bi-plus-lg me-1"></i>Crear Encuesta
                                     </a>
@@ -327,14 +327,14 @@
                             {% endfor %}
                             <div class="text-center mt-3 pt-2 border-top">
                                 <p class="small text-muted mb-2">
-                                    <i class="bi bi-lightbulb me-1"></i>Tip: Mantén tus surveys activas y monitoreadas
+                                    <i class="bi bi-lightbulb me-1"></i>Tip: Mantén tus encuestas activas y monitoreadas
                                 </p>
                             </div>
                         {% else %}
                             <div class="text-center text-muted py-5">
                                 <i class="bi bi-check-circle fs-1 mb-3 opacity-25 text-success"></i>
                                 <h6 class="fw-bold text-success">Todo en orden</h6>
-                                <p class="small mb-0">No hay surveys que requieran atención</p>
+                                <p class="small mb-0">No hay encuestas que requieran atención</p>
                             </div>
                         {% endif %}
                     </div>

@@ -745,108 +745,94 @@ document.addEventListener('DOMContentLoaded', function() {
         // Capturar categoría para el resumen
         const category = dom.surveyCategory ? (dom.surveyCategory.value.trim() || 'General') : 'General';
 
-        // Detectar modo noche
-        const isDarkMode = document.body.classList.contains('dark-mode') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const darkBg = 'background-color: #23272b;';
-        const darkBorder = 'border: 1px solid #444;';
-        const darkText = 'color: #e0e0e0;';
-        const darkMuted = 'color: #b0b0b0;';
-        const darkCard = 'background-color: #181a1b; border: 1px solid #333;';
+        // Limpieza defensiva: si el HTML viejo sigue presente (caché), remover bloques ruidosos
+        const legacyTitle = document.getElementById('preview-header-title');
+        if (legacyTitle) legacyTitle.remove();
+        const legacyDesc = document.getElementById('preview-header-desc');
+        if (legacyDesc) legacyDesc.remove();
+        // Caja informativa vieja (buscamos por texto aproximado dentro de la card-body del paso 3)
+        const step3 = document.getElementById('step-3-content');
+        if (step3) {
+            const infoBoxes = step3.querySelectorAll('.card-body .bg-body-tertiary');
+            infoBoxes.forEach((box) => {
+                const text = (box.textContent || '').toLowerCase();
+                if (text.includes('para evitar ruido') && text.includes('resumen')) {
+                    box.remove();
+                }
+            });
+        }
 
-        // Actualizar textos del header del preview
-        ['review-title', 'preview-header-title'].forEach(id => {
+        // Actualizar título del resumen
+        ['review-title'].forEach(id => {
             const el = document.getElementById(id); if(el) el.innerText = title;
-        });
-        ['review-description', 'preview-header-desc'].forEach(id => {
-             const el = document.getElementById(id); if(el) el.innerText = desc;
         });
 
         // Actualizar Categoría en el resumen (NUEVO)
         const reviewCat = document.getElementById('review-category');
         if(reviewCat) reviewCat.innerText = category;
 
-        const container = document.getElementById('preview-container');
-        if(!container) return;
-
-        container.innerHTML = '';
-        const items = dom.questionsList.querySelectorAll('.question-item');
+        const items = dom.questionsList ? dom.questionsList.querySelectorAll('.question-item') : [];
 
         const countBadge = document.getElementById('review-count');
         if(countBadge) countBadge.innerText = items.length;
 
-        items.forEach((q, idx) => {
-            const qTitle = q.querySelector('.question-title').value;
-            const qType = q.querySelector('.question-type').value;
-            const qReq = q.querySelector('.question-required').checked;
+        // Render compacto (resumen) para reducir ruido
+        const compactContainer = document.getElementById('preview-compact-container');
+        if (compactContainer) {
+            compactContainer.innerHTML = '';
 
-            const card = document.createElement('div');
-            card.className = 'card mb-3 border-0 shadow-sm';
-            if (isDarkMode) card.style = darkCard;
+            if (!items.length) {
+                compactContainer.innerHTML = '<div class="list-group-item text-muted">Sin preguntas</div>';
+            } else {
+                const typeLabel = {
+                    text: 'Texto',
+                    number: 'Número',
+                    scale: 'Escala',
+                    single: 'Opción única',
+                    multi: 'Opción múltiple',
+                    select: 'Desplegable'
+                };
 
-            let inputHTML = '';
-            const bgStyle = isDarkMode ? darkBg : 'background-color: var(--bs-body-tertiary);';
-            const borderStyle = isDarkMode ? darkBorder : 'border: 1px solid var(--bs-border-color);';
-            const textStyle = isDarkMode ? darkText : '';
-            const mutedStyle = isDarkMode ? darkMuted : 'color: var(--bs-secondary-color);';
+                const maxCompact = 6;
+                items.forEach((q, idx) => {
+                    if (idx >= maxCompact) return;
 
-            if(qType === 'text') {
-                inputHTML = `<textarea class="form-control" rows="2" disabled style="${bgStyle} ${borderStyle} ${textStyle}"></textarea>`;
-            } else if (qType === 'number') {
-                inputHTML = `<input type="number" class="form-control" disabled placeholder="123" style="${bgStyle} ${borderStyle} ${textStyle}">`;
-            } else if (qType === 'scale') {
-                const scaleNums = [0,1,2,3,4,5,6,7,8,9,10];
-                inputHTML = `
-                    <div class="d-flex justify-content-between gap-1 mt-2 overflow-auto pb-2">
-                        ${scaleNums.map(n => `
-                            <div class="d-flex align-items-center justify-content-center border rounded flex-fill p-2" 
-                                 style="min-width: 35px; height: 35px; ${bgStyle} ${borderStyle} ${mutedStyle} font-weight: 500;">
-                                ${n}
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="d-flex justify-content-between small px-1" style="${mutedStyle}">
-                        <span>Nada probable</span>
-                        <span>Muy probable</span>
-                    </div>`;
-            } else if (['single', 'multi', 'select'].includes(qType)) {
-                const rawOpts = q.querySelector('.question-options').value;
-                const opts = rawOpts.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
-                if (opts.length === 0) {
-                    inputHTML = `<div class="fst-italic small p-2 border border-dashed rounded text-center" style="${bgStyle} ${borderStyle} ${mutedStyle}">Sin opciones definidas</div>`;
-                } else {
-                    if (qType === 'select') {
-                        inputHTML = `
-                            <select class="form-select" disabled style="${bgStyle} ${borderStyle} ${textStyle}">
-                                <option selected>Selecciona una opción...</option>
-                                ${opts.map(opt => `<option>${opt}</option>`).join('')}
-                            </select>`;
-                    } else {
-                        const inputType = qType === 'single' ? 'radio' : 'checkbox';
-                        const checkBg = isDarkMode ? 'background-color:#23272b !important;border-color:#666 !important;' : '';
-                        inputHTML = `<div class="d-flex flex-column gap-2">` + 
-                            opts.map((opt) => {
-                                const darkClass = isDarkMode ? 'dark-preview' : '';
-                                return `<div class="form-check p-2 border rounded" style="${bgStyle} ${borderStyle}">
-                                    <input class="form-check-input ms-1 ${darkClass}" type="${inputType}" disabled style="${bgStyle} ${borderStyle} ${checkBg}">
-                                    <label class="form-check-label w-100 ps-2" style="${textStyle}">${opt}</label>
-                                </div>`;
-                            }).join('') + 
-                        `</div>`;
+                    const qTitle = (q.querySelector('.question-title').value || '').trim() || `Pregunta ${idx + 1}`;
+                    const qType = q.querySelector('.question-type').value;
+                    const qReq = q.querySelector('.question-required').checked;
+
+                    let meta = typeLabel[qType] || qType;
+                    if (qType === 'scale') meta = `${meta} (0–10)`;
+                    if (['single', 'multi', 'select'].includes(qType)) {
+                        const rawOpts = (q.querySelector('.question-options')?.value || '').trim();
+                        const opts = rawOpts ? rawOpts.split(/[\n,]+/).map(s => s.trim()).filter(Boolean) : [];
+                        meta = `${meta} (${opts.length} opción${opts.length === 1 ? '' : 'es'})`;
                     }
+
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'list-group-item d-flex justify-content-between align-items-start';
+                    itemEl.innerHTML = `
+                        <div class="me-3 overflow-hidden">
+                            <div class="fw-semibold text-truncate">${idx + 1}. ${qTitle}</div>
+                            <div class="small text-body-secondary">${meta}</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            ${qReq ? '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Obligatoria</span>' : '<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Opcional</span>'}
+                        </div>
+                    `;
+                    compactContainer.appendChild(itemEl);
+                });
+
+                if (items.length > maxCompact) {
+                    const remaining = items.length - maxCompact;
+                    const moreEl = document.createElement('div');
+                    moreEl.className = 'list-group-item text-body-secondary small';
+                    moreEl.innerHTML = `<i class="bi bi-three-dots me-1"></i>Y ${remaining} pregunta${remaining === 1 ? '' : 's'} más…`;
+                    compactContainer.appendChild(moreEl);
                 }
             }
+        }
 
-            card.innerHTML = `
-                <div class="card-body p-4">
-                    <h6 class="card-title fw-bold mb-3" style="${textStyle}">
-                        ${idx + 1}. ${qTitle} 
-                        ${qReq ? '<span class="text-danger" title="Obligatorio">*</span>' : ''}
-                    </h6>
-                    ${inputHTML}
-                </div>`;
-
-            container.appendChild(card);
-        });
     }
 
     // Inicialización al cargar

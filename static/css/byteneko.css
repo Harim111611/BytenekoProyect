@@ -106,7 +106,7 @@
 
 /* THANKS PAGE STYLES (Moved from inline styles) */
 body.thanks-page {
-    background: var(--bk-gradient-brand);
+    background: var(--bk-body-bg);
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -114,7 +114,7 @@ body.thanks-page {
 }
 
 [data-bs-theme="dark"] body.thanks-page {
-    background: var(--bk-gradient-brand);
+    background: var(--bk-body-bg);
 }
 
 .thanks-wrapper {
@@ -387,16 +387,18 @@ body.thanks-page {
     --z-modal: 1070;
 
     /* Colores Base (Modo Claro) */
+    /* Neutro azul-gris suave (sin efecto “neón”) */
     --bk-body-bg: #EEF2F6;
-    --bk-card-bg: color-mix(in srgb, #FFFFFF, var(--bk-body-bg) 6%);
+    /* Superficies apenas tintadas para armonizar con el fondo */
+    --bk-card-bg: color-mix(in srgb, #FFFFFF, var(--bk-body-bg) 8%);
     --bk-card-border: rgba(17, 24, 39, 0.10);
     --bk-input-bg: color-mix(in srgb, #FFFFFF, var(--bk-body-bg) 12%);
-    --bk-hover-bg: #E9EEF5;
+    --bk-hover-bg: #E7ECF4;
 
     /* Texto */
-    --bk-text-primary: #111827;
-    --bk-text-secondary: #6B7281;
-    --bk-text-muted: #9CA3AF;
+    --bk-text-primary: #0F172A;
+    --bk-text-secondary: #475569;
+    --bk-text-muted: #64748B;
 
     /* Sidebar & Nav */
     --sidebar-bg: #F8FAFC;
@@ -408,13 +410,13 @@ body.thanks-page {
     /* Brand Colors (Indigo/Primary) */
     --bk-primary: #4F46E5;
     --bk-primary-hover: #4338CA;
-    --bk-primary-subtle: rgba(79, 70, 229, 0.1);
+    --bk-primary-subtle: rgba(79, 70, 229, 0.12);
 
     /* Accent (Pink) */
     --bk-accent: #ec4899;
 
     /* Gradients */
-    --bk-gradient-brand: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --bk-gradient-brand: linear-gradient(135deg, #6366F1 0%, #EC4899 100%);
     --bk-gradient-primary-accent-90: linear-gradient(90deg, var(--bk-primary) 0%, var(--bk-accent) 100%);
     --bk-gradient-primary-accent-135: linear-gradient(135deg, var(--bk-primary) 0%, var(--bk-accent) 100%);
     --bk-gradient-primary-accent-vertical: linear-gradient(to bottom, var(--bk-primary), var(--bk-accent));
@@ -462,32 +464,35 @@ body.thanks-page {
 /* Modo Oscuro */
 [data-bs-theme="dark"] {
     /* Base Dark */
-    --bk-body-bg: #0D1117;
-    --bk-card-bg: color-mix(in srgb, #161B22, white 4%);
-    --bk-card-border: color-mix(in srgb, #30363D, white 14%);
-    --bk-input-bg: #21262D;
-    --bk-hover-bg: color-mix(in srgb, #21262D, white 6%);
+    --bk-body-bg: #0B1220;
+    --bk-card-bg: #111A2E;
+    --bk-card-border: rgba(148, 163, 184, 0.16);
+    --bk-input-bg: #172342;
+    --bk-hover-bg: #19284A;
 
     /* Texto Dark */
-    --bk-text-primary: #F0F6FC;
-    --bk-text-secondary: #8B949E;
-    --bk-text-muted: #6E7681;
+    --bk-text-primary: #E6EEF8;
+    --bk-text-secondary: #AAB7CF;
+    --bk-text-muted: #7A8AA8;
 
     /* Sidebar Dark */
-    --sidebar-bg: #0D1117;
-    --sidebar-border: #30363D;
-    --sidebar-item-hover: #21262D;
-    --sidebar-item-active-bg: rgba(56, 139, 253, 0.15);
-    --sidebar-item-active-text: #58A6FF;
+    --sidebar-bg: #0B1220;
+    --sidebar-border: #1E2A44;
+    --sidebar-item-hover: #172342;
+    --sidebar-item-active-bg: rgba(122, 162, 247, 0.18);
+    --sidebar-item-active-text: #7AA2F7;
 
     /* Brand Colors Dark Override */
-    --bk-primary: #58A6FF;
-    --bk-primary-subtle: rgba(88, 166, 255, 0.15);
-    --bk-primary-hover: color-mix(in srgb, var(--bk-primary), white 15%);
+    --bk-primary: #7AA2F7;
+    --bk-primary-subtle: rgba(122, 162, 247, 0.16);
+    --bk-primary-hover: color-mix(in srgb, var(--bk-primary), white 18%);
+
+    /* Accent Dark (rosa suave complementaria al índigo) */
+    --bk-accent: #F7768E;
 
     /* Gradients Dark */
-    --bk-gradient-brand: linear-gradient(135deg, #3d3659 0%, #1f1428 100%);
-    --bk-gradient-badge: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --bk-gradient-brand: linear-gradient(135deg, #7AA2F7 0%, #F7768E 100%);
+    --bk-gradient-badge: linear-gradient(135deg, #7AA2F7 0%, #F7768E 100%);
 
     /* Bootstrap Overrides para consistencia */
     --bs-body-bg: var(--bk-body-bg);
@@ -544,12 +549,6 @@ body.thanks-page {
    ------------------------------------------------------------ */
 body {
     background-color: var(--bk-body-bg);
-    background-image: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--bk-body-bg), var(--bk-card-bg) 18%) 0%,
-        var(--bk-body-bg) 42%,
-        var(--bk-body-bg) 100%
-    );
     color: var(--bk-text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
@@ -759,6 +758,29 @@ button .card:hover,
 }
 .mini-stat-card:hover { transform: translateY(-2px); }
 
+/* KPI helpers */
+.bk-kpi-icon-pill {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bk-primary-subtle);
+    border: 1px solid var(--bk-card-border);
+    color: var(--bk-primary);
+}
+
+.bk-kpi-icon-pill i {
+    font-size: 1.25rem;
+}
+
+.bk-progress-10 {
+    height: 10px !important;
+    background: var(--bk-hover-bg) !important;
+    overflow: hidden;
+}
+
 /* Bordes de KPI */
 .mini-stat-card.bk-kpi-border-success, .kpi-card-modern.bk-kpi-border-success { border-left-color: var(--bk-success) !important; }
 .mini-stat-card.bk-kpi-border-primary, .kpi-card-modern.bk-kpi-border-primary { border-left-color: var(--bk-primary) !important; }
@@ -833,6 +855,28 @@ button .card:hover,
 /* ========================================
    TABLA CRUZADA (CROSSTAB) OPTIMIZADA
    ======================================== */
+
+/* Botón: Limpiar Vista (resetea filtros/cruces) */
+.bk-btn-clear-view {
+    background: var(--bk-card-bg) !important;
+    border: 1px solid var(--bk-card-border) !important;
+    color: var(--bk-text-secondary) !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.bk-btn-clear-view i {
+    color: var(--bk-danger) !important;
+}
+
+.bk-btn-clear-view:hover {
+    background: var(--bk-hover-bg) !important;
+    border-color: var(--bk-danger) !important;
+    color: var(--bk-danger) !important;
+}
+
+.bk-btn-clear-view:focus-visible {
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.20) !important;
+}
    
 /* Container del grÃ¡fico */
 .bk-crosstab-chart-container {
