@@ -257,7 +257,11 @@ async def survey_results_view(request, public_id):
     )
 
     # Serializar Charts para el Template (asegura chart_json como string JSON)
-    insights_list = analysis_result.get('analysis_data', [])
+    insights_list_all = analysis_result.get('analysis_data', [])
+    ignored_questions = [x for x in insights_list_all if x.get('redacted')]
+    sensitive_ids = {x.get('id') for x in ignored_questions if x.get('id') is not None}
+    insights_list = [x for x in insights_list_all if not x.get('redacted')]
+
     for item in insights_list:
         if 'chart' in item and item['chart']:
             if isinstance(item['chart'], str):
@@ -266,7 +270,11 @@ async def survey_results_view(request, public_id):
                 item['chart_json'] = json.dumps(item['chart'], cls=DjangoJSONEncoder)
 
     # Mapear correctamente el KPI de satisfacción
-    kpi_score = analysis_result.get('kpi_prom_satisfaccion', 0)
+    kpi_count = int(analysis_result.get('kpi_satisfaction_count') or 0)
+    kpi_min_required = int(analysis_result.get('kpi_min_required') or 0)
+    kpi_raw = analysis_result.get('kpi_prom_satisfaccion')
+    kpi_has_data = bool(kpi_count > 0 and kpi_raw is not None)
+    kpi_score = round(float(kpi_raw), 1) if kpi_has_data else None
     evolution = analysis_result.get('evolution', {})
 
     # Top Insights (Mood crítico o excelente)
@@ -302,12 +310,18 @@ async def survey_results_view(request, public_id):
         survey.questions.values('id', 'text', 'type', 'is_demographic').order_by('order')
     ), thread_sensitive=True)()
 
+    if sensitive_ids:
+        preguntas_filtro = [p for p in (preguntas_filtro or []) if p.get('id') not in sensitive_ids]
+
     context = {
         'survey': survey,
         'total_respuestas': total_respuestas,
         'analysis_data': insights_list,
         'evolution_chart': json.dumps(evolution, cls=DjangoJSONEncoder),
-        'kpi_score': round(float(kpi_score), 1),
+        'kpi_score': kpi_score,
+        'kpi_has_data': kpi_has_data,
+        'kpi_count': kpi_count,
+        'kpi_min_required': kpi_min_required,
         'crosstab_data': crosstab_data,
         'crosstab_chart_json': crosstab_chart_json,
         'has_filters': has_filters,
@@ -319,7 +333,7 @@ async def survey_results_view(request, public_id):
         'preguntas_filtro': preguntas_filtro,
         'has_date_fields': await sync_to_async(_has_date_fields, thread_sensitive=True)(survey.id),
         'top_insights': top_insights,
-        'ignored_questions': analysis_result.get('ignored_questions', [])
+        'ignored_questions': ignored_questions,
     }
     render_async = sync_to_async(render, thread_sensitive=True)
     return await render_async(request, 'surveys/responses/results.html', context)
@@ -356,7 +370,8 @@ async def report_preview(request, public_id):
             survey, respuestas_qs, include_charts=include_charts
         )
 
-        analysis_items = analysis.get('analysis_data', [])
+        analysis_items_all = analysis.get('analysis_data', [])
+        analysis_items = [x for x in (analysis_items_all or []) if not x.get('redacted')]
         for item in analysis_items or []:
             if 'total_responses' not in item and 'total_respuestas' in item:
                 item['total_responses'] = item.get('total_respuestas', 0)
@@ -486,7 +501,8 @@ async def survey_analysis_ajax(request, public_id):
         await PermissionHelper.verify_survey_access(survey, user)
         respuestas_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)()
         analysis = await SurveyAnalysisService.get_analysis_data(survey, respuestas_qs, include_charts=True)
-        return JsonResponse({'success': True, 'analysis_data': analysis['analysis_data']}, encoder=DjangoJSONEncoder)
+        safe_items = [x for x in (analysis.get('analysis_data') or []) if not x.get('redacted')]
+        return JsonResponse({'success': True, 'analysis_data': safe_items}, encoder=DjangoJSONEncoder)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -525,7 +541,11 @@ async def debug_analysis_view(request, public_id):
     )()
     user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
     await PermissionHelper.verify_survey_access(survey, user)
-    analysis = await SurveyAnalysisService.get_analysis_data(survey, await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)())
+    analysis = await SurveyAnalysisService.get_analysis_data(
+        survey,
+        await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)(),
+    )
+    analysis['analysis_data'] = [x for x in (analysis.get('analysis_data') or []) if not x.get('redacted')]
     return JsonResponse(analysis, encoder=DjangoJSONEncoder)
 
 async def survey_thanks_view(request):

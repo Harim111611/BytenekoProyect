@@ -69,7 +69,13 @@
             {# CASO 1: TEXTO (Comentarios) #}
             {% if data.type == 'text' %}
                 <div class="custom-scroll pe-2 overflow-y-auto d-flex flex-column gap-2" style="max-height: 240px; min-height: 240px;">
-                    {% if data.top_responses %}
+                    {% if data.insight_data.type == 'insufficient_data' %}
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 opacity-50">
+                            <i class="bi bi-shield-lock fs-1 mb-2 text-muted"></i>
+                            <span class="small text-muted">Datos insuficientes para mostrar comentarios</span>
+                            <span class="small text-muted">(mínimo {{ data.insight_data.min_required }})</span>
+                        </div>
+                    {% elif data.top_responses %}
                         {% for resp in data.top_responses %}
                             <div class="p-3 bg-light rounded-3 border-start border-4 border-secondary position-relative">
                                 <i class="bi bi-quote position-absolute text-secondary opacity-25" style="top: 5px; right: 10px; font-size: 1.5rem;"></i>
@@ -91,24 +97,32 @@
                     <div class="col-5 text-center border-end pe-3">
                         <div class="text-uppercase text-muted fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">Promedio</div>
                         <div class="display-4 fw-bolder text-primary lh-1 mb-2">
-                            {{ data.insight_data.average|default:"0.0"|floatformat:1 }}
+                            {% if data.total_responses|default:0|add:0 > 0 and data.insight_data.average is not None %}
+                                {{ data.insight_data.average|floatformat:1 }}
+                            {% else %}
+                                —
+                            {% endif %}
                         </div>
                         
                         {# Barra de progreso compacta #}
-                        {% with max_val=scale_max|default:5 avg=data.insight_data.average|default:0 %}
-                        <div class="d-flex align-items-center gap-2" style="font-size: 0.7rem;">
-                            <span class="text-muted">0</span>
-                            <div class="progress flex-grow-1" style="height: 4px;">
-                                <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio avg max_val 100 %}%;"></div>
+                        {% if data.total_responses|default:0|add:0 > 0 and data.insight_data.average is not None %}
+                            {% with max_val=scale_max|default:5 avg=data.insight_data.average %}
+                            <div class="d-flex align-items-center gap-2" style="font-size: 0.7rem;">
+                                <span class="text-muted">0</span>
+                                <div class="progress flex-grow-1" style="height: 4px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio avg max_val 100 %}%;"></div>
+                                </div>
+                                <span class="text-muted">{{ max_val }}</span>
                             </div>
-                            <span class="text-muted">{{ max_val }}</span>
-                        </div>
-                        {% endwith %}
+                            {% endwith %}
+                        {% else %}
+                            <div class="small text-muted opacity-75">Sin datos suficientes</div>
+                        {% endif %}
                     </div>
 
                     {# Gráfico Derecha - CORREGIDO WIDTH #}
                     <div class="col-7 ps-3 d-flex align-items-center justify-content-center">
-                        {% if data.chart %}
+                        {% if data.chart and data.total_responses|default:0|add:0 > 0 %}
                             {# Usamos w-100 en lugar de max-width para forzar responsividad #}
                             <div class="w-100" style="min-width: 0; overflow: hidden;">
                                 <div style="width: 100%;">
@@ -124,7 +138,12 @@
             {# CASO 3: GRÁFICO ESTÁNDAR - CORREGIDO WIDTH #}
             {% else %}
                 <div class="w-100 h-100 d-flex align-items-center justify-content-center" style="min-height: 220px;">
-                    {% if data.chart %}
+                    {% if data.insight_data.type == 'insufficient_data' %}
+                        <div class="text-center text-muted opacity-50">
+                            <i class="bi bi-shield-lock fs-1 d-block mb-2"></i>
+                            <small>Datos insuficientes (mínimo {{ data.insight_data.min_required }})</small>
+                        </div>
+                    {% elif data.chart %}
                         {# Usamos w-100 en lugar de max-width/auto para forzar responsividad #}
                         <div class="w-100" style="min-width: 0;">
                             <div style="width: 100%;">

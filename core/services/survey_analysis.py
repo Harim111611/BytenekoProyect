@@ -550,6 +550,263 @@ class TextMiningEngine:
             if topic in text.lower() and 20 < len(text) < 110: return f'"{text}"'
         return None
 
+
+class SensitiveMetadataDetector:
+    """Heurísticas para detectar preguntas de metadatos/PII y evitar exponer datos.
+
+    Diseñado para ser conservador (mejor ocultar de más que filtrar PII).
+    """
+
+    _EMAIL_RE = re.compile(r"\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b", re.IGNORECASE)
+    # Teléfonos comunes: admite +, espacios, guiones, paréntesis; valida longitud de dígitos.
+    _PHONE_CANDIDATE_RE = re.compile(r"\+?\d[\d\s\-().]{6,}\d")
+
+    # Palabras/patrones (ya normalizados: sin acentos, solo a-z0-9 y espacios)
+    _SENSITIVE_LABEL_PATTERNS = [
+        # Identidad
+        re.compile(r"\bnombre\b"),
+        re.compile(r"\bapellid(?:o|os)\b"),
+        re.compile(r"\bnombre completo\b"),
+        re.compile(r"\bhuesped\b"),
+        re.compile(r"\bhu[eé]sped\b"),
+        re.compile(r"\bguest\b"),
+        re.compile(r"\bfull name\b"),
+        re.compile(r"\bfirst name\b"),
+        re.compile(r"\blast name\b"),
+        re.compile(r"\bname\b"),
+        # Contacto
+        re.compile(r"\bcorreo\b"),
+        re.compile(r"\bcorreo electronico\b"),
+        re.compile(r"\bemail\b"),
+        re.compile(r"\be mail\b"),
+        re.compile(r"\btelefono\b"),
+        re.compile(r"\bcelular\b"),
+        re.compile(r"\bmovil\b"),
+        re.compile(r"\bphone\b"),
+        re.compile(r"\bwhatsapp\b"),
+        re.compile(r"\bnumero de telefono\b"),
+        # Identificadores
+        re.compile(r"\bmatricula\b"),
+        re.compile(r"\bcodigo\b"),
+        re.compile(r"\bid\b"),
+        re.compile(r"\bdni\b"),
+        re.compile(r"\bcedula\b"),
+        re.compile(r"\bpasaporte\b"),
+        re.compile(r"\bdocumento\b"),
+        # Dirección
+        re.compile(r"\bdireccion\b"),
+        re.compile(r"\bdomicilio\b"),
+        re.compile(r"\baddress\b"),
+        # Reservas / booking
+        re.compile(r"\breserva\b"),
+        re.compile(r"\breservation\b"),
+        re.compile(r"\bbooking\b"),
+        re.compile(r"\bfolio\b"),
+        re.compile(r"\bconfirmacion\b"),
+        re.compile(r"\bconfirmation\b"),
+        re.compile(r"\bid reserva\b"),
+        re.compile(r"\breserva id\b"),
+        re.compile(r"\breservation id\b"),
+        re.compile(r"\bbooking id\b"),
+        re.compile(r"\bcodigo reserva\b"),
+        re.compile(r"\bcode\b"),
+        # Demografía frecuente en hotel/universidad
+        re.compile(r"\bnacionalidad\b"),
+        re.compile(r"\bnationality\b"),
+        # Metadata frecuente (no siempre PII, pero el usuario pidió ocultarlo)
+        re.compile(r"\bestudiante\b"),
+        re.compile(r"\balumno\b"),
+        re.compile(r"\bcarrera\b"),
+        re.compile(r"\bprograma\b"),
+        re.compile(r"\bfacultad\b"),
+        re.compile(r"\bdepartamento\b"),
+        re.compile(r"\barea\b"),
+        re.compile(r"\bsemestre\b"),
+        re.compile(r"\bgrupo\b"),
+        re.compile(r"\bseccion\b"),
+    ]
+
+    # Matching adicional por tokens (más flexible que regex exactos).
+    _PII_TOKENS = {
+        'correo', 'email', 'mail', 'e', 'telefono', 'celular', 'movil', 'whatsapp',
+        'dni', 'cedula', 'pasaporte', 'documento', 'direccion', 'domicilio',
+        'nombre', 'apellido', 'apellidos', 'fullname', 'name', 'firstname', 'lastname',
+    }
+
+    _METADATA_TOKENS = {
+        # Universidad
+        'estudiante', 'alumno', 'carrera', 'programa', 'facultad', 'departamento', 'area', 'semestre', 'grupo', 'seccion',
+        # Hotel / reservas
+        'huesped', 'guest', 'reserva', 'reservation', 'booking', 'folio', 'confirmacion', 'confirmation',
+        'habitacion', 'room', 'check', 'checkin', 'checkout', 'llegada', 'salida',
+        'nacionalidad', 'nationality', 'pais', 'country',
+    }
+
+    _ID_TOKENS = {
+        'id', 'uuid', 'guid', 'codigo', 'code', 'folio', 'ticket', 'reserva', 'reservation', 'booking',
+        'matricula', 'cliente', 'customer', 'usuario', 'user',
+    }
+
+    @staticmethod
+    def _norm(text: str) -> str:
+        """Normaliza preservando separadores como espacios.
+
+        Nota: TextMiningEngine.normalize_text elimina separadores (p.ej. '_' -> ''),
+        lo que rompe patrones tipo 'Nombre_Huesped'. Aquí los convertimos a espacios.
+        """
+        if not text:
+            return ''
+        raw = str(text)
+        # Insertar espacios en límites camelCase y acrónimos: "nombreHuesped" -> "nombre Huesped",
+        # "IDReserva" -> "ID Reserva".
+        raw = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", raw)
+        raw = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", raw)
+        raw = raw.lower()
+        raw = re.sub(r"[_\-./\\]+", " ", raw)
+        raw = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+        raw = re.sub(r"[^a-z0-9]+", " ", raw)
+        return re.sub(r"\s+", " ", raw).strip()
+
+    @staticmethod
+    def _tokenize(normalized_text: str):
+        if not normalized_text:
+            return []
+        return [t for t in normalized_text.split(' ') if t]
+
+    @staticmethod
+    def _looks_like_phone(value: str) -> bool:
+        if not value:
+            return False
+        s = str(value).strip()
+        if not SensitiveMetadataDetector._PHONE_CANDIDATE_RE.search(s):
+            return False
+        digits = re.sub(r"\D", "", s)
+        return 7 <= len(digits) <= 15
+
+    @staticmethod
+    def _looks_like_identifier(value: str) -> bool:
+        """Detecta IDs típicos: mezcla alfanumérica o números largos.
+
+        Heurística para columnas como Reserva_ID/BookingCode aunque el label sea raro.
+        """
+        if value is None:
+            return False
+        s = str(value).strip()
+        if not s:
+            return False
+        # Normalizar separadores comunes en IDs
+        s_clean = re.sub(r"[\s_\-]+", "", s)
+        if len(s_clean) < 6 or len(s_clean) > 64:
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9]+", s_clean):
+            return False
+        has_alpha = bool(re.search(r"[A-Za-z]", s_clean))
+        has_digit = bool(re.search(r"\d", s_clean))
+        if has_alpha and has_digit:
+            return True
+        # Solo dígitos, pero largo (ej. folio numérico)
+        if (not has_alpha) and has_digit and len(s_clean) >= 8:
+            return True
+        return False
+
+    @classmethod
+    def detect(cls, question_text: str, *, is_demographic: bool = False, sample_values=None):
+        """Devuelve (is_sensitive, category, reason).
+
+        category: 'metadata' | 'pii'
+        """
+        if is_demographic:
+            return True, 'metadata', 'question.is_demographic'
+
+        normalized = cls._norm(question_text or '')
+        tokens = set(cls._tokenize(normalized))
+
+        # Match rápido por tokens (flexible a orden/guiones/underscores/camelCase parcialmente)
+        if tokens:
+            # Si incluye señales de PII, categorizar como PII
+            if tokens.intersection(cls._PII_TOKENS):
+                return True, 'pii', 'matched_sensitive_tokens'
+
+            # Señales de metadata
+            if tokens.intersection(cls._METADATA_TOKENS):
+                return True, 'metadata', 'matched_metadata_tokens'
+
+            # Patrones del tipo "reserva id" / "booking id" / "*_id"
+            if 'id' in tokens and tokens.intersection(cls._ID_TOKENS):
+                return True, 'metadata', 'matched_identifier_tokens'
+
+            # Tokens que terminan en id: reservaid, bookingid, clienteid
+            if any(t.endswith('id') and len(t) > 2 for t in tokens):
+                return True, 'metadata', 'matched_identifier_suffix'
+
+        if normalized:
+            for pat in cls._SENSITIVE_LABEL_PATTERNS:
+                if pat.search(normalized):
+                    # Heurística: algunos labels son claramente PII
+                    if any(k in normalized for k in ['correo', 'email', 'telefono', 'celular', 'whatsapp', 'dni', 'cedula', 'pasaporte', 'direccion', 'domicilio']):
+                        return True, 'pii', 'matched_sensitive_label'
+                    return True, 'metadata', 'matched_sensitive_label'
+
+        # Heurística por valores (cuando el label no lo delata)
+        if sample_values:
+            values = [str(v) for v in sample_values if v is not None]
+            if values:
+                email_hits = sum(1 for v in values if cls._EMAIL_RE.search(v))
+                phone_hits = sum(1 for v in values if cls._looks_like_phone(v))
+                id_hits = sum(1 for v in values if cls._looks_like_identifier(v))
+                n = len(values)
+                if email_hits >= 2 and (email_hits / max(n, 1)) >= 0.25:
+                    return True, 'pii', 'detected_email_values'
+                if phone_hits >= 2 and (phone_hits / max(n, 1)) >= 0.25:
+                    return True, 'pii', 'detected_phone_values'
+
+                # IDs: además exigir alta unicidad (típico de identificadores)
+                if id_hits >= 2 and (id_hits / max(n, 1)) >= 0.25:
+                    unique_ratio = len(set(values)) / max(n, 1)
+                    if unique_ratio >= 0.8:
+                        return True, 'metadata', 'detected_identifier_values'
+
+        return False, 'none', ''
+
+
+def _redact_analysis_item(item: dict, *, category: str, reason: str) -> None:
+    # Mantener total_respuestas/total_responses, pero sin exponer valores.
+    item['redacted'] = True
+    item['insight'] = (
+        "Pregunta identificada como metadato/dato sensible; "
+        "se omitieron detalles por privacidad."
+    )
+    item['insight_data'] = {
+        'type': 'sensitive',
+        'category': category,
+        'reason': reason,
+        'redacted': True,
+    }
+    item['chart_labels'] = []
+    item['chart_data'] = []
+    item['opciones'] = []
+    item['samples_texto'] = []
+    item['top_responses'] = []
+    item['chart'] = None
+
+
+def _apply_insufficient_data(item: dict, *, count: int, min_required: int) -> None:
+    # Estado seguro: no mostrar detalles ni valores individuales.
+    item['insufficient_data'] = True
+    item['insight'] = "Datos insuficientes para generar un análisis fiable."
+    item['insight_data'] = {
+        'type': 'insufficient_data',
+        'count': int(count or 0),
+        'min_required': int(min_required),
+        'key_insight': 'Datos insuficientes para análisis.',
+    }
+    item['chart_labels'] = []
+    item['chart_data'] = []
+    item['opciones'] = []
+    item['samples_texto'] = []
+    item['top_responses'] = []
+    item['chart'] = None
+
 # --- 3. SERVICIO PRINCIPAL ---
 
 class SurveyAnalysisService:
@@ -602,6 +859,14 @@ class SurveyAnalysisService:
         tone = config.get('tone', 'FORMAL').upper()
         include_quotes = config.get('include_quotes', True)
         include_charts = True if include_charts is None else bool(include_charts)
+
+        # Política de muestra mínima para mostrar insights/gráficas.
+        # Si hay pocas respuestas, se devuelve estructura pero sin detalles.
+        min_samples = int(config.get('min_samples') or 5)
+        min_samples_text = int(config.get('min_samples_text') or min_samples)
+        min_samples_choice = int(config.get('min_samples_choice') or min_samples)
+        min_samples_numeric = int(config.get('min_samples_numeric') or min_samples)
+        min_samples_global_kpi = int(config.get('min_samples_global_kpi') or min_samples)
         
         if cache_key is None:
             # OPT: usar una sola query (aggregate) para total + last_id.
@@ -611,7 +876,13 @@ class SurveyAnalysisService:
             )()
             total = int(agg.get('total') or 0)
             last_id = int(agg.get('last_id') or 0)
-            cache_key = f"analysis_v20_ultra:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}:charts={int(include_charts)}"
+            cache_key = (
+                f"analysis_v22_privacy_samples:{survey.id}:{total}:{last_id}:{tone}:{include_quotes}:"
+                f"charts={int(include_charts)}:min={min_samples}"
+            )
+
+        # Asegura bust de caché aun si el caller pasa cache_key.
+        cache_key = f"{cache_key}:privacy_v1:min={min_samples}"
             
         cached = cache.get(cache_key)
         if cached: return cached
@@ -648,6 +919,21 @@ class SurveyAnalysisService:
                 item['total_respuestas'] = st.get('count', 0)
                 # Compat: export/templates suelen esperar total_responses
                 item['total_responses'] = item['total_respuestas']
+
+                is_demo_flag = bool(getattr(q, 'is_demographic', False))
+                is_sensitive, category, reason = SensitiveMetadataDetector.detect(
+                    q.text, is_demographic=is_demo_flag
+                )
+                item['is_demographic'] = is_demo_flag
+                if is_sensitive:
+                    _redact_analysis_item(item, category=category, reason=reason)
+                    analysis_data.append(item)
+                    continue
+
+                if item['total_respuestas'] < min_samples_numeric:
+                    _apply_insufficient_data(item, count=item['total_respuestas'], min_required=min_samples_numeric)
+                    analysis_data.append(item)
+                    continue
                 if q.id == main_satisfaction_qid:
                     for d in raw_dist:
                         v = d.get('value', None)
@@ -659,7 +945,7 @@ class SurveyAnalysisService:
                 item['chart_labels'], item['chart_data'] = SurveyAnalysisService._optimize_chart_data(raw_dist, is_numeric=True)
                 item['tipo_display'] = 'bar'
                 
-                is_demo = getattr(q, 'is_demographic', False) or (q.text and 'edad' in q.text.lower())
+                is_demo = is_demo_flag or (q.text and 'edad' in q.text.lower())
                 narrative = NumericNarrative.analyze(st['avg'], st['max'], min_val=st['min'], stats_dist=raw_dist, tone=tone, is_demographic=is_demo)
                 item['insight'] = narrative
                 # Compat: algunos templates esperan keys avg/max/min/trend_delta
@@ -682,9 +968,28 @@ class SurveyAnalysisService:
 
             elif q.id in text_responses:
                 texts = text_responses[q.id]
-                topics, sentiment = TextMiningEngine.extract_topics_and_sentiment(texts)
                 item['total_respuestas'] = len(texts)
                 item['total_responses'] = item['total_respuestas']
+
+                is_demo_flag = bool(getattr(q, 'is_demographic', False))
+                is_sensitive, category, reason = SensitiveMetadataDetector.detect(
+                    q.text,
+                    is_demographic=is_demo_flag,
+                    sample_values=texts[:20],
+                )
+                item['is_demographic'] = is_demo_flag
+                if is_sensitive:
+                    _redact_analysis_item(item, category=category, reason=reason)
+                    analysis_data.append(item)
+                    continue
+
+                if item['total_respuestas'] < min_samples_text:
+                    # Evitar mostrar citas/quotes con pocas respuestas.
+                    _apply_insufficient_data(item, count=item['total_respuestas'], min_required=min_samples_text)
+                    analysis_data.append(item)
+                    continue
+
+                topics, sentiment = TextMiningEngine.extract_topics_and_sentiment(texts)
                 item['top_responses'] = texts[:5]
                 item['samples_texto'] = texts[:5]
                 item['tipo_display'] = 'text'
@@ -704,6 +1009,25 @@ class SurveyAnalysisService:
                 total_q = sum(d['count'] for d in raw_dist)
                 item['total_respuestas'] = total_q
                 item['total_responses'] = item['total_respuestas']
+
+                is_demo_flag = bool(getattr(q, 'is_demographic', False))
+                sample_opts = [d.get('option') for d in (raw_dist or [])][:20]
+                is_sensitive, category, reason = SensitiveMetadataDetector.detect(
+                    q.text,
+                    is_demographic=is_demo_flag,
+                    sample_values=sample_opts,
+                )
+                item['is_demographic'] = is_demo_flag
+                if is_sensitive:
+                    _redact_analysis_item(item, category=category, reason=reason)
+                    analysis_data.append(item)
+                    continue
+
+                if item['total_respuestas'] < min_samples_choice:
+                    _apply_insufficient_data(item, count=item['total_respuestas'], min_required=min_samples_choice)
+                    analysis_data.append(item)
+                    continue
+
                 item['chart_labels'], item['chart_data'] = SurveyAnalysisService._optimize_chart_data(raw_dist, is_numeric=False)
                 item['opciones'] = [{'label': d['option'], 'count': d['count'], 'percent': (d['count']/total_q)*100 if total_q else 0} for d in raw_dist]
                 chart_type = 'bar' if len(item['chart_labels']) > 4 else 'doughnut'
@@ -748,10 +1072,16 @@ class SurveyAnalysisService:
 
             analysis_data.append(item)
 
-        kpi = round((satisfaction_sum / satisfaction_count), 1) if satisfaction_count > 0 else 0
+        kpi = (
+            round((satisfaction_sum / satisfaction_count), 1)
+            if satisfaction_count >= min_samples_global_kpi
+            else None
+        )
         evolution = await sync_to_async(TimelineEngine.analyze_evolution, thread_sensitive=True)(responses_queryset)
         result = {
             'analysis_data': analysis_data, 'kpi_prom_satisfaccion': kpi,
+            'kpi_satisfaction_count': satisfaction_count,
+            'kpi_min_required': min_samples_global_kpi,
             'nps_data': {'score': None}, 'heatmap_image': None, 'total_respuestas': await sync_to_async(responses_queryset.count, thread_sensitive=True)(),
             'evolution': evolution
         }
@@ -828,7 +1158,7 @@ class SurveyAnalysisService:
             return {'error': 'Pandas no está disponible para generar tablas cruzadas.'}
         
         # Cache key único
-        cache_key = f"crosstab_v3_{survey.id}_{row_id}_{col_id}_{hash(str(queryset.query)) if queryset else 'all'}"
+        cache_key = f"crosstab_v4_privacy_{survey.id}_{row_id}_{col_id}_{hash(str(queryset.query)) if queryset else 'all'}"
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -840,6 +1170,17 @@ class SurveyAnalysisService:
             
             if not row_question or not col_question:
                 return {'error': 'Una o ambas preguntas no existen.'}
+
+            row_sensitive, _, _ = SensitiveMetadataDetector.detect(
+                row_question.text,
+                is_demographic=bool(getattr(row_question, 'is_demographic', False)),
+            )
+            col_sensitive, _, _ = SensitiveMetadataDetector.detect(
+                col_question.text,
+                is_demographic=bool(getattr(col_question, 'is_demographic', False)),
+            )
+            if row_sensitive or col_sensitive:
+                return {'error': 'Tabla cruzada no disponible para preguntas de metadatos/datos sensibles.'}
             
             # Usar queryset o todos los responses
             if queryset is None:

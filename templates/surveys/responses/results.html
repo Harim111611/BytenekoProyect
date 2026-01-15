@@ -254,7 +254,11 @@
     <div class="row g-4 mb-5">
         <div class="col-12 col-xl-4">
               <div class="card kpi-card-modern bk-kpi-border-primary shadow-lg h-100 rounded-4 p-4 position-relative overflow-hidden d-flex flex-column">
-                {% widthratio kpi_score 10 100 as kpi_percent %}
+                {% if kpi_has_data %}
+                    {% widthratio kpi_score 10 100 as kpi_percent %}
+                {% else %}
+                    {% widthratio 0 10 100 as kpi_percent %}
+                {% endif %}
 
                 <div class="d-flex align-items-start justify-content-between gap-3 mb-2">
                     <div>
@@ -267,14 +271,22 @@
                 </div>
 
                 <div class="d-flex align-items-end mt-3">
-                    <span class="display-2 fw-bold bk-gradient-text">{{ kpi_score }}</span>
+                    <span class="display-2 fw-bold bk-gradient-text">{% if kpi_has_data %}{{ kpi_score }}{% else %}—{% endif %}</span>
                     <span class="fs-4 ms-2 opacity-50 text-muted">/ 10</span>
                 </div>
 
                 <div class="mt-2">
                     <div class="d-flex justify-content-between align-items-center small text-muted">
-                        <span class="opacity-75">{{ kpi_percent }}% del máximo</span>
-                        {% if kpi_score >= 8 %}
+                        <span class="opacity-75">
+                            {% if kpi_has_data %}
+                                {{ kpi_percent }}% del máximo
+                            {% else %}
+                                Sin datos suficientes{% if kpi_min_required %} (mínimo {{ kpi_min_required }}){% endif %}
+                            {% endif %}
+                        </span>
+                        {% if not kpi_has_data %}
+                            <span class="badge bg-light text-muted border rounded-pill">Sin datos</span>
+                        {% elif kpi_score >= 8 %}
                             <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 rounded-pill">Excelente</span>
                         {% elif kpi_score >= 6 %}
                             <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill">Bueno</span>
@@ -297,6 +309,11 @@
                         <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-10 rounded-pill px-3 py-2">
                             <i class="bi bi-people-fill me-1"></i> {{ total_respuestas|intcomma }} respuestas
                         </span>
+                        {% if kpi_has_data %}
+                        <span class="badge bg-light text-muted border border-opacity-10 rounded-pill px-3 py-2">
+                            <i class="bi bi-check2-circle me-1"></i> Basado en {{ kpi_count|default:0 }} respuestas
+                        </span>
+                        {% endif %}
                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill px-3 py-2">
                             <i class="bi bi-speedometer2 me-1"></i> Indicador global
                         </span>
@@ -314,7 +331,16 @@
                     </span>
                 </div>
                 <div class="chart-surface chart-pad bk-chart-280">
-                    <canvas id="evolutionChart"></canvas>
+                    <div id="evolutionChartWrapper" style="position: relative; height: 100%;">
+                        <canvas id="evolutionChart"></canvas>
+                        <div id="evolutionEmptyState" class="h-100 w-100 d-none align-items-center justify-content-center text-center">
+                            <div class="text-muted opacity-75">
+                                <i class="bi bi-graph-up fs-1 d-block mb-2"></i>
+                                <div class="fw-semibold">Tendencia no disponible</div>
+                                <small id="evolutionEmptyStateText">Se necesitan al menos 2 días con respuestas.</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -709,14 +735,36 @@ document.addEventListener('DOMContentLoaded', function () {
     // ==========================================
     const evolutionData = (typeof evolution_chart !== 'undefined') ? evolution_chart : {{ evolution_chart|default:'{"labels":[],"data":[]}'|safe }};
     const ctxEvolution = document.getElementById('evolutionChart');
-    if (ctxEvolution && evolutionData && evolutionData.labels && evolutionData.labels.length > 0) {
+    const evolutionWrapper = document.getElementById('evolutionChartWrapper');
+    const evolutionEmpty = document.getElementById('evolutionEmptyState');
+    const evolutionEmptyText = document.getElementById('evolutionEmptyStateText');
+
+    const evolutionLabels = (evolutionData && evolutionData.labels) ? evolutionData.labels : [];
+    const evolutionSeries = (evolutionData && evolutionData.data) ? evolutionData.data : [];
+
+    // Política UI: para hablar de "tendencia" necesitamos al menos 2 puntos.
+    if (evolutionWrapper && evolutionEmpty) {
+        const points = Array.isArray(evolutionLabels) ? evolutionLabels.length : 0;
+        if (points < 2) {
+            if (ctxEvolution) ctxEvolution.classList.add('d-none');
+            evolutionEmpty.classList.remove('d-none');
+            evolutionEmpty.classList.add('d-flex');
+            if (evolutionEmptyText) {
+                evolutionEmptyText.textContent = points === 0
+                    ? 'Aún no hay datos para mostrar la tendencia.'
+                    : 'Solo hay datos de un día; se necesitan al menos 2 días.';
+            }
+        }
+    }
+
+    if (ctxEvolution && evolutionData && Array.isArray(evolutionLabels) && evolutionLabels.length >= 2) {
         new Chart(ctxEvolution, {
             type: 'line',
             data: {
-                labels: evolutionData.labels,
+                labels: evolutionLabels,
                 datasets: [{
                     label: 'Respuestas',
-                    data: evolutionData.data,
+                    data: evolutionSeries,
                     fill: true,
                     backgroundColor: hexToRgba(theme().primary, 0.13),
                     borderColor: theme().primary,
