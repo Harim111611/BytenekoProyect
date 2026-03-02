@@ -105,8 +105,8 @@ def check_docker_containers():
             else:
                 print(f"✗ {container} NO está corriendo")
         
-    except Exception as e:
-        print(f"No se pudo verificar Docker: {e}")
+    except Exception:
+        print("No se pudo verificar Docker")
 
 
 def main():

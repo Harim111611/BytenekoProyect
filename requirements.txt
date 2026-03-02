@@ -1,5 +1,5 @@
 # Django Core
-Django==5.2.9
+Django==5.2.11
 python-decouple==3.8
 asgiref==3.10.0
 
@@ -24,7 +24,7 @@ brotli==1.2.0
 
 # Security & Rate Limiting
 django-ratelimit==4.1.0
-cryptography==46.0.3
+cryptography==46.0.5
 
 
 # Monitoring & Error Tracking
@@ -35,7 +35,7 @@ psutil==5.9.8
 gunicorn==23.0.0
 
 # Development Server
-Werkzeug==3.1.5
+Werkzeug==3.1.6
 django-sslserver==0.22
 
 # Storage (AWS S3 - Optional)
@@ -44,12 +44,12 @@ django-storages==1.14.6
 s3transfer==0.15.0
 
 # Reports & Data Processing
-weasyprint==66.0
+weasyprint==68.0
 python-pptx==1.0.2
 pandas==2.3.3
 seaborn==0.13.2
 matplotlib==3.10.7
-pillow==12.0.0
+pillow==12.1.1
 xlsxwriter==3.2.9
 
 # Optional C++ CSV optimizer (required if you compile/use cpp_csv)

@@ -50,11 +50,13 @@ def _run_import_job_by_id(job_id: int) -> dict:
         job.save(update_fields=["survey", "total_rows", "processed_rows", "status", "updated_at"])
 
         return {"success": True, "total_rows": total_rows, "survey_id": survey.id}
-    except Exception as exc:
+    except Exception:
+        logger.exception("_run_import_job_by_id failed", extra={'job_id': job_id})
+        safe_error = "Error interno procesando archivo de importación."
         job.status = "failed"
-        job.error_message = str(exc)
+        job.error_message = safe_error
         job.save(update_fields=["status", "error_message", "updated_at"])
-        return {"success": False, "error": str(exc)}
+        return {"success": False, "error": safe_error}
 
 
 @shared_task(bind=True)
@@ -71,7 +73,7 @@ def process_survey_import(self, survey_id: int = None, file_path: str = None, fi
         return _run_import_job_by_id(int(survey_id))
 
     log_system_stats()
-    logger.info(f"[TASK][IMPORT] Iniciando para encuesta {survey_id} desde {file_path}")
+    logger.info("[TASK][IMPORT] Iniciando para encuesta %s desde %s", survey_id, file_path)
     
     # Importación local para evitar ciclos y asegurar carga de apps
     from surveys.models import Survey
@@ -85,7 +87,7 @@ def process_survey_import(self, survey_id: int = None, file_path: str = None, fi
 
         # Si retorna dict con errores de validación, propagarlo
         if isinstance(result, dict) and not result.get('success', True):
-            logger.error(f"[TASK][IMPORT][VALIDATION] Errores: {result.get('validation_errors', [])}")
+            logger.error("[TASK][IMPORT][VALIDATION] Errores: %s", result.get('validation_errors', []))
             return {
                 'status': 'FAILURE',
                 'error': result.get('error', 'Errores de validación en el archivo CSV.'),
@@ -93,7 +95,11 @@ def process_survey_import(self, survey_id: int = None, file_path: str = None, fi
             }
 
         total_rows, imported_rows = result
-        logger.info(f"[TASK][IMPORT] Éxito. Filas CSV: {total_rows}, Respuestas insertadas: {imported_rows}")
+        logger.info(
+            "[TASK][IMPORT] Éxito. Filas CSV: %s, Respuestas insertadas: %s",
+            total_rows,
+            imported_rows,
+        )
 
         return {
             'status': 'SUCCESS',
@@ -108,8 +114,8 @@ def process_survey_import(self, survey_id: int = None, file_path: str = None, fi
         logger.error(msg)
         raise Exception(msg) from None
         
-    except Exception as e:
-        logger.error(f"[TASK][IMPORT] Fallo crítico: {e}", exc_info=True)
+    except Exception:
+        logger.exception("[TASK][IMPORT] Fallo crítico")
         raise
         
     finally:
@@ -118,8 +124,8 @@ def process_survey_import(self, survey_id: int = None, file_path: str = None, fi
             try:
                 os.remove(file_path)
                 logger.debug(f"Archivo temporal eliminado: {file_path}")
-            except Exception as e:
-                logger.warning(f"No se pudo eliminar {file_path}: {e}")
+            except Exception:
+                logger.warning("No se pudo eliminar %s", file_path, exc_info=True)
         
         # Liberar memoria explícitamente (MAGIA NEGRA™)
         gc.collect()
@@ -136,7 +142,7 @@ def delete_surveys_task(survey_ids: list, user_id: int = None):
     if not survey_ids:
         return {'status': 'SUCCESS', 'deleted': 0}
 
-    logger.info(f"[TASK][DELETE] Iniciando borrado de {len(survey_ids)} encuestas")
+    logger.info("[TASK][DELETE] Iniciando borrado de %s encuestas", len(survey_ids))
     result = fast_delete_surveys(survey_ids)
 
     # IMPORTANTE: fast_delete_surveys usa SQL directo y no dispara señales.
@@ -150,8 +156,8 @@ def delete_surveys_task(survey_ids: list, user_id: int = None):
             pass
     
     if result['status'] == 'SUCCESS':
-        logger.info(f"[TASK][DELETE] ✅ Completado - {result['deleted']} encuestas eliminadas")
+        logger.info("[TASK][DELETE] ✅ Completado - %s encuestas eliminadas", result['deleted'])
     else:
-        logger.error(f"[TASK][DELETE] ❌ Error: {result.get('error', 'Unknown')}")
+        logger.error("[TASK][DELETE] ❌ Error: %s", result.get('error', 'Unknown'))
     
     return result

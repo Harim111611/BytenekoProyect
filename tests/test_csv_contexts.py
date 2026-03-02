@@ -28,8 +28,8 @@ def analyze_csv_structure(csv_path):
             break
         except (UnicodeDecodeError, UnicodeError):
             continue
-        except Exception as e:
-            print(f"❌ Error con codificación {encoding}: {e}")
+        except Exception:
+            print(f"❌ Error con codificación {encoding}")
             continue
     
     if df is None:

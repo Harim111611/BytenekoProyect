@@ -33,7 +33,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
     except (ValueError, TypeError):
         return {'status': 'FAILURE', 'error': 'IDs inválidos'}
 
-    logger.info(f"[DELETE][FAST] Eliminando {len(ids)} encuestas con SQL directo")
+    logger.info("[DELETE][FAST] Eliminando %s encuestas con SQL directo", len(ids))
 
     try:
         with transaction.atomic():
@@ -48,7 +48,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     )
                 """, (ids,))
                 qr_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminadas {qr_deleted} respuestas individuales")
+                logger.info("[DELETE][FAST] Eliminadas %s respuestas individuales", qr_deleted)
                 
                 # 2. SurveyResponse (respuestas completas)
                 cursor.execute(
@@ -56,7 +56,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     (ids,)
                 )
                 sr_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminadas {sr_deleted} respuestas de encuesta")
+                logger.info("[DELETE][FAST] Eliminadas %s respuestas de encuesta", sr_deleted)
                 
                 # 3. AnalysisSegment (segmentos de análisis)
                 cursor.execute(
@@ -64,7 +64,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     (ids,)
                 )
                 as_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminados {as_deleted} segmentos de análisis")
+                logger.info("[DELETE][FAST] Eliminados %s segmentos de análisis", as_deleted)
                 
                 # 4. AnswerOption (opciones de preguntas)
                 cursor.execute("""
@@ -74,7 +74,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     )
                 """, (ids,))
                 ao_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminadas {ao_deleted} opciones de respuesta")
+                logger.info("[DELETE][FAST] Eliminadas %s opciones de respuesta", ao_deleted)
                 
                 # 5. Question (preguntas)
                 cursor.execute(
@@ -82,7 +82,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     (ids,)
                 )
                 q_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminadas {q_deleted} preguntas")
+                logger.info("[DELETE][FAST] Eliminadas %s preguntas", q_deleted)
                 
                 # 6. ImportJob (opcional, jobs de importación)
                 cursor.execute(
@@ -90,7 +90,7 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     (ids,)
                 )
                 ij_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminados {ij_deleted} import jobs")
+                logger.info("[DELETE][FAST] Eliminados %s import jobs", ij_deleted)
                 
                 # 7. Survey (finalmente, las encuestas)
                 cursor.execute(
@@ -98,9 +98,13 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
                     (ids,)
                 )
                 s_deleted = cursor.rowcount
-                logger.info(f"[DELETE][FAST] Eliminadas {s_deleted} encuestas")
+                logger.info("[DELETE][FAST] Eliminadas %s encuestas", s_deleted)
                 
-        logger.info(f"[DELETE][FAST] ✅ Completado - Total: {s_deleted} encuestas + {qr_deleted + sr_deleted} respuestas")
+        logger.info(
+            "[DELETE][FAST] ✅ Completado - Total: %s encuestas + %s respuestas",
+            s_deleted,
+            qr_deleted + sr_deleted,
+        )
         return {
             'status': 'SUCCESS', 
             'deleted': s_deleted,
@@ -115,9 +119,9 @@ def fast_delete_surveys(survey_ids: List[int]) -> dict:
             }
         }
 
-    except Exception as e:
-        logger.error(f"[DELETE][FAST] ❌ Error: {e}", exc_info=True)
-        return {'status': 'FAILURE', 'error': str(e)}
+    except Exception:
+        logger.exception("[DELETE][FAST] ❌ Error")
+        return {'status': 'FAILURE', 'error': 'Error interno durante eliminación rápida'}
 
 
 def fast_delete_single_survey(survey_id: int) -> dict:

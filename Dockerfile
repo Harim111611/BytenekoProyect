@@ -2,8 +2,8 @@
 FROM python:3.11-slim-bookworm
 
 # Establecer variables de entorno para evitar prompts interactivos
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # Definir el directorio de trabajo dentro del contenedor
 WORKDIR /usr/src/app
@@ -57,11 +57,17 @@ COPY . /usr/src/app/
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Crear usuario no-root para ejecución en runtime
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser && chown -R appuser:appgroup /usr/src/app
+
 # Instalar netcat para verificar conexiones
 RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Exponer el puerto de Django
 EXPOSE 8000
+
+# Ejecutar la app como usuario no privilegiado
+USER appuser
 
 # Usar el script de entrada
 ENTRYPOINT ["docker-entrypoint.sh"]

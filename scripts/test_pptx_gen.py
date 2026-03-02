@@ -74,8 +74,8 @@ def run_test():
             f.write(pdf_buffer.getvalue())
         print(f"Saved to {output_path}")
         
-    except Exception as e:
-        print(f"FAILED: {e}")
+    except Exception:
+        print("FAILED: error generando PPTX")
         import traceback
         traceback.print_exc()
 

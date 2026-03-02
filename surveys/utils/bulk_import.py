@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 try:
     from tools.cpp_csv import pybind_csv as cpp_csv
 except ImportError as e:
-    logger.error(f"CRÍTICO: No se pudo cargar cpp_csv: {e}")
+    logger.exception("CRÍTICO: No se pudo cargar cpp_csv")
     raise RuntimeError(
         "cpp_csv es requerido para importaciones. "
         "Asegúrate de que esté compilado en tools/cpp_csv/"
@@ -210,7 +210,7 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     import gc  # Para liberar memoria explícitamente
     
     # 1. Lectura con C++ - Usar sampling para preparación inicial
-    logger.info(f"[IMPORT][MEMORY] Iniciando importación optimizada para 4GB")
+    logger.info("[IMPORT][MEMORY] Iniciando importación optimizada para 4GB")
     
     try:
         # Primero leer solo una muestra para analizar estructura
@@ -223,8 +223,8 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
             
         headers = list(sample_rows[0].keys())
         
-    except Exception as e:
-        logger.error(f"[IMPORT][ERROR] Error leyendo CSV con módulo C++: {e}")
+    except Exception:
+        logger.exception("[IMPORT][ERROR] Error leyendo CSV con módulo C++")
         raise
 
     # 2. Detectar columna de fecha desde la muestra
@@ -235,7 +235,7 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
             break
             
     # 3. Preparar Estructura (Preguntas y Opciones) - solo con muestra
-    logger.info(f"[IMPORT][PREP] Preparando estructura con muestra de {len(sample_rows)} filas")
+    logger.info("[IMPORT][PREP] Preparando estructura con muestra de %s filas", len(sample_rows))
     questions_map = _prepare_questions_map(survey, headers, sample_rows, date_column)
     
     # Liberar memoria de la muestra
@@ -247,15 +247,15 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
     total_rows_processed = 0
     final_rows_inserted = 0
     
-    logger.info(f"[IMPORT][START] Procesando archivo completo con chunks de {chunk_size}")
+    logger.info("[IMPORT][START] Procesando archivo completo con chunks de %s", chunk_size)
     
     # Leer archivo completo de una vez (cpp_csv es eficiente)
     try:
         all_rows = cpp_csv.read_csv_dicts(file_path)
         total_rows = len(all_rows)
-        logger.info(f"[IMPORT][LOADED] {total_rows} filas cargadas desde CSV")
-    except Exception as e:
-        logger.error(f"[IMPORT][ERROR] Error en lectura completa: {e}")
+        logger.info("[IMPORT][LOADED] %s filas cargadas desde CSV", total_rows)
+    except Exception:
+        logger.exception("[IMPORT][ERROR] Error en lectura completa")
         raise
     
     # Procesar en chunks para controlar memoria (MAGIA NEGRA™)
@@ -263,7 +263,12 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
         chunk_rows = all_rows[i : i + chunk_size]
         chunk_size_actual = len(chunk_rows)
         
-        logger.info(f"[IMPORT][CHUNK {chunk_idx}] Procesando {chunk_size_actual} filas (offset {i})")
+        logger.info(
+            "[IMPORT][CHUNK %s] Procesando %s filas (offset %s)",
+            chunk_idx,
+            chunk_size_actual,
+            i,
+        )
         
         with transaction.atomic():
             # A. Crear SurveyResponses con bulk_create optimizado
@@ -346,7 +351,7 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
                     batch_qr_count += 1
 
             final_rows_inserted += batch_qr_count
-            logger.info(f"[IMPORT][CHUNK {chunk_idx}] Insertadas {batch_qr_count} respuestas")
+            logger.info("[IMPORT][CHUNK %s] Insertadas %s respuestas", chunk_idx, batch_qr_count)
             
             # C. Ejecutar COPY con acceso al cursor nativo (MAGIA NEGRA™)
             qr_buffer.seek(0)
@@ -367,8 +372,8 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
                         logger.error("[IMPORT][ERROR] Driver no soporta COPY masivo")
                         raise NotImplementedError("Driver incompatible con COPY")
                         
-                except Exception as e:
-                    logger.error(f"[IMPORT][ERROR] Error crítico en COPY: {e}")
+                except Exception:
+                    logger.exception("[IMPORT][ERROR] Error crítico en COPY")
                     raise
         
         # Liberar memoria después de cada chunk (MAGIA NEGRA™)
@@ -376,11 +381,16 @@ def bulk_import_responses_postgres(file_path: str, survey) -> Tuple[int, int]:
         del chunk_rows, sr_objects, created_srs
         gc.collect()
         
-        logger.info(f"[IMPORT][PROGRESS] {total_rows_processed}/{total_rows} filas procesadas ({(total_rows_processed/total_rows)*100:.1f}%)")
+        logger.info(
+            "[IMPORT][PROGRESS] %s/%s filas procesadas (%.1f%%)",
+            total_rows_processed,
+            total_rows,
+            (total_rows_processed / total_rows) * 100,
+        )
 
     # Liberar memoria final
     del all_rows
     gc.collect()
     
-    logger.info(f"[IMPORT][COMPLETE] Total: {total_rows} filas, {final_rows_inserted} respuestas insertadas")
+    logger.info("[IMPORT][COMPLETE] Total: %s filas, %s respuestas insertadas", total_rows, final_rows_inserted)
     return total_rows, final_rows_inserted

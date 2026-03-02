@@ -54,8 +54,8 @@ def analyze_csv(path):
                 max_val = vals.max()
                 print(f'\n--- Numérico: {col} ---')
                 print(NumericNarrative.analyze(avg, max_val, n_sentences=3))
-            except Exception as e:
-                print(f'Error numérico en {col}: {e}')
+            except Exception:
+                print(f'Error numérico en {col}')
         elif col_type == 'categorical':
             dist = values.value_counts().reset_index()
             dist.columns = ['option', 'count']
