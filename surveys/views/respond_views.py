@@ -199,8 +199,11 @@ async def respond_survey_view(request, public_id):
                 f"public_id={survey.public_id}&status={final_status}&success=1"
             )
             return await redirect_async(url)
-        except Exception as e:
-            logger.exception("Error respondiendo encuesta %s: %s", public_id, e)
+        except Exception:
+            logger.exception(
+                "Error respondiendo encuesta",
+                extra={"public_id": public_id},
+            )
             await sync_to_async(messages.error, thread_sensitive=True)(request, "Error guardando respuesta. Intenta nuevamente.")
     render_async = sync_to_async(render, thread_sensitive=True)
     return await render_async(request, "surveys/responses/fill.html", context)

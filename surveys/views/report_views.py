@@ -33,6 +33,23 @@ CACHE_TIMEOUT_STATS = 300
 CACHE_TIMEOUT_ANALYSIS = 1800
 
 
+async def _redirect_if_not_authenticated(request):
+    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
+    if not is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    return None
+
+
+async def _get_authorized_survey(request, public_id):
+    survey = await sync_to_async(
+        lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
+        thread_sensitive=True
+    )()
+    user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
+    await PermissionHelper.verify_survey_access(survey, user)
+    return survey, user
+
+
 def _resolve_request_user(request):
     user = request.user
     # Force evaluation of Django's SimpleLazyObject in a sync/thread context
@@ -193,10 +210,9 @@ async def survey_results_view(request, public_id):
     Vista principal del Dashboard de Resultados.
     Orquesta los datos del Service y los pasa al Template.
     """
-    # Manual authentication check for async view
-    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
-    if not is_authenticated:
-        return redirect_to_login(request.get_full_path())
+    redirect_response = await _redirect_if_not_authenticated(request)
+    if redirect_response:
+        return redirect_response
     try:
         survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
             Survey.objects.select_related('author').prefetch_related('questions__options'),
@@ -301,8 +317,13 @@ async def survey_results_view(request, public_id):
                 logger.info(f"Crosstab procesado para template. Headers: {crosstab_data.get('headers') if crosstab_data else 'None'}")
             else:
                 logger.error(f"Error en crosstab: {raw_crosstab.get('error') if raw_crosstab else 'raw_crosstab es None'}")
-        except Exception as e:
-            logger.error(f"Excepción generando crosstab: {str(e)}", exc_info=True)
+        except Exception:
+            logger.exception(
+                "Excepción generando crosstab",
+                public_id=getattr(survey, 'public_id', None),
+                crosstab_row=crosstab_row,
+                crosstab_col=crosstab_col,
+            )
     elif crosstab_row or crosstab_col:
         logger.warning(f"Crosstab incompleto. crosstab_row={crosstab_row}, crosstab_col={crosstab_col}, iguales={crosstab_row == crosstab_col}")
 
@@ -341,16 +362,11 @@ async def survey_results_view(request, public_id):
 
 async def report_preview(request, public_id):
     """Vista AJAX para preview de reportes."""
-    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
-    if not is_authenticated:
-        return redirect_to_login(request.get_full_path())
+    redirect_response = await _redirect_if_not_authenticated(request)
+    if redirect_response:
+        return redirect_response
     try:
-        survey = await sync_to_async(
-              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-            thread_sensitive=True
-        )()
-        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-        await PermissionHelper.verify_survey_access(survey, user)
+        survey, user = await _get_authorized_survey(request, public_id)
         start = request.POST.get('start_date') or request.GET.get('start_date')
         end = request.POST.get('end_date') or request.GET.get('end_date')
         window = request.POST.get('window_days')
@@ -437,17 +453,17 @@ async def report_preview(request, public_id):
         }, request=request)
         return JsonResponse({'success': True, 'html': html})
         
-    except Exception as e:
-        logger.exception(f"Error generando preview reporte: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error generando preview reporte", public_id=public_id)
+        return JsonResponse({'error': 'Error interno generando vista previa'}, status=500)
 
 
 @ratelimit(key='user', rate='10/h', method='GET', block=True)
 async def export_survey_csv_view(request, public_id):
     """Exportar resultados de encuesta a CSV."""
-    is_authenticated = await sync_to_async(lambda: request.user.is_authenticated)()
-    if not is_authenticated:
-        return redirect_to_login(request.get_full_path())
+    redirect_response = await _redirect_if_not_authenticated(request)
+    if redirect_response:
+        return redirect_response
     try:
         survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=public_id, author=request.user)
     except Http404:
@@ -493,28 +509,21 @@ async def export_survey_csv_view(request, public_id):
 async def survey_analysis_ajax(request, public_id):
     """API para obtener datos JSON puros (útil para recargar gráficas)."""
     try:
-        survey = await sync_to_async(
-              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-            thread_sensitive=True
-        )()
-        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-        await PermissionHelper.verify_survey_access(survey, user)
+        survey, _user = await _get_authorized_survey(request, public_id)
         respuestas_qs = await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)()
         analysis = await SurveyAnalysisService.get_analysis_data(survey, respuestas_qs, include_charts=True)
         safe_items = [x for x in (analysis.get('analysis_data') or []) if not x.get('redacted')]
         return JsonResponse({'success': True, 'analysis_data': safe_items}, encoder=DjangoJSONEncoder)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except PermissionDenied:
+        return JsonResponse({'error': 'No tienes permisos para acceder a esta encuesta.'}, status=403)
+    except Exception:
+        logger.exception("Error en survey_analysis_ajax", public_id=public_id)
+        return JsonResponse({'error': 'Error interno obteniendo análisis'}, status=500)
 
 async def api_crosstab_view(request, public_id):
     """API dedicada para cargar cruces de variables vía AJAX."""
     try:
-        survey = await sync_to_async(
-              lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-            thread_sensitive=True
-        )()
-        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-        await PermissionHelper.verify_survey_access(survey, user)
+        survey, _user = await _get_authorized_survey(request, public_id)
         row_id = request.GET.get('row')
         col_id = request.GET.get('col')
         if not row_id or not col_id:
@@ -529,18 +538,20 @@ async def api_crosstab_view(request, public_id):
             'chart_json': json.loads(chart_json) if chart_json else {}
         })
             
-    except Exception as e:
-        logger.error(f"Error crosstab api: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+    except PermissionDenied:
+        return JsonResponse({'error': 'No tienes permisos para acceder a esta encuesta.'}, status=403)
+    except Exception:
+        logger.exception(
+            "Error en api_crosstab_view",
+            public_id=public_id,
+            row_id=row_id,
+            col_id=col_id,
+        )
+        return JsonResponse({'error': 'Error interno generando cruce de variables'}, status=500)
 
 async def debug_analysis_view(request, public_id):
     """Vista de depuración para verificar qué está viendo el sistema."""
-    survey = await sync_to_async(
-        lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-        thread_sensitive=True
-    )()
-    user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-    await PermissionHelper.verify_survey_access(survey, user)
+    survey, _user = await _get_authorized_survey(request, public_id)
     analysis = await SurveyAnalysisService.get_analysis_data(
         survey,
         await sync_to_async(lambda: SurveyResponse.objects.filter(survey=survey), thread_sensitive=True)(),
@@ -598,12 +609,7 @@ async def change_survey_status(request, public_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     try:
-        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-        survey = await sync_to_async(
-            lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-            thread_sensitive=True
-        )()
-        await PermissionHelper.verify_survey_access(survey, user)
+        survey, _user = await _get_authorized_survey(request, public_id)
 
         data = json.loads(request.body)
         new_status = (data.get('status') or '').strip()
@@ -616,13 +622,17 @@ async def change_survey_status(request, public_id):
 
         return JsonResponse({'success': True, 'status': survey.status})
     except ValidationError as e:
-        return JsonResponse({'error': str(e)}, status=400)
-    except PermissionDenied as e:
-        return JsonResponse({'error': str(e)}, status=403)
+        error_message = 'Estado de encuesta inválido.'
+        if getattr(e, 'messages', None):
+            error_message = e.messages[0]
+        return JsonResponse({'error': error_message}, status=400)
+    except PermissionDenied:
+        return JsonResponse({'error': 'No tienes permisos para acceder a esta encuesta.'}, status=403)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error cambiando estado de encuesta", public_id=public_id)
+        return JsonResponse({'error': 'Error interno cambiando estado'}, status=500)
 
 async def save_analysis_segment_view(request, public_id):
     """Endpoint AJAX para guardar un segmento de análisis."""
@@ -630,12 +640,7 @@ async def save_analysis_segment_view(request, public_id):
         return JsonResponse({'error': 'POST required'}, status=405)
     
     try:
-        user = await sync_to_async(lambda: _resolve_request_user(request), thread_sensitive=True)()
-        survey = await sync_to_async(
-            lambda: get_object_or_404(Survey.objects.select_related('author'), public_id=public_id),
-            thread_sensitive=True
-        )()
-        await PermissionHelper.verify_survey_access(survey, user)
+        survey, user = await _get_authorized_survey(request, public_id)
         
         data = json.loads(request.body)
         segment_name = data.get('name', '').strip()
@@ -671,6 +676,6 @@ async def save_analysis_segment_view(request, public_id):
     
     except json.JSONDecodeError:
         return JsonResponse({'error': 'JSON inválido'}, status=400)
-    except Exception as e:
-        logger.error(f"Error saving segment: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error saving segment", public_id=public_id)
+        return JsonResponse({'error': 'Error interno guardando segmento'}, status=500)

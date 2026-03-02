@@ -106,9 +106,9 @@ def api_create_survey_from_json(request):
         return JsonResponse({'success': False, 'error': f"Error de validación: {e.message}"}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido en el cuerpo de la petición.'}, status=400)
-    except Exception as e:
-        logger.error(f"[CREATE_SURVEY][API_ERROR] {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': f"Error interno: {str(e)}"}, status=500)
+    except Exception:
+        logger.error("[CREATE_SURVEY][API_ERROR]", exc_info=True, user_id=request.user.id)
+        return JsonResponse({'success': False, 'error': 'Error interno creando encuesta'}, status=500)
 
 
 @login_required
@@ -157,7 +157,7 @@ def delete_task_status(request, task_id):
                      response_data['deleted_count'] = result.result[0]
             else:
                 # Si falló, result.info es la excepción
-                response_data['error'] = str(result.info)
+                response_data['error'] = 'La tarea falló durante el procesamiento.'
         else:
             # Estado PENDING o PROGRESS
             if result.info and isinstance(result.info, dict):
@@ -165,9 +165,9 @@ def delete_task_status(request, task_id):
         
         return JsonResponse(response_data)
         
-    except Exception as e:
-        logger.error(f"[TASK_STATUS_ERROR] Error consultando tarea {task_id}: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.error("[TASK_STATUS_ERROR] Error consultando tarea", exc_info=True, task_id=task_id)
+        return JsonResponse({'success': False, 'error': 'Error interno consultando estado de tarea'}, status=500)
 
 
 @login_required
@@ -200,7 +200,7 @@ def bulk_delete_surveys_view(request):
         base_qs = Survey.objects.filter(id__in=clean_ids, author=request.user)
         if base_qs.count() == 0:
             msg = 'No tienes permisos o las encuestas no existen.'
-            logger.error(f'[BULK_DELETE] {msg}')
+            logger.error('[BULK_DELETE] %s', msg)
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': msg}, status=403)
             messages.error(request, msg)
@@ -220,9 +220,9 @@ def bulk_delete_surveys_view(request):
         try:
             # .delay() es síncrono y bloqueante
             task_result = delete_surveys_task.delay(clean_ids, request.user.id)
-            logger.info(f'[BULK_DELETE][CELERY] Lanzada tarea {task_result.id} para borrar {len(clean_ids)} items.')
-        except Exception as e:
-            logger.warning(f"[BULK_DELETE][CELERY_UNAVAILABLE] Fallback: {e}")
+            logger.info('[BULK_DELETE][CELERY] Lanzada tarea %s para borrar %s items.', task_result.id, len(clean_ids))
+        except Exception:
+            logger.warning("[BULK_DELETE][CELERY_UNAVAILABLE] Fallback", exc_info=True)
 
         if task_result is None:
             # Fallback: usar eliminación SQL directa sin Celery
@@ -248,8 +248,8 @@ def bulk_delete_surveys_view(request):
                 else:
                     raise Exception(result.get('error', 'Error desconocido'))
                     
-            except Exception as e:
-                logger.error(f"[BULK_DELETE][SYNC_ERROR] {e}")
+            except Exception:
+                logger.error("[BULK_DELETE][SYNC_ERROR]", exc_info=True)
                 msg = 'Error al eliminar.'
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({'success': False, 'error': msg}, status=500)
@@ -269,8 +269,8 @@ def bulk_delete_surveys_view(request):
         messages.success(request, 'Procesando eliminación en segundo plano.')
         return HttpResponseRedirect(reverse('surveys:list'))
 
-    except Exception as e:
-        logger.error(f'[BULK_DELETE][UNHANDLED] {e}', exc_info=True)
+    except Exception:
+        logger.error('[BULK_DELETE][UNHANDLED]', exc_info=True)
         return JsonResponse({'success': False, 'error': 'Error inesperado en el borrado masivo.'}, status=500)
 
 
@@ -306,8 +306,8 @@ class SurveyListView(LoginRequiredMixin, EncuestaQuerysetMixin, ListView):
             if category: 
                 qs = qs.filter(category=category)
 
-        except Exception as e:
-            logger.warning(f"SurveyListView.get_queryset: Exception: {e}")
+        except Exception:
+            logger.warning("SurveyListView.get_queryset: Exception", exc_info=True)
             pass
         
         try:
@@ -436,7 +436,7 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
         survey_id = self.object.id
         survey_title = self.object.title
         
-        logger.info(f"[DELETE] Iniciando borrado para survey_id={survey_id}")
+        logger.info("[DELETE] Iniciando borrado para survey_id=%s", survey_id)
         
         try:
             # Intentar Celery primero
@@ -448,9 +448,9 @@ class SurveyDeleteView(LoginRequiredMixin, OwnerRequiredMixin, DeleteView):
             messages.success(request, f"Procesando eliminación de '{survey_title}'...")
             return HttpResponseRedirect(self.success_url)
             
-        except Exception as e:
+        except Exception:
             # Fallback: eliminación SQL directa inmediata
-            logger.warning(f"[DELETE] Celery no disponible, usando SQL directo: {e}")
+            logger.warning("[DELETE] Celery no disponible, usando SQL directo", exc_info=True)
             result = fast_delete_surveys([survey_id])
             
             if result['status'] == 'SUCCESS':

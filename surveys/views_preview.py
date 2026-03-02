@@ -1,14 +1,19 @@
 import os
 import tempfile
+import logging
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django_ratelimit.decorators import ratelimit
 
 # cpp_csv es obligatorio para importación/preview
 from tools.cpp_csv import pybind_csv as cpp_csv
 
+logger = logging.getLogger(__name__)
+
 @login_required
+@ratelimit(key='user_or_ip', rate='30/h', method='POST', block=True)
 def import_csv_preview_view(request):
     """Vista AJAX para generar preview del CSV antes de importar (usando cpp_csv)."""
     if request.method == 'POST' and request.FILES.get('csv_file'):
@@ -69,9 +74,9 @@ def import_csv_preview_view(request):
                 'columns': columns,
                 'sample_rows': sample_rows
             })
-        except Exception as e:
-            # En producción conviene no filtrar detalles; mantenemos el mensaje por compat.
-            return JsonResponse({'success': False, 'error': f'Error inesperado: {str(e)}'}, status=500)
+        except Exception:
+            logger.exception("Error generando preview de importación")
+            return JsonResponse({'success': False, 'error': 'Error interno generando preview'}, status=500)
         finally:
             if tmp_path:
                 try:

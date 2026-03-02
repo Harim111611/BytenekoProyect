@@ -27,17 +27,17 @@ async def update_question_view(request, pk):
             pk=pk,
         )
     except Http404:
-        logger.warning(f"Intento de actualizar pregunta inexistente: ID {pk} por usuario {request.user.username}")
+        logger.warning("Intento de actualizar pregunta inexistente: ID %s por usuario %s", pk, request.user.username)
         return JsonResponse({'success': False, 'error': 'Pregunta no encontrada'}, status=404)
     
     # Verificar permisos (solo el autor puede editar)
     if question.survey.author != request.user:
-        logger.warning(f"Usuario {request.user.username} intentó editar pregunta {pk} sin permisos")
+        logger.warning("Usuario %s intentó editar pregunta %s sin permisos", request.user.username, pk)
         return JsonResponse({'success': False, 'error': 'Sin permisos'}, status=403)
     
     # Validar que la encuesta esté en borrador
     if question.survey.status != 'draft':
-        logger.warning(f"Intento de editar pregunta {pk} de encuesta {question.survey.status} por {request.user.username}")
+        logger.warning("Intento de editar pregunta %s de encuesta %s por %s", pk, question.survey.status, request.user.username)
         return JsonResponse({
             'success': False, 
             'error': 'Solo se pueden editar preguntas en encuestas en estado borrador'
@@ -64,11 +64,11 @@ async def update_question_view(request, pk):
                                     order=idx
                                 )
         await update_question()
-        logger.info(f"Pregunta {pk} actualizada por usuario {request.user.username}")
+        logger.info("Pregunta %s actualizada por usuario %s", pk, request.user.username)
         return JsonResponse({'success': True})
-    except Exception as e:
-        logger.error(f"Error al actualizar pregunta {pk}: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error al actualizar pregunta %s", pk)
+        return JsonResponse({'success': False, 'error': 'Error interno actualizando pregunta'}, status=500)
 
 
 @login_required
@@ -81,17 +81,17 @@ async def delete_question_view(request, pk):
             pk=pk,
         )
     except Http404:
-        logger.warning(f"Intento de eliminar pregunta inexistente: ID {pk} por usuario {request.user.username}")
+        logger.warning("Intento de eliminar pregunta inexistente: ID %s por usuario %s", pk, request.user.username)
         return JsonResponse({'success': False, 'error': 'Pregunta no encontrada'}, status=404)
     
     # Verificar permisos
     if question.survey.author != request.user:
-        logger.warning(f"Usuario {request.user.username} intentó eliminar pregunta {pk} sin permisos")
+        logger.warning("Usuario %s intentó eliminar pregunta %s sin permisos", request.user.username, pk)
         return JsonResponse({'success': False, 'error': 'Sin permisos'}, status=403)
     
     # Validar que la encuesta esté en borrador
     if question.survey.status != 'draft':
-        logger.warning(f"Intento de eliminar pregunta {pk} de encuesta {question.survey.status} por {request.user.username}")
+        logger.warning("Intento de eliminar pregunta %s de encuesta %s por %s", pk, question.survey.status, request.user.username)
         return JsonResponse({
             'success': False, 
             'error': 'Solo se pueden eliminar preguntas en encuestas en estado borrador'
@@ -108,11 +108,11 @@ async def delete_question_view(request, pk):
                     q.order = idx
                     q.save(update_fields=["order"])
         await delete_and_reorder()
-        logger.info(f"Pregunta {pk} eliminada de encuesta {question.survey.id} por usuario {request.user.username} y preguntas reordenadas")
+        logger.info("Pregunta %s eliminada de encuesta %s por usuario %s y preguntas reordenadas", pk, question.survey.id, request.user.username)
         return JsonResponse({'success': True})
-    except Exception as e:
-        logger.error(f"Error al eliminar pregunta {pk}: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error al eliminar pregunta %s", pk)
+        return JsonResponse({'success': False, 'error': 'Error interno eliminando pregunta'}, status=500)
 
 
 @login_required
@@ -127,17 +127,17 @@ async def add_question_view(request, public_id):
             public_id=public_id,
         )
     except Http404:
-        logger.warning(f"Intento de agregar pregunta a encuesta inexistente: ID {public_id} por usuario {request.user.username}")
+        logger.warning("Intento de agregar pregunta a encuesta inexistente: ID %s por usuario %s", public_id, request.user.username)
         return JsonResponse({'success': False, 'error': 'Encuesta no encontrada'}, status=404)
     
     # Verificar permisos
     if survey.author != request.user:
-        logger.warning(f"Usuario {request.user.username} intentó agregar pregunta a encuesta {public_id} sin permisos")
+        logger.warning("Usuario %s intentó agregar pregunta a encuesta %s sin permisos", request.user.username, public_id)
         return JsonResponse({'success': False, 'error': 'Sin permisos'}, status=403)
     
     # Validar que la encuesta esté en borrador
     if survey.status != 'draft':
-        logger.warning(f"Intento de agregar pregunta a encuesta {survey.status} {public_id} por {request.user.username}")
+        logger.warning("Intento de agregar pregunta a encuesta %s %s por %s", survey.status, public_id, request.user.username)
         return JsonResponse({
             'success': False, 
             'error': 'Solo se pueden agregar preguntas a encuestas en estado borrador'
@@ -169,11 +169,11 @@ async def add_question_view(request, public_id):
                             )
             return question
         question = await create_question()
-        logger.info(f"Nueva pregunta {question.id} creada en encuesta {public_id} por usuario {request.user.username}")
+        logger.info("Nueva pregunta %s creada en encuesta %s por usuario %s", question.id, public_id, request.user.username)
         return JsonResponse({
             'success': True,
             'question_id': question.id
         })
-    except Exception as e:
-        logger.error(f"Error al crear pregunta en encuesta {public_id}: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error al crear pregunta en encuesta %s", public_id)
+        return JsonResponse({'success': False, 'error': 'Error interno creando pregunta'}, status=500)

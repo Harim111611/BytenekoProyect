@@ -5,7 +5,10 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from surveys.models import SurveyTemplate
 import json
+import logging
 from asgiref.sync import sync_to_async
+
+logger = logging.getLogger(__name__)
 
 @require_http_methods(["POST"])
 async def create_template(request):
@@ -41,8 +44,9 @@ async def create_template(request):
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error creando plantilla")
+        return JsonResponse({'success': False, 'error': 'Error interno creando plantilla'}, status=500)
 
 @require_http_methods(["GET"])
 async def list_templates(request):
@@ -59,8 +63,9 @@ async def list_templates(request):
             ).order_by('-created_at'))
         templates = await get_templates()
         return JsonResponse(templates, safe=False)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error listando plantillas")
+        return JsonResponse({'error': 'Error interno listando plantillas'}, status=500)
 
 @require_http_methods(["PUT", "PATCH"])
 async def update_template(request, template_id):
@@ -91,8 +96,9 @@ async def update_template(request, template_id):
         return JsonResponse({'success': True})
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error actualizando plantilla id=%s", template_id)
+        return JsonResponse({'success': False, 'error': 'Error interno actualizando plantilla'}, status=500)
 
 @require_http_methods(["DELETE", "POST"])
 async def delete_template(request, template_id):
@@ -111,5 +117,6 @@ async def delete_template(request, template_id):
             template.delete()
         await delete_obj()
         return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Error eliminando plantilla id=%s", template_id)
+        return JsonResponse({'success': False, 'error': 'Error interno eliminando plantilla'}, status=500)

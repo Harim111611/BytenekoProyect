@@ -99,7 +99,7 @@ class SurveyUpdateForm(SurveyForm):
             elif hasattr(e, 'message'):
                 error_msg = e.message
             else:
-                error_msg = str(e)
+                error_msg = _('Cambio de estado inválido.')
             raise forms.ValidationError(error_msg) from e
 
         return new_status
