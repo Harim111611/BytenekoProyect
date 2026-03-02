@@ -105,8 +105,8 @@ class TimelineEngine:
                     labels.append(entry['date'].strftime('%d/%m'))
                     counts.append(entry['count'])
             return {'labels': labels, 'data': counts}
-        except Exception as exc:
-            logger.exception("TimelineEngine.analyze_evolution failed: %s", exc)
+        except Exception:
+            logger.exception("TimelineEngine.analyze_evolution failed")
             return {'labels': [], 'data': []}
 
 class NumericNarrative:
@@ -1282,5 +1282,13 @@ class SurveyAnalysisService:
             
             return result
             
-        except Exception as e:
-            return {'error': f'Error generando tabla cruzada: {str(e)}'}
+        except Exception:
+            logger.exception(
+                "Error interno generando crosstab",
+                extra={
+                    'survey_id': getattr(survey, 'id', None),
+                    'row_id': row_id,
+                    'col_id': col_id,
+                },
+            )
+            return {'error': 'Error interno generando tabla cruzada.'}
