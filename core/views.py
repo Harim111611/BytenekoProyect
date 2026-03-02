@@ -17,6 +17,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.template.loader import render_to_string
 from django.core.cache import cache
 from django.conf import settings
+from django.db import DatabaseError
 from django.db.models import Count, Avg, Q, F, FloatField, ExpressionWrapper, Max
 from django_ratelimit.decorators import ratelimit
 
@@ -73,6 +74,32 @@ async def _get_authenticated_user_id_and_username(request: HttpRequest) -> tuple
         ),
         thread_sensitive=True,
     )()
+
+
+async def _get_user_owned_survey_by_identifier(user_id: int, survey_identifier: str):
+    """Resuelve encuesta por `id` numérico o `public_id`, restringida al dueño."""
+    if str(survey_identifier).isdigit():
+        return await sync_to_async(get_object_or_404, thread_sensitive=True)(
+            Survey.objects.select_related('author'),
+            id=survey_identifier,
+            author_id=user_id,
+        )
+    return await sync_to_async(get_object_or_404, thread_sensitive=True)(
+        Survey.objects.select_related('author'),
+        public_id=survey_identifier,
+        author_id=user_id,
+    )
+
+
+def _get_report_survey_identifier(request: HttpRequest) -> str | None:
+    return request.POST.get('public_id') or request.GET.get('survey_id')
+
+
+def _parse_include_flags(data: Mapping[str, Any]) -> tuple[bool, bool, bool]:
+    include_charts = _is_truthy(data.get('include_charts'))
+    include_table = _is_truthy(data.get('include_table'))
+    include_kpis = _is_truthy(data.get('include_kpis'))
+    return include_charts, include_table, include_kpis
 
 def _get_filtered_responses(survey: Survey, data: Mapping[str, Any]):
     """Helper centralizado para filtros de fecha."""
@@ -194,7 +221,8 @@ async def dashboard_results_view(request: HttpRequest) -> HttpResponse:
             .only('id', 'name', 'survey_id')
             .order_by('-created_at')[:50]
         ), thread_sensitive=True)()
-    except Exception:
+    except DatabaseError as e:
+        logger.exception("Error cargando analysis_segments: %s", e)
         analysis_segments = []
 
     try:
@@ -218,7 +246,8 @@ async def dashboard_results_view(request: HttpRequest) -> HttpResponse:
                     type__in=['single', 'multi', 'scale', 'select']
                 ).values('id', 'text').order_by('survey_id', 'order')[:50]
             ), thread_sensitive=True)()
-    except Exception:
+    except DatabaseError as e:
+        logger.exception("Error cargando survey_questions: %s", e)
         survey_questions = []
 
     summary_data['analysis_segments'] = analysis_segments
@@ -283,9 +312,7 @@ def report_preview_ajax(request: HttpRequest, public_id: str) -> HttpResponse:
     try:
         responses_queryset = _get_filtered_responses(survey, request.GET)
         total_respuestas = responses_queryset.count()
-        show_charts = _is_truthy(request.GET.get('include_charts'))
-        show_kpis = _is_truthy(request.GET.get('include_kpis'))
-        show_table = _is_truthy(request.GET.get('include_table'))
+        show_charts, show_table, show_kpis = _parse_include_flags(request.GET)
 
         analysis_result = async_to_sync(SurveyAnalysisService.get_analysis_data)(
             survey=survey,
@@ -392,9 +419,9 @@ def report_preview_ajax(request: HttpRequest, public_id: str) -> HttpResponse:
 
         html = render_to_string('core/reports/_report_preview_content.html', context)
         return JsonResponse({'html': html, 'success': True})
-    except Exception as e:
-        logger.error(f"Error preview survey {public_id}: {str(e)}", exc_info=True)
-        return JsonResponse({'error': str(e), 'success': False}, status=500)
+    except Exception:
+        logger.exception("Error preview survey", extra={'public_id': public_id})
+        return JsonResponse({'error': 'Error interno generando preview', 'success': False}, status=500)
 
 async def report_pdf_view(request: HttpRequest) -> HttpResponse:
     redirect_response = await _redirect_to_login_if_needed_async(request)
@@ -403,26 +430,13 @@ async def report_pdf_view(request: HttpRequest) -> HttpResponse:
 
     user_id, _username = await _get_authenticated_user_id_and_username(request)
 
-    survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
-    if not survey_id:
+    survey_identifier = _get_report_survey_identifier(request)
+    if not survey_identifier:
         raise Http404("Survey ID required")
-    if str(survey_id).isdigit():
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
-            Survey.objects.select_related('author'),
-            id=survey_id,
-            author_id=user_id,
-        )
-    else:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(
-            Survey.objects.select_related('author'),
-            public_id=survey_id,
-            author_id=user_id,
-        )
+    survey = await _get_user_owned_survey_by_identifier(user_id, str(survey_identifier))
     try:
         responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
-        include_charts = _is_truthy(request.POST.get('include_charts'))
-        include_table = _is_truthy(request.POST.get('include_table'))
-        include_kpis = _is_truthy(request.POST.get('include_kpis'))
+        include_charts, include_table, include_kpis = _parse_include_flags(request.POST)
         data = await SurveyAnalysisService.get_analysis_data(
             survey=survey,
             responses_queryset=responses_queryset,
@@ -506,9 +520,9 @@ async def report_pdf_view(request: HttpRequest) -> HttpResponse:
         filename = f"Report_{safe_title}_{datetime.now().strftime('%Y%m%d')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-    except Exception as e:
-        logger.error(f"Error generando PDF: {str(e)}", exc_info=True)
-        return HttpResponse(f"Error: {str(e)}", status=500, content_type="text/plain; charset=utf-8")
+    except Exception:
+        logger.exception("Error generando PDF", extra={'survey_identifier': str(survey_identifier)})
+        return HttpResponse("Error interno generando PDF.", status=500, content_type="text/plain; charset=utf-8")
 
 async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
     redirect_response = await _redirect_to_login_if_needed_async(request)
@@ -517,18 +531,13 @@ async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
 
     user_id, _username = await _get_authenticated_user_id_and_username(request)
 
-    survey_id = request.POST.get('public_id') or request.GET.get('survey_id')
-    if not survey_id:
+    survey_identifier = _get_report_survey_identifier(request)
+    if not survey_identifier:
         raise Http404("Survey ID required")
-    if str(survey_id).isdigit():
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, id=survey_id, author_id=user_id)
-    else:
-        survey = await sync_to_async(get_object_or_404, thread_sensitive=True)(Survey, public_id=survey_id, author_id=user_id)
+    survey = await _get_user_owned_survey_by_identifier(user_id, str(survey_identifier))
     try:
         responses_queryset = await sync_to_async(_get_filtered_responses, thread_sensitive=True)(survey, request.POST)
-        include_charts = _is_truthy(request.POST.get('include_charts'))
-        include_table = _is_truthy(request.POST.get('include_table'))
-        include_kpis = _is_truthy(request.POST.get('include_kpis'))
+        include_charts, include_table, include_kpis = _parse_include_flags(request.POST)
         data = await SurveyAnalysisService.get_analysis_data(
             survey=survey,
             responses_queryset=responses_queryset,
@@ -551,8 +560,8 @@ async def report_powerpoint_view(request: HttpRequest) -> HttpResponse:
         safe_title = slugify(survey.title)[:50]
         response['Content-Disposition'] = f'attachment; filename="Report_{safe_title}.pptx"'
         return response
-    except Exception as e:
-        logger.error(f"Error PPTX: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception("Error PPTX", extra={'survey_identifier': str(survey_identifier)})
         return HttpResponse("Error generando PowerPoint.", status=500)
 
 async def settings_view(request: HttpRequest) -> HttpResponse:

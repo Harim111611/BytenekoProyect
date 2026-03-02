@@ -220,7 +220,7 @@ class PDFReportGenerator:
 
             return pdf_file
 
-        except Exception as e:
+        except Exception:
             survey_id = None
             try:
                 if isinstance(survey, dict):
@@ -230,7 +230,7 @@ class PDFReportGenerator:
             except Exception:
                 survey_id = None
 
-            logger.exception(f"Error crítico generando PDF para encuesta {survey_id}: {e}")
+            logger.exception("Error crítico generando PDF", extra={'survey_id': survey_id})
             if getattr(settings, "DEBUG", False):
                 raise
             return None
@@ -276,8 +276,8 @@ class PDFReportGenerator:
             html_string = render_to_string('core/reports/_global_results_pdf.html', context)
             return HTML(string=html_string, base_url=settings.BASE_DIR).write_pdf()
             
-        except Exception as e:
-            logger.exception(f"Error generando reporte global PDF: {e}")
+        except Exception:
+            logger.exception("Error generando reporte global PDF")
             if getattr(settings, "DEBUG", False):
                 raise
             return None

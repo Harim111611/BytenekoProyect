@@ -114,8 +114,8 @@ class ChartGenerator:
                 'displayModeBar': False,
                 'responsive': True # IMPORTANTE: Permite que el JS ajuste el ancho
             })
-        except Exception as e:
-            logger.error(f"Error chart (plotly): {e}")
+        except Exception:
+            logger.exception("Error chart (plotly)")
             return None
 
     @classmethod
@@ -373,8 +373,8 @@ class ChartGenerator:
             )
 
             return cls._fig_to_base64(fig)
-        except Exception as e:
-            logger.error(f"Heatmap error: {e}")
+        except Exception:
+            logger.exception("Heatmap error")
             plt.close(fig)
             return None
 
