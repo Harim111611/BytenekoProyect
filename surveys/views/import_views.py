@@ -6,6 +6,7 @@ import psutil
 import logging
 import os
 import tempfile
+import uuid
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.apps import apps
 from django.db import transaction
+from django_ratelimit.decorators import ratelimit
 from asgiref.sync import sync_to_async
 
 # Intentar importar el modelo Survey
@@ -64,6 +66,22 @@ class MaxRAMMonitor:
 
     def get_max_rss_mb(self):
         return self.max_rss / (1024 * 1024)
+
+
+def _unauthorized_json() -> JsonResponse:
+    return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+
+
+def _method_not_allowed_json() -> JsonResponse:
+    return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
+
+
+async def _get_async_authenticated_user(request: HttpRequest):
+    """Devuelve (user, error_response)."""
+    user = await request.auser()
+    if not user.is_authenticated:
+        return None, _unauthorized_json()
+    return user, None
 
 # =============================================================================
 # Helpers Síncronos (I/O)
@@ -121,7 +139,10 @@ def _process_single_csv_import(upload, user):
 
     author = user or get_user_model().objects.first()
     if author is None:
-        author = get_user_model().objects.create_user(username="importer", password="importer")
+        random_username = f"importer_{uuid.uuid4().hex[:12]}"
+        author = get_user_model().objects.create_user(username=random_username)
+        author.set_unusable_password()
+        author.save(update_fields=['password'])
 
     survey = Survey.objects.create(
         author=author,
@@ -207,6 +228,7 @@ def _process_single_csv_import(upload, user):
 
 
 @login_required
+@ratelimit(key='user_or_ip', rate='20/h', method='POST', block=True)
 def import_new_view(request: HttpRequest):
     """Synchronous CSV import used by tests for quick validation."""
     if request.method != "POST":
@@ -375,16 +397,15 @@ def service_generate_preview(uploaded_file):
                 "filename": uploaded_file.name,
                 "total_rows": len(rows)
             }
-    except Exception as exc:
-        logger.exception("[IMPORT_PREVIEW][ERROR] %s", exc)
-        if getattr(settings, "DEBUG", False):
-            return {"success": False, "error": str(exc)}
+    except Exception:
+        logger.exception("[IMPORT_PREVIEW][ERROR]")
         return {"success": False, "error": "Error interno generando preview."}
 
 # =============================================================================
 # Vistas Async (Corregidas para acceso seguro al Usuario y DB)
 # =============================================================================
 
+@ratelimit(key='user_or_ip', rate='20/h', method='POST', block=True)
 def csv_create_start_import(request: HttpRequest) -> JsonResponse:
     """
     Crea encuestas e inicia importación.
@@ -394,12 +415,11 @@ def csv_create_start_import(request: HttpRequest) -> JsonResponse:
       para no romper la suite existente.
     """
     if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+        return _unauthorized_json()
     
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
+        return _method_not_allowed_json()
 
-    import os
     env = (os.environ.get('DJANGO_ENV') or '').lower()
 
     # -----------------------------
@@ -508,13 +528,12 @@ async def csv_create_start_import_async(request: HttpRequest) -> JsonResponse:
     Crea encuestas e inicia importación (versión async para producción).
     Usa await request.auser() para evitar SynchronousOnlyOperation.
     """
-    # CORRECCIÓN CLAVE: Usar auser() para cargar el usuario asíncronamente
-    user = await request.auser()
-    if not user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+    user, auth_error = await _get_async_authenticated_user(request)
+    if auth_error:
+        return auth_error
     
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
+        return _method_not_allowed_json()
 
     ram_monitor = MaxRAMMonitor()
     ram_monitor.start()
@@ -579,32 +598,30 @@ async def csv_create_start_import_async(request: HttpRequest) -> JsonResponse:
             ram_monitor.stop()
             return JsonResponse({'success': False, 'error': 'No se recibió archivo CSV.'}, status=400)
 
-    except Exception as exc:
+    except Exception:
         ram_monitor.stop()
-        logger.error(f"[IMPORT_VIEW][ERROR] {exc}", exc_info=True)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        logger.exception("[IMPORT_VIEW][ERROR]")
+        return JsonResponse({"success": False, "error": "Error interno iniciando importación"}, status=500)
 
 
 async def csv_create_preview_view(request: HttpRequest) -> JsonResponse:
-    # CORRECCIÓN CLAVE: Usar auser()
-    user = await request.auser()
-    if not user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+    _user, auth_error = await _get_async_authenticated_user(request)
+    if auth_error:
+        return auth_error
         
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
+        return _method_not_allowed_json()
 
     return await csv_preview_view(request, public_id=None)
 
 
 async def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonResponse:
-    # CORRECCIÓN CLAVE: Usar auser()
-    user = await request.auser()
-    if not user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+    user, auth_error = await _get_async_authenticated_user(request)
+    if auth_error:
+        return auth_error
 
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
+        return _method_not_allowed_json()
 
     if 'survey_file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'Falta archivo.'}, status=400)
@@ -623,21 +640,19 @@ async def csv_upload_start_import(request: HttpRequest, public_id: str) -> JsonR
 
         return JsonResponse({'success': True, **result})
         
-    except Exception as exc:
-        logger.error(f"[IMPORT_EXISTING][ERROR] {exc}", exc_info=True)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+    except Exception:
+        logger.exception("[IMPORT_EXISTING][ERROR]")
+        return JsonResponse({"success": False, "error": "Error interno importando archivo"}, status=500)
 
 
 async def get_task_status_view(request: HttpRequest, task_id: str) -> JsonResponse:
-    # Verificación manual de autenticación y método usando auser() para evitar acceso a session en async
-    user = await request.auser()
-    if not user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+    """Consulta estado de Celery."""
+    _user, auth_error = await _get_async_authenticated_user(request)
+    if auth_error:
+        return auth_error
     if request.method != 'GET':
-        return JsonResponse({'success': False, 'error': 'Método no permitido.'}, status=405)
-    """
-    Consulta estado de Celery.
-    """
+        return _method_not_allowed_json()
+
     def _get_status_sync(tid):
         # Primero, intentar encontrar un ImportJob si el id coincide
         from surveys.models import ImportJob
@@ -663,11 +678,11 @@ async def get_task_status_view(request: HttpRequest, task_id: str) -> JsonRespon
             # Si el resultado es un dict con errores de validación, propagarlo
             if isinstance(result.result, dict) and result.result.get('status') == 'FAILURE':
                 response['status'] = 'failed'
-                response['error_message'] = result.result.get('error', str(result.result))
+                response['error_message'] = result.result.get('error', 'La tarea falló durante la validación.')
                 response['validation_errors'] = result.result.get('validation_errors', [])
             else:
                 response['status'] = 'failed'
-                response['error_message'] = str(result.result)
+                response['error_message'] = 'La tarea falló durante el procesamiento.'
         else:
             response['status'] = 'processing'
             if isinstance(result.info, dict):
@@ -677,18 +692,15 @@ async def get_task_status_view(request: HttpRequest, task_id: str) -> JsonRespon
     try:
         response_data = await sync_to_async(_get_status_sync, thread_sensitive=True)(task_id)
         return JsonResponse(response_data)
-    except Exception as exc:
-        logger.exception("[TASK_STATUS][ERROR] %s", exc)
-        if getattr(settings, "DEBUG", False):
-            return JsonResponse({"status": "failed", "error": str(exc)}, status=500)
+    except Exception:
+        logger.exception("[TASK_STATUS][ERROR]")
         return JsonResponse({"status": "failed", "error": "Error interno consultando estado."}, status=500)
 
 
 async def csv_preview_view(request: HttpRequest, public_id: str = None) -> JsonResponse:
-    # CORRECCIÓN CLAVE: Usar auser()
-    user = await request.auser()
-    if not user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'No autorizado.'}, status=401)
+    _user, auth_error = await _get_async_authenticated_user(request)
+    if auth_error:
+        return auth_error
 
     uploaded_file = request.FILES.get('survey_file') or request.FILES.get('csv_file')
     
