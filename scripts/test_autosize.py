@@ -47,8 +47,8 @@ def run_test():
             f.write(pptx_buffer.getvalue())
         print("✓ Autosize test generated")
         
-    except Exception as e:
-        print(f"✗ FAILED: {e}")
+    except Exception:
+        print("✗ FAILED: error generando PPTX")
 
 if __name__ == "__main__":
     run_test()

@@ -43,9 +43,9 @@ def _run_logging_script():
         )
         print(f"✅ Encuesta creada: {survey.id}")
         print("   Revisa los logs en: logs/surveys.log\n")
-    except Exception as e:
+    except Exception:
         survey = None
-        print(f"❌ Error: {e}\n")
+        print("❌ Error creando encuesta de prueba\n")
 
     print("📝 Test 2: Generando logs de prueba...")
     if survey:

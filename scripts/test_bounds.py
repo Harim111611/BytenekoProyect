@@ -59,8 +59,8 @@ def run_test():
         print(f"✓ Saved to {output_path}")
         print(f"✓ Created {len(analysis_mock)} detail slides + cover + summary slides")
         
-    except Exception as e:
-        print(f"✗ FAILED: {e}")
+    except Exception:
+        print("✗ FAILED: error generando PPTX")
         import traceback
         traceback.print_exc()
 

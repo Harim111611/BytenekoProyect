@@ -84,3 +84,7 @@ data_export.json
 
 # Entorno y variables
 .env
+
+# Artefactos de pruebas PPTX (raíz del repo)
+/test_*.pptx
+/tmp_*.pptx

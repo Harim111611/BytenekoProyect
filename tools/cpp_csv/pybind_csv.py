@@ -10,8 +10,8 @@ def read_csv(filename, delimiter=','):
     """
     try:
         return cpp_csv.read_csv(filename, delimiter)
-    except Exception as e:
-        logger.error(f"Error leyendo CSV con cpp_csv: {e}")
+    except Exception:
+        logger.exception("Error leyendo CSV con cpp_csv")
         raise
 
 
@@ -22,8 +22,8 @@ def read_csv_dicts(filename, delimiter=','):
     """
     try:
         return cpp_csv.read_csv_dicts(filename, delimiter)
-    except Exception as e:
-        logger.error(f"Error leyendo CSV con cpp_csv: {e}")
+    except Exception:
+        logger.exception("Error leyendo CSV con cpp_csv (dicts)")
         raise
 
 
@@ -63,6 +63,6 @@ def read_and_validate_csv(filename, schema, delimiter=','):
     """
     try:
         return cpp_csv.read_and_validate_csv(filename, schema, delimiter)
-    except Exception as e:
-        logger.error(f"Error validando CSV con cpp_csv: {e}")
+    except Exception:
+        logger.exception("Error validando CSV con cpp_csv")
         raise

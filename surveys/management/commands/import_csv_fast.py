@@ -154,8 +154,9 @@ class Command(BaseCommand):
 
         except FileNotFoundError:
             self.stderr.write(self.style.ERROR(f'File not found: {csv_file}'))
-        except Exception as e:
-            self.stderr.write(self.style.ERROR(f'Error during import: {str(e)}'))
+        except Exception:
+            logger.exception('Error during import_csv_fast', extra={'survey_id': survey_id, 'csv_file': csv_file})
+            self.stderr.write(self.style.ERROR('Error during import. Revisa logs para más detalles.'))
             import traceback
             traceback.print_exc()
             raise

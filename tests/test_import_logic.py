@@ -31,8 +31,8 @@ def test_import_logic():
                 print(f"✓ Importación exitosa: {job.total_rows} filas, encuesta id={job.survey.id}")
             else:
                 print(f"✗ Error: {job.error_message}")
-        except Exception as e:
-            print(f"✗ ERROR: {e}")
+        except Exception:
+            print("✗ ERROR en prueba de importación")
             import traceback
             traceback.print_exc()
 

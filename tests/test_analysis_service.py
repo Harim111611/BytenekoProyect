@@ -63,9 +63,9 @@ def test_question_analyzer_text_question_runs():
         id = 1
     try:
         analysis_service.QuestionAnalyzer.analyze_text_question(DummyQuestion(), DummyQS())
-    except Exception as e:
+    except Exception:
         import logging
-        logging.getLogger(__name__).warning(f"test_text_question_analysis_runs: Exception: {e}")
+        logging.getLogger(__name__).warning("test_text_question_analysis_runs: Exception")
 
 def test_nps_calculator_calculate_nps_runs():
     class DummyQS:

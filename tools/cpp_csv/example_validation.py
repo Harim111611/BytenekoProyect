@@ -126,8 +126,8 @@ if __name__ == "__main__":
     print("=" * 60)
     try:
         example_basic_validation()
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
+        print("Error ejecutando example_basic_validation")
     
     print("\n" + "=" * 60)
     print("Ventajas de la validación en C++:")
